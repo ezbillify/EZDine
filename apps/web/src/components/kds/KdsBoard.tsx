@@ -135,9 +135,10 @@ export function KdsBoard() {
   }
 
   const validOrders = orders.filter(o => {
-    // If it's an online payment (QR/Online), it MUST be paid to show up on KDS.
-    // However, if it's 'cash' (Pay at Counter), it can be 'pending'/'counter_pending'.
-    if ((o as any).payment_method === 'online' && (o as any).payment_status !== 'paid') {
+    // Strict Filter: Hide ALL non-POS orders until they are PAID.
+    // This covers 'online' (Razorpay) and 'cash' (Pay at Counter) from QR flow.
+    // Ideally, for 'cash', the cashier marks it as Paid in POS, then it appears in KDS.
+    if ((o as any).source !== 'pos' && (o as any).payment_status !== 'paid') {
       return false;
     }
     return true;
