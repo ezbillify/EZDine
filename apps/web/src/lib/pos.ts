@@ -37,6 +37,36 @@ export async function getPublicBranchMenu(branchId: string) {
   return data ?? [];
 }
 
+export async function getPublicBranchDetails(branchId: string) {
+  const { data, error } = await supabase
+    .from("branches")
+    .select("id, name, restaurant:restaurants(name, logo)")
+    .eq("id", branchId)
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function getMenuCategories(branchId?: string) {
+  // If branchId is provided, we might want to filter categories that have items in this branch.
+  // For now, let's just fetch all categories as they are restaurant-level usually, 
+  // but we filter by the restaurant of the branch.
+
+  // First get restaurant_id for this branch
+  const { data: branch } = await supabase.from("branches").select("restaurant_id").eq("id", branchId).single();
+  if (!branch) return [];
+
+  const { data, error } = await supabase
+    .from("menu_categories")
+    .select("id, name")
+    .eq("restaurant_id", branch.restaurant_id)
+    .order("name");
+
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function getTables(pBranchId?: string) {
   let finalBranchId = pBranchId;
   if (!finalBranchId) {
