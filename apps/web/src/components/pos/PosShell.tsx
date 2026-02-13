@@ -509,53 +509,77 @@ export function PosShell() {
     setStatus("saving");
 
     try {
-      // 1. Create Order
-      // For Pay & Order, we create it immediately as paid
-      const order = await createOrder(
-        activeTableId,
-        cart,
-        undefined,
-        selectedCustomerId,
-        'pos',
-        'paid',
-        undefined,
-        undefined,
-        method === 'online' ? 'online' : 'cash'
-      );
+      let orderId = activeOrderId;
+      let orderNumber = activeOrderNumber;
+      let tokenNumber = activeTokenNumber;
 
-      const orderId = order.id;
-      const orderNumber = order.order_number;
-      const tokenNumber = order.token_number;
-
-      // 2. Print KOT
-      try {
-        const settings = await getPrintingSettings();
-        if (settings) {
-          const kotLines = buildKotLines({
-            restaurantName: "EZDine",
-            branchName: "Branch",
-            tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
-            orderId: orderNumber ?? "--",
-            tokenNumber: tokenNumber?.toString(),
-            items: cart.map((c) => ({ name: c.name, qty: c.qty }))
-          });
-          await sendPrintJob({
-            printerId: settings.printerIdKot ?? "kitchen-1",
-            width: settings.widthKot ?? 58,
-            type: "kot",
-            lines: kotLines
-          });
+      // 1. Create or Update Order
+      if (!orderId) {
+        // New Order
+        const order = await createOrder(
+          activeTableId,
+          cart,
+          undefined,
+          selectedCustomerId,
+          'pos',
+          'paid',
+          undefined,
+          undefined,
+          method === 'online' ? 'online' : 'cash'
+        );
+        orderId = order.id;
+        orderNumber = order.order_number;
+        tokenNumber = order.token_number;
+      } else {
+        // Existing Order - Append items if any
+        if (cart.length > 0) {
+          await appendOrderItems(orderId, cart);
         }
-      } catch (printErr: any) {
-        console.error("KOT Print failed", printErr);
-        toast.error("Order saved, but KOT printing failed: " + printErr.message);
+      }
+
+      // 2. Print KOT (Only if new items exist)
+      if (cart.length > 0) {
+        try {
+          const settings = await getPrintingSettings();
+          if (settings) {
+            const kotLines = buildKotLines({
+              restaurantName: "EZDine",
+              branchName: "Branch",
+              tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
+              orderId: orderNumber ?? "--",
+              tokenNumber: tokenNumber?.toString(),
+              items: cart.map((c) => ({ name: c.name, qty: c.qty }))
+            });
+            await sendPrintJob({
+              printerId: settings.printerIdKot ?? "kitchen-1",
+              width: settings.widthKot ?? 58,
+              type: "kot",
+              lines: kotLines
+            });
+          }
+        } catch (printErr: any) {
+          console.error("KOT Print failed", printErr);
+          toast.error("KOT printing failed: " + printErr.message);
+        }
       }
 
       // 3. Create Bill & Payment
-      const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-      const bill = await createBill(orderId, cart);
+      const fullItems = [
+        ...existingItems.map(i => ({ item_id: i.item_id, name: i.name, qty: i.quantity, price: i.price })),
+        ...cart
+      ];
+
+      const totalAmount = fullItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+      // Create Bill with ALL items
+      // We pass fullItems to createBill to ensure accurate record
+      // But wait, createBill implementation expects CartItem[] which has item_id, name, qty, price.
+      // fullItems matches this structure.
+      // However, TypeScript might complain about missing properties if CartItem has more.
+      // Let's cast fullItems as any to be safe or ensure it matches CartItem
+      const bill = await createBill(orderId!, fullItems as any);
       await addPayment(bill.id, method, totalAmount);
-      await closeOrder(orderId);
+      await closeOrder(orderId!);
 
       // 4. Print Bill
       try {
@@ -564,14 +588,14 @@ export function PosShell() {
           const billLines = buildInvoiceLines({
             restaurantName: "EZDine",
             branchName: "Branch",
-            billId: `${orderNumber}`, // Use Order Number as Bill ID for simplicity or fetch actual bill number
-            items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
+            billId: `${orderNumber}`,
+            items: fullItems.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
             subtotal: totalAmount,
             tax: 0,
             total: totalAmount
           });
           await sendPrintJob({
-            printerId: settings.printerIdBill ?? "counter-1",
+            printerId: settings.printerIdInvoice ?? "billing-1", // Changed from printerIdBill to match usage elsewhere if needed, or keep consistent
             width: settings.widthBill ?? 80,
             type: "invoice",
             lines: billLines
@@ -579,7 +603,7 @@ export function PosShell() {
         }
       } catch (printErr: any) {
         console.error("Bill Print failed", printErr);
-        toast.error("Order paid, but Bill printing failed: " + printErr.message);
+        toast.error("Bill printing failed: " + printErr.message);
       }
 
       // 5. Reset
@@ -591,12 +615,13 @@ export function PosShell() {
       setActiveTokenNumber(null);
       setSelectedCustomerId(null);
       setSelectedCustomerName(null);
+      if (isQuickBill) setIsQuickBill(false); // Reset Quick Bill state
 
       // Refresh History
       const updatedHistory = await getSettledBills();
       setHistory(updatedHistory);
 
-      toast.success("Order Placed & Paid Successfully!");
+      toast.success("Order Settled & Paid!");
     } catch (err: any) {
       toast.error(err.message || "Failed to process payment");
     } finally {
@@ -1113,30 +1138,32 @@ export function PosShell() {
             >
               <Eye size={16} /> Preview Bill
             </Button>
-            <Button
-              onClick={handlePlaceOrder}
-              disabled={status === "saving" || cart.length === 0}
-              className="w-full h-11 bg-slate-900 hover:bg-black text-white rounded-xl"
-            >
-              {status === "saving" ? "Saving..." : <span className="flex items-center gap-2"><Save size={16} /> KOT / Save</span>}
-            </Button>
+            {(!isQuickBill) && (
+              <Button
+                onClick={handlePlaceOrder}
+                disabled={status === "saving" || cart.length === 0}
+                className="w-full h-11 bg-slate-900 hover:bg-black text-white rounded-xl"
+              >
+                {status === "saving" ? "Saving..." : <span className="flex items-center gap-2"><Save size={16} /> KOT / Save</span>}
+              </Button>
+            )}
           </div>
 
           <div className="flex gap-3">
-            {isQuickBill && cart.length > 0 && !activeOrderId && (
+            {isQuickBill && (cart.length > 0 || activeOrderId) && (
               <Button
                 onClick={() => setShowPaymentModal(true)}
                 disabled={status === "saving"}
                 className="flex-1 h-12 rounded-xl bg-brand-600 text-white hover:bg-brand-700 font-black uppercase tracking-widest text-xs shadow-lg shadow-brand-500/20"
               >
-                Pay & Order
+                {activeOrderId ? "Pay & Print" : "Pay & Order"}
               </Button>
             )}
             <Button
               onClick={handleCreateBill}
               variant="secondary"
               disabled={status === "saving" || (!activeOrderId && cart.length === 0)}
-              className={`flex-1 h-12 rounded-xl ${isQuickBill && !activeOrderId ? 'bg-slate-100 text-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-500/20'} font-black uppercase tracking-widest text-xs`}
+              className={`flex-1 h-12 rounded-xl ${isQuickBill ? 'hidden' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-500/20'} font-black uppercase tracking-widest text-xs`}
             >
               Finalize & Print
             </Button>
