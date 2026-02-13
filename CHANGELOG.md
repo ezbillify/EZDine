@@ -1,4 +1,28 @@
 
+## v0.1.3 (2026-02-13)
+
+**Changelog 📚**
+
+### ✨ Features
+
+* Enhanced POS with split payments, KDS realtime, and Razorpay edge function verification [bc6ce23]
+* Implemented split payments and fixed zero amount bug [20bc80f]
+
+### 🐛 Fixes
+
+* Resolved zero payable bug and added smart payment modal with auto-fill and shortcuts [f4f1500]
+* Strictly hid all unpaid QR orders [d610729]
+* Enabled POS realtime for order items and added connection debug logs [823592d]
+* Fixed KDS hiding unpaid online orders and added debug logs for payment verification [5016390]
+* Fixed POS realtime auto-refresh and sound notification [83d0d9c]
+* Used Service Role Key for payment verification to bypass RLS [dfa7c5f]
+
+### ⚡️ Improvements
+
+* Released v0.1.2 [60b843c]
+* Released v0.1.1 [5f2be06]
+
+
 ## v0.1.2 (2026-02-13)
 
 **Changelog 📣**

@@ -271,14 +271,18 @@ export async function getOrders() {
 
 export async function getPendingQrOrders() {
   const { branchId } = await getContext();
+  const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+
   const { data, error } = await supabase
     .from("orders")
     .select("*, customer:customers(name)")
     .eq("branch_id", branchId)
     .eq("is_open", true)
     .in("source", ["qr", "table"])
-    .in("payment_status", ["counter_pending", "paid"])
-    .order("created_at", { ascending: false });
+    .neq("status", "cancelled")
+    .or(`payment_status.neq.paid,and(payment_status.eq.paid,created_at.gt.${threeMinutesAgo})`)
+    .order("created_at", { ascending: false })
+    .limit(25);
 
   if (error) throw error;
   return data ?? [];

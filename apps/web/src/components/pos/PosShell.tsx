@@ -609,9 +609,24 @@ export function PosShell() {
         await addPayment(bill.id, p.method, p.amount);
       }
 
-      // await closeOrder(orderId!); 
-      // Do not close order immediately. Let KDS handle status.
-      // We just ensure it is marked as Paid (via bill & payments)
+      // 3. Mark as Paid & Pending (Critical for KDS)
+      // We need to fetch the current status first to avoid resetting 'preparing' orders back to 'pending'.
+      const { data: currentOrder } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', orderId!)
+        .single();
+
+      const newStatus = (currentOrder?.status === 'counter_pending') ? 'pending' : currentOrder?.status;
+
+      await supabase
+        .from('orders')
+        .update({
+          payment_status: 'paid',
+          status: newStatus, // Only force pending if it was hidden (counter_pending)
+          payment_method: primaryMethod
+        })
+        .eq('id', orderId!);
 
       // 4. Print Bill
       try {
@@ -650,12 +665,42 @@ export function PosShell() {
       if (isQuickBill) setIsQuickBill(false); // Reset Quick Bill state
 
       // Refresh History
-      const updatedHistory = await getSettledBills();
-      setHistory(updatedHistory);
-
+      const data = await getSettledBills();
+      setHistory(data);
       toast.success("Order Settled & Paid!");
     } catch (err: any) {
       toast.error(err.message || "Failed to process payment");
+    } finally {
+      setStatus("idle");
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!activeOrderId) return;
+    if (!confirm("Are you sure you want to CANCEL this order?")) return;
+
+    setStatus("saving");
+    try {
+      await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', activeOrderId);
+
+      // Reset
+      const cacheKey = isQuickBill ? 'ezdine_cart_quick' : `ezdine_cart_${activeTableId}`;
+      setCart([]);
+      localStorage.removeItem(cacheKey);
+      setActiveOrderId(null);
+      setActiveOrderNumber(null);
+      setActiveTokenNumber(null);
+      setExistingItems([]);
+      setSelectedCustomerId(null);
+      setSelectedCustomerName(null);
+      if (isQuickBill) setIsQuickBill(false);
+
+      toast.success("Order Cancelled");
+    } catch (err: any) {
+      toast.error("Failed to cancel order");
     } finally {
       setStatus("idle");
     }
@@ -1047,9 +1092,18 @@ export function PosShell() {
               </div>
             </div>
             {activeOrderNumber && (
-              <div className="text-right">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Order #</p>
-                <p className="font-mono font-medium text-slate-900">{activeOrderNumber}</p>
+              <div className="text-right flex items-center gap-3">
+                <button
+                  onClick={handleCancelOrder}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 hover:shadow-sm transition-all"
+                  title="Cancel Order"
+                >
+                  <Trash2 size={16} />
+                </button>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Order #</p>
+                  <p className="font-mono font-medium text-slate-900">{activeOrderNumber}</p>
+                </div>
               </div>
             )}
           </div>
