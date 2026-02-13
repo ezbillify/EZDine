@@ -5,7 +5,7 @@ import { useSearchParams, useParams } from "next/navigation";
 import {
     Search, Plus, Minus, ShoppingBag, User, Phone,
     Check, ChevronRight, Utensils, Zap, Star, Clock,
-    ChevronLeft, ArrowRight, Info
+    ChevronLeft, ArrowRight, Info, Coffee
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { getPublicBranchMenu, createOrder, CartItem, getPublicBranchDetails, getMenuCategories } from "../../../lib/pos";
@@ -16,7 +16,7 @@ export default function QrOrderPage() {
     const params = useParams();
     const searchParams = useSearchParams();
     const branchId = params.branchId as string;
-    const tableId = searchParams.get("t");
+    const initialTableId = searchParams.get("t");
 
     const [loading, setLoading] = useState(true);
     const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -25,9 +25,10 @@ export default function QrOrderPage() {
     const [activeCategory, setActiveCategory] = useState<string>("All");
     const [searchQuery, setSearchQuery] = useState("");
     const [cart, setCart] = useState<CartItem[]>([]);
-    const [step, setStep] = useState<"menu" | "cart" | "customer" | "success">("menu");
+    const [step, setStep] = useState<"onboarding" | "menu" | "cart" | "success">("onboarding");
 
-    // Customer Data
+    // Customer & Order Data
+    const [orderType, setOrderType] = useState<"dine_in" | "takeaway">(initialTableId ? "dine_in" : "takeaway");
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [orderId, setOrderId] = useState<string | null>(null);
@@ -53,6 +54,9 @@ export default function QrOrderPage() {
                 const savedPhone = localStorage.getItem("ezdine_cust_phone");
                 if (savedName) setName(savedName);
                 if (savedPhone) setPhone(savedPhone);
+
+                // If we have saved details, we could potentially skip onboarding,
+                // but the user wants to choose Dine In / Takeaway first.
             } catch (err) {
                 console.error(err);
                 toast.error("Failed to load restaurant data");
@@ -98,23 +102,30 @@ export default function QrOrderPage() {
 
     const total = useMemo(() => cart.reduce((sum, i) => sum + i.price * i.qty, 0), [cart]);
 
-    const handleCheckout = async () => {
-        if (!name || phone.length < 10) {
-            toast.error("Please provide name and valid phone");
+    const handleOnboardingComplete = () => {
+        if (!name.trim()) {
+            toast.error("Please enter your name");
             return;
         }
-
+        if (phone.length < 10) {
+            toast.error("Please enter a valid phone number");
+            return;
+        }
         localStorage.setItem("ezdine_cust_name", name);
         localStorage.setItem("ezdine_cust_phone", phone);
+        setStep("menu");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    };
 
+    const handleCheckout = async () => {
         setLoading(true);
         try {
             const result = await createOrder(
-                tableId,
+                orderType === "dine_in" ? initialTableId : null,
                 cart,
                 undefined,
                 null,
-                tableId ? 'table' : 'qr',
+                orderType === "dine_in" ? 'table' : 'qr',
                 'counter_pending'
             );
             setOrderId(result.id);
@@ -129,7 +140,7 @@ export default function QrOrderPage() {
         }
     };
 
-    if (loading && step === "menu") {
+    if (loading && step === "onboarding") {
         return (
             <div className="flex h-screen flex-col items-center justify-center p-4 bg-white">
                 <div className="relative h-24 w-24 mb-6">
@@ -149,35 +160,124 @@ export default function QrOrderPage() {
         <div className="min-h-screen bg-[#FDFDFF] font-outfit text-slate-900 pb-24 selection:bg-brand-100 selection:text-brand-900">
             <Toaster position="top-center" richColors />
 
-            {/* Premium Header */}
-            <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 px-4 py-4">
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 bg-gradient-to-br from-brand-600 to-brand-700 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-brand-500/30 transform transition-transform hover:rotate-6">
-                            <Utensils size={20} />
+            {/* Premium Header - Only show if not success step, or maybe show always for branding */}
+            {step !== "onboarding" && step !== "success" && (
+                <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 px-4 py-4">
+                    <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 bg-gradient-to-br from-brand-600 to-brand-700 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-brand-500/30 transform transition-transform hover:rotate-6">
+                                <Utensils size={20} />
+                            </div>
+                            <div>
+                                <h1 className="font-black text-xl tracking-tighter leading-none text-slate-900">
+                                    {branchInfo?.restaurant?.name || "EZDine"}
+                                </h1>
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 italic">
+                                    {branchInfo?.name || "Main Branch"}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="font-black text-xl tracking-tighter leading-none text-slate-900">
-                                {branchInfo?.restaurant?.name || "EZDine"}
-                            </h1>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 italic">
-                                {branchInfo?.name || "Main Branch"}
-                            </p>
+                        <div className="flex items-center gap-2">
+                            <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 shadow-sm border ${orderType === 'dine_in' ? 'bg-brand-50 border-brand-100 text-brand-600' : 'bg-slate-900 border-slate-900 text-white'}`}>
+                                {orderType === 'dine_in' ? (
+                                    <>
+                                        <span className="h-2 w-2 rounded-full bg-brand-600 animate-pulse" />
+                                        <span className="text-xs font-black uppercase tracking-widest">{initialTableId ? `Table ${initialTableId.split('-')[0]}` : "Dine In"}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <ShoppingBag size={14} />
+                                        <span className="text-xs font-black uppercase tracking-widest">Takeaway</span>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
-                    {tableId ? (
-                        <div className="bg-brand-50 border border-brand-100 text-brand-600 px-4 py-2 rounded-2xl flex items-center gap-2 shadow-sm">
-                            <span className="h-2 w-2 rounded-full bg-brand-600 animate-pulse" />
-                            <span className="text-xs font-black uppercase tracking-widest">Table {tableId.split('-')[0]}</span>
+                </header>
+            )}
+
+            {step === "onboarding" && (
+                <main className="min-h-screen flex flex-col items-center justify-center p-5 animate-in fade-in zoom-in-95 duration-700">
+                    <div className="w-full max-w-[360px] bg-white rounded-[2.5rem] shadow-2xl shadow-brand-100/40 border border-brand-50 p-6 pt-10 relative overflow-hidden">
+                        {/* Decorative Background */}
+                        <div className="absolute top-0 right-0 w-24 h-24 bg-brand-50 rounded-full -mr-12 -mt-12 blur-3xl opacity-40" />
+                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-amber-50 rounded-full -ml-12 -mb-12 blur-3xl opacity-40" />
+
+                        <div className="relative z-10 text-center mb-8">
+                            <div className="h-16 w-16 bg-brand-600 rounded-2xl flex items-center justify-center text-white mx-auto shadow-xl shadow-brand-500/20 mb-5 rotate-3">
+                                <Coffee size={28} />
+                            </div>
+                            <h2 className="text-[9px] font-black uppercase tracking-[0.3em] text-brand-600 mb-1.5">Welcome to</h2>
+                            <h1 className="text-2xl font-black text-slate-900 tracking-tighter leading-none mb-3">
+                                {branchInfo?.restaurant?.name || "EZDine"}
+                            </h1>
+                            <p className="text-slate-400 font-medium text-[11px] tracking-wide">Select experience & share details</p>
                         </div>
-                    ) : (
-                        <div className="bg-slate-900 text-white px-4 py-2 rounded-2xl flex items-center gap-2 shadow-xl shadow-slate-900/20">
-                            <ShoppingBag size={14} />
-                            <span className="text-xs font-black uppercase tracking-widest">Takeaway</span>
+
+                        {/* Order Type Selection */}
+                        <div className="grid grid-cols-2 gap-3 mb-6">
+                            <button
+                                onClick={() => setOrderType("dine_in")}
+                                className={`p-4 rounded-[1.75rem] flex flex-col items-center gap-2.5 transition-all border-2 ${orderType === "dine_in"
+                                    ? "bg-brand-50 border-brand-500 shadow-lg shadow-brand-100 scale-102"
+                                    : "bg-white border-slate-100 grayscale opacity-60 hover:opacity-100 hover:grayscale-0"
+                                    }`}
+                            >
+                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${orderType === "dine_in" ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-400"}`}>
+                                    <Utensils size={18} />
+                                </div>
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-900">Dine-In</span>
+                            </button>
+                            <button
+                                onClick={() => setOrderType("takeaway")}
+                                className={`p-4 rounded-[1.75rem] flex flex-col items-center gap-2.5 transition-all border-2 ${orderType === "takeaway"
+                                    ? "bg-slate-900 border-slate-900 shadow-lg shadow-slate-200 scale-102 text-white"
+                                    : "bg-white border-slate-100 grayscale opacity-60 hover:opacity-100 hover:grayscale-0"
+                                    }`}
+                            >
+                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${orderType === "takeaway" ? "bg-amber-400 text-slate-900" : "bg-slate-100 text-slate-400"}`}>
+                                    <ShoppingBag size={18} />
+                                </div>
+                                <span className="text-[9px] font-black uppercase tracking-widest">Takeaway</span>
+                            </button>
                         </div>
-                    )}
-                </div>
-            </header>
+
+                        {/* Customer Form */}
+                        <div className="space-y-3 mb-8">
+                            <div className="relative group">
+                                <User className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${name ? 'text-brand-600' : 'text-slate-300'}`} size={18} />
+                                <input
+                                    placeholder="Your Name"
+                                    value={name}
+                                    onChange={e => setName(e.target.value)}
+                                    className="w-full h-14 pl-12 pr-6 rounded-[1.25rem] bg-slate-50 border-2 border-transparent focus:border-brand-500/20 focus:bg-white transition-all outline-none font-bold text-sm text-slate-900 placeholder:text-slate-300"
+                                />
+                            </div>
+                            <div className="relative group">
+                                <Phone className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${phone ? 'text-brand-600' : 'text-slate-300'}`} size={18} />
+                                <input
+                                    placeholder="Phone Number"
+                                    type="tel"
+                                    value={phone}
+                                    onChange={e => setPhone(e.target.value)}
+                                    className="w-full h-14 pl-12 pr-6 rounded-[1.25rem] bg-slate-50 border-2 border-transparent focus:border-brand-500/20 focus:bg-white transition-all outline-none font-bold text-sm text-slate-900 placeholder:text-slate-300"
+                                />
+                            </div>
+                        </div>
+
+                        <Button
+                            className="w-full h-14 rounded-[1.5rem] bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-slate-900/20 active:scale-95 transition-all flex items-center justify-center gap-2 hover:bg-brand-600"
+                            onClick={handleOnboardingComplete}
+                        >
+                            Open Menu <ArrowRight size={16} />
+                        </Button>
+                    </div>
+
+                    <p className="mt-6 text-[8px] font-bold text-slate-300 uppercase tracking-[0.2em] text-center">
+                        Powered by <span className="text-brand-500">EZDine Premium</span>
+                    </p>
+                </main>
+            )}
 
             {step === "menu" && (
                 <main className="animate-in fade-in duration-700 slide-in-from-bottom-2">
@@ -334,74 +434,16 @@ export default function QrOrderPage() {
                     {cart.length > 0 && (
                         <Button
                             className="w-full h-16 rounded-[2rem] bg-brand-600 text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl shadow-brand-500/40 active:scale-95 transition-all group"
-                            onClick={() => setStep("customer")}
+                            onClick={handleCheckout}
+                            disabled={loading}
                         >
-                            Guest Details <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
+                            {loading ? (
+                                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                            ) : (
+                                <>Confirm Order <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" /></>
+                            )}
                         </Button>
                     )}
-                </main>
-            )}
-
-            {step === "customer" && (
-                <main className="p-6 animate-in slide-in-from-bottom-8 duration-500">
-                    <div className="flex items-center justify-between mb-10">
-                        <button onClick={() => setStep("cart")} className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center shadow-sm ring-1 ring-slate-100 text-slate-400 hover:text-brand-600 transition-all">
-                            <ChevronLeft size={24} />
-                        </button>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight text-center flex-1">Almost Done</h2>
-                        <div className="w-12" />
-                    </div>
-
-                    <div className="space-y-8 mb-12">
-                        <div className="space-y-4">
-                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-4">Tell us your name</label>
-                            <div className="relative">
-                                <User className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-600" size={20} />
-                                <input
-                                    placeholder="e.g. Rahul Sharma"
-                                    value={name}
-                                    onChange={e => setName(e.target.value)}
-                                    className="w-full h-16 pl-14 pr-6 rounded-[1.5rem] bg-white ring-1 ring-slate-200 font-bold focus:ring-4 focus:ring-brand-500/10 focus:ring-brand-500 transition-all outline-none"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-4">
-                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 ml-4">Mobile Number</label>
-                            <div className="relative">
-                                <Phone className="absolute left-6 top-1/2 -translate-y-1/2 text-brand-600" size={20} />
-                                <input
-                                    placeholder="98765 XXXXX"
-                                    type="tel"
-                                    value={phone}
-                                    onChange={e => setPhone(e.target.value)}
-                                    className="w-full h-16 pl-14 pr-6 rounded-[1.5rem] bg-white ring-1 ring-slate-200 font-bold focus:ring-4 focus:ring-brand-500/10 focus:ring-brand-500 transition-all outline-none"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="p-6 bg-indigo-50/50 rounded-[2rem] border border-indigo-100 flex gap-4 items-start shadow-sm shadow-indigo-100/50">
-                            <div className="h-8 w-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white shrink-0">
-                                <Zap size={16} />
-                            </div>
-                            <p className="text-xs text-indigo-900 font-medium leading-relaxed">
-                                <span className="font-black uppercase tracking-widest block mb-1">Instant Kitchen!</span>
-                                Your order will be fired to the kitchen immediately. You can settle the bill at the counter after your meal.
-                            </p>
-                        </div>
-                    </div>
-
-                    <Button
-                        className="w-full h-16 rounded-[2rem] bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl shadow-slate-900/30 active:scale-95 transition-all flex items-center justify-center gap-3"
-                        disabled={loading}
-                        onClick={handleCheckout}
-                    >
-                        {loading ? (
-                            <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                        ) : (
-                            <>Confirm Order <Check size={18} strokeWidth={3} /></>
-                        )}
-                    </Button>
                 </main>
             )}
 
@@ -462,7 +504,7 @@ export default function QrOrderPage() {
                     <Button
                         variant="ghost"
                         className="mt-6 text-brand-600 font-black uppercase tracking-[0.2em] text-[10px] hover:bg-brand-50 rounded-full px-8 py-4 transition-all"
-                        onClick={() => setStep("menu")}
+                        onClick={() => setStep("onboarding")}
                     >
                         Order More Items
                     </Button>
