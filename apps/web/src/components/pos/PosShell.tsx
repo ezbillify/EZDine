@@ -166,7 +166,15 @@ export function PosShell() {
           setLastUpdated(Date.now());
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("POS Realtime Status:", status);
+        if (status === 'SUBSCRIBED') {
+          toast.success("Connected to Live Updates");
+        }
+        if (status === 'CHANNEL_ERROR') {
+          toast.error("Live Updates Error");
+        }
+      });
 
     fetchQrOrders();
 
