@@ -40,7 +40,7 @@ export async function getPublicBranchMenu(branchId: string) {
 export async function getPublicBranchDetails(branchId: string) {
   const { data, error } = await supabase
     .from("branches")
-    .select("id, name, restaurant:restaurants(name, logo)")
+    .select("id, name, restaurant_id, restaurant:restaurants(name, logo)")
     .eq("id", branchId)
     .single();
 
