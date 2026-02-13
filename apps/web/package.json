@@ -1,13 +1,14 @@
 {
   "name": "@ezdine/web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "push": "node scripts/push.cjs"
   },
   "dependencies": {
     "@ezdine/shared": "workspace:*",

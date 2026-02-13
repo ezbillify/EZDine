@@ -22,6 +22,7 @@ import { useEffect, useState } from "react";
 
 import { getActiveBranchRole, getActiveRestaurantRole } from "../../lib/tenant";
 import { supabase } from "../../lib/supabaseClient";
+import { APP_VERSION } from "../../version";
 
 const baseItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -89,7 +90,6 @@ export function Sidebar({ className = "" }: { className?: string }) {
                     </div>
                     <div className="flex flex-col">
                         <span className="font-black text-lg text-slate-900 leading-none">EZDine <span className="text-brand-600">Pro</span></span>
-                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">Enterprise OS</span>
                     </div>
                 </div>
             </div>
@@ -143,6 +143,10 @@ export function Sidebar({ className = "" }: { className?: string }) {
                         <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                         <p className="text-[11px] font-black text-slate-900 uppercase">Live & Secure</p>
                     </div>
+                </div>
+
+                <div className="px-2 text-center">
+                    <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">v{APP_VERSION}</p>
                 </div>
 
                 <button
