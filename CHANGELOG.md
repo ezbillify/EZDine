@@ -1,4 +1,25 @@
 
+## v1.1.7 (2026-02-13)
+
+### 🚀 Release Notes v1.1.6
+
+#### ✨ New Features
+
+* Introduced smart payment modal with auto-fill and shortcuts for seamless transactions
+
+#### 🐛 Bug Fixes
+
+* Resolved zero payable bug
+* Strictly hide unpaid QR orders
+* Fixed payment verification issue by using Service Role Key
+* Enabled POS real-time for order items
+* Added connection debug logs for improved troubleshooting
+
+#### ⚡️ Improvements
+
+* Multiple release notes for v0.1.x to v1.1.6 👀
+
+
 ## v1.1.6 (2026-02-13)
 
 ### ✨ New Features

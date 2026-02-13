@@ -39,7 +39,10 @@ export default function QrOrderPage() {
     const [step, setStep] = useState<"onboarding_type" | "onboarding_mobile" | "onboarding_name" | "menu" | "cart" | "payment" | "success" | "track_lookup" | "track_view">("onboarding_type");
 
     // Customer & Order Data
-    const [orderType, setOrderType] = useState<"dine_in" | "takeaway">(initialTableId ? "dine_in" : "takeaway");
+    const [orderType, setOrderType] = useState<"dine_in" | "takeaway">("dine_in");
+    useEffect(() => {
+        if (initialTableId) setOrderType("dine_in");
+    }, [initialTableId]);
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [customerId, setCustomerId] = useState<string | null>(null);
@@ -344,20 +347,36 @@ export default function QrOrderPage() {
 
                         <div className="grid grid-cols-2 gap-3 mb-6">
                             <Button
-                                variant="outline"
-                                className={`h-16 rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-[0.98] transition-all border-2 ${orderType === "dine_in" ? 'border-slate-900 bg-slate-50' : 'border-slate-100 opacity-60'}`}
+                                variant={orderType === "dine_in" ? "primary" : "outline"}
+                                className={`h-28 rounded-3xl flex flex-col items-center justify-center gap-2 active:scale-[0.98] transition-all border-2 ${orderType === "dine_in"
+                                    ? "bg-slate-900 border-slate-900 text-white shadow-xl shadow-slate-200"
+                                    : "bg-white border-slate-100 text-slate-400 opacity-60"
+                                    }`}
                                 onClick={() => setOrderType("dine_in")}
                             >
-                                <Utensils size={18} className={orderType === "dine_in" ? "text-slate-900" : "text-slate-400"} />
-                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">Dine-In</span>
+                                <div className={`h-11 w-11 rounded-2xl flex items-center justify-center ${orderType === "dine_in" ? "bg-white/10" : "bg-slate-50"}`}>
+                                    <Utensils size={22} className={orderType === "dine_in" ? "text-white" : "text-slate-400"} />
+                                </div>
+                                <div className="space-y-0.5">
+                                    <span className="text-[10px] font-black uppercase tracking-widest block">Dine-In</span>
+                                    {orderType === "dine_in" && <div className="h-1 w-1 bg-brand-500 rounded-full mx-auto" />}
+                                </div>
                             </Button>
                             <Button
-                                variant="primary"
-                                className="w-full h-16 rounded-2xl flex flex-col items-center justify-center gap-1 group relative overflow-hidden active:scale-[0.98] transition-all bg-emerald-600 hover:bg-emerald-700"
+                                variant={orderType === "takeaway" ? "primary" : "outline"}
+                                className={`h-28 rounded-3xl flex flex-col items-center justify-center gap-2 active:scale-[0.98] transition-all border-2 ${orderType === "takeaway"
+                                    ? "bg-slate-900 border-slate-900 text-white shadow-xl shadow-slate-200"
+                                    : "bg-white border-slate-100 text-slate-400 opacity-60"
+                                    }`}
                                 onClick={() => setOrderType("takeaway")}
                             >
-                                <span className="font-black uppercase tracking-[0.2em] text-[10px]">Takeaway</span>
-                                <span className="text-[10px] font-bold opacity-60">Collect at Counter</span>
+                                <div className={`h-11 w-11 rounded-2xl flex items-center justify-center ${orderType === "takeaway" ? "bg-white/10" : "bg-slate-50"}`}>
+                                    <ShoppingBag size={22} className={orderType === "takeaway" ? "text-white" : "text-slate-400"} />
+                                </div>
+                                <div className="space-y-0.5">
+                                    <span className="text-[10px] font-black uppercase tracking-widest block">Takeaway</span>
+                                    {orderType === "takeaway" && <div className="h-1 w-1 bg-brand-500 rounded-full mx-auto" />}
+                                </div>
                             </Button>
                         </div>
 
