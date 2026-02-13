@@ -52,6 +52,8 @@ export function KdsBoard() {
           source,
           created_at,
           table:tables(name),
+          payment_status,
+          payment_method,
           order_items(
             id,
             quantity,
@@ -132,9 +134,18 @@ export function KdsBoard() {
     );
   }
 
-  const pendingOrders = orders.filter(o => o.status === "pending");
-  const preparingOrders = orders.filter(o => o.status === "preparing");
-  const readyOrders = orders.filter(o => o.status === "ready");
+  const validOrders = orders.filter(o => {
+    // If it's an online payment (QR/Online), it MUST be paid to show up on KDS.
+    // However, if it's 'cash' (Pay at Counter), it can be 'pending'/'counter_pending'.
+    if ((o as any).payment_method === 'online' && (o as any).payment_status !== 'paid') {
+      return false;
+    }
+    return true;
+  });
+
+  const pendingOrders = validOrders.filter(o => o.status === "pending");
+  const preparingOrders = validOrders.filter(o => o.status === "preparing");
+  const readyOrders = validOrders.filter(o => o.status === "ready");
 
   return (
     <>

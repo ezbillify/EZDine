@@ -355,10 +355,23 @@ export async function saveRazorpaySettings(branchId: string, settings: { key: st
 
 export async function verifyPayment(orderId: string, paymentId: string, signature: string) {
   // Use Edge Function
+  console.log("Verifying payment with Edge Function:", { orderId, paymentId });
   const { data, error } = await supabase.functions.invoke('payment-verification', {
     body: { orderId, paymentId, signature }
   });
 
-  if (error) throw error;
+  if (error) {
+    console.error("Edge Function Error:", error);
+    // If Edge function fails (e.g. 500), 'error' is populated.
+    // We should throw it to catch it in the UI.
+    throw error;
+  }
+
+  // Also check if data.success is false (logic error inside function)
+  if (data && !data.success) {
+    console.error("Verification Logic Failed:", data);
+    throw new Error(data.error || "Verification failed");
+  }
+
   return data;
 }
