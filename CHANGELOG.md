@@ -1,4 +1,23 @@
 
+## v1.1.6 (2026-02-13)
+
+### ✨ New Features
+- No new features were added in these commits.
+
+### 🐛 Fixes
+- **Smart Payment Modal**: resolve zero payable bug and add auto-fill and shortcuts to the smart payment modal [f4f1500]
+- **POS Realtime**: enable POS realtime for order items and add connection debug logs [823592d]
+- **Payment Verification**: use Service Role Key for payment verification to bypass RLS [dfa7c5f]
+- **KDS Unpaid Orders**: strictly hide all unpaid QR orders from KDS [d610729]
+- **KDS Online Orders**: hide unpaid online orders from KDS and add debug logs for payment verification [5016390]
+
+### ⚡️ Improvements
+- No improvements were added in these commits.
+
+### 🚀 Release Notes
+- Releases v0.1.5, v0.1.4, v0.1.3, v0.1.2, and v0.1.1.
+
+
 ## v0.1.5 (2026-02-13)
 
 **🚀 Release Notes**

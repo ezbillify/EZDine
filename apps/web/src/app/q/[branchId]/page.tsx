@@ -343,18 +343,14 @@ export default function QrOrderPage() {
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mb-6">
-                            <button
+                            <Button
+                                variant="outline"
+                                className={`h-16 rounded-2xl flex flex-col items-center justify-center gap-1 active:scale-[0.98] transition-all border-2 ${orderType === "dine_in" ? 'border-slate-900 bg-slate-50' : 'border-slate-100 opacity-60'}`}
                                 onClick={() => setOrderType("dine_in")}
-                                className={`p-4 rounded-2xl flex flex-col items-center gap-2 transition-all border-2 ${orderType === "dine_in"
-                                    ? "bg-slate-50 border-slate-900"
-                                    : "bg-white border-slate-100 opacity-60"
-                                    }`}
                             >
-                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${orderType === "dine_in" ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-400"}`}>
-                                    <Utensils size={18} />
-                                </div>
+                                <Utensils size={18} className={orderType === "dine_in" ? "text-slate-900" : "text-slate-400"} />
                                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">Dine-In</span>
-                            </button>
+                            </Button>
                             <Button
                                 variant="primary"
                                 className="w-full h-16 rounded-2xl flex flex-col items-center justify-center gap-1 group relative overflow-hidden active:scale-[0.98] transition-all bg-emerald-600 hover:bg-emerald-700"
@@ -380,6 +376,111 @@ export default function QrOrderPage() {
                             Already Ordered? Check Status
                         </button>
                     </div>
+                </main>
+            )}
+
+            {step === "track_lookup" && (
+                <main className="min-h-[90vh] flex flex-col items-center justify-center p-6 animate-in slide-in-from-bottom-10 duration-500">
+                    <div className="w-full max-w-[340px] bg-white rounded-3xl shadow-xl border border-slate-100 p-6 pt-8 relative overflow-hidden text-center">
+                        <button
+                            onClick={() => setStep("onboarding_type")}
+                            className="absolute top-4 left-4 p-2 rounded-full bg-slate-100 text-slate-900 active:scale-90 transition-all"
+                        >
+                            <ChevronLeft size={18} />
+                        </button>
+
+                        <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center mb-6 mx-auto shadow-sm">
+                            <Clock size={28} className="text-emerald-600" />
+                        </div>
+
+                        <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-1">Track Order</h2>
+                        <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-3 italic">Check Status</h1>
+                        <p className="text-slate-400 font-bold mb-8 max-w-[200px] mx-auto text-xs">Enter your mobile number to see your live kitchen status.</p>
+
+                        <div className="space-y-4">
+                            <div className="relative">
+                                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                <input
+                                    type="tel"
+                                    placeholder="Phone Number"
+                                    value={trackPhone}
+                                    onChange={(e) => setTrackPhone(e.target.value)}
+                                    className="w-full h-14 pl-12 pr-4 bg-slate-50 border-none rounded-2xl text-base font-bold text-slate-900 placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900/5 transition-all outline-none"
+                                />
+                            </div>
+
+                            <Button
+                                variant="primary"
+                                className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all shadow-lg shadow-slate-200"
+                                onClick={handleTrackLookup}
+                                disabled={loading}
+                            >
+                                {loading ? "Searching..." : "Track My Orders"}
+                            </Button>
+                        </div>
+                    </div>
+                </main>
+            )}
+
+            {step === "track_view" && (
+                <main className="min-h-[90vh] flex flex-col items-center p-6 bg-slate-50/50 animate-in fade-in duration-500">
+                    <div className="w-full max-w-[400px] flex items-center justify-between mb-8">
+                        <button
+                            onClick={() => setStep("track_lookup")}
+                            className="p-3 rounded-2xl bg-white text-slate-900 shadow-sm active:scale-90 transition-all border border-slate-100"
+                        >
+                            <ChevronLeft size={20} />
+                        </button>
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight italic">Live Status</h2>
+                        <div className="w-10" />
+                    </div>
+
+                    <div className="w-full max-w-[400px] space-y-4">
+                        {trackedOrders.length > 0 ? trackedOrders.map((order) => (
+                            <div key={order.id} className="bg-white rounded-3xl border border-slate-100 p-6 shadow-sm relative overflow-hidden">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Token</p>
+                                        <p className="text-4xl font-black text-slate-900 italic tracking-tighter">#{order.token_number}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Status</p>
+                                        <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${order.status === 'ready' ? 'bg-emerald-50 text-emerald-600' :
+                                            order.status === 'preparing' ? 'bg-amber-50 text-amber-600 animate-pulse' :
+                                                'bg-slate-50 text-slate-400'
+                                            }`}>
+                                            {order.status}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+                                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-300">
+                                        <Clock size={12} />
+                                        <span>{new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <div className={`text-[10px] font-black uppercase tracking-widest ${order.payment_status === 'paid' ? 'text-emerald-500' : 'text-amber-500'
+                                        }`}>
+                                        {order.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
+                                    </div>
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="py-20 text-center opacity-40">
+                                <p className="font-black uppercase tracking-widest text-[10px]">No active orders found</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <p className="mt-12 text-[10px] font-bold text-slate-400 text-center max-w-[220px] leading-relaxed">
+                        Stay close to the counter if your status is <span className="text-emerald-600 font-black">"Ready"</span>.
+                    </p>
+
+                    <button
+                        onClick={() => setStep("onboarding_type")}
+                        className="mt-8 text-slate-900 font-black uppercase tracking-widest text-[10px] underline underline-offset-8 decoration-slate-200"
+                    >
+                        Back to Welcome
+                    </button>
                 </main>
             )}
 
