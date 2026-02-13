@@ -1,4 +1,27 @@
 
+## v0.1.4 (2026-02-13)
+
+**What's New in 0.1.4 🚀**
+
+### ✨ Features
+
+* **Split Payments**: Seamlessly split payments with our POS, perfect for multiple users 📈
+* **KDS Realtime**: Get real-time updates on orders, no delays! ⏱️
+* **Razorpay Verification**: Our edge function verifies payments for extra security 🔒
+
+### 🐛 Fixes
+
+* **Payment Bug Fix**: No more zero payable bugs, auto-fill and shortcuts for smart payments 🛍️
+* **QR Order Hiding**: Unpaid QR orders are now hidden from view 🔒
+* **Payment Verification**: Use Service Role Key for secure payment verification 🔑
+* **POS Realtime**: Get real-time updates on order items, plus connection debug logs 📊
+* **KDS Unpaid Orders**: Hide unpaid online orders, and get debug logs for payment verification 🔍
+
+### ⚡️ Improvements
+
+* **Release Updates**: We've released v0.1.3, v0.1.2, and v0.1.1 to keep you on the bleeding edge 🚀
+
+
 ## v0.1.3 (2026-02-13)
 
 **Changelog 📚**

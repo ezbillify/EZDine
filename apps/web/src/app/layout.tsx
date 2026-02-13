@@ -9,7 +9,8 @@ const outfit = Outfit({
 
 export const metadata = {
   title: "EZDine | Modern Restaurant OS",
-  description: "The intelligent operating system for forward-thinking restaurants."
+  description: "The intelligent operating system for forward-thinking restaurants.",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0"
 };
 
 export default function RootLayout({

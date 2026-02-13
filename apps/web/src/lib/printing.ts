@@ -79,19 +79,27 @@ export async function saveDocNumberingSettings(
 }
 
 export async function sendPrintJob(job: PrintJob) {
-  const baseUrl = process.env.NEXT_PUBLIC_PRINT_SERVER_URL;
-  if (!baseUrl) {
-    throw new Error("Missing NEXT_PUBLIC_PRINT_SERVER_URL");
-  }
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_PRINT_SERVER_URL;
+    if (!baseUrl) {
+      console.warn("Printing skipped: NEXT_PUBLIC_PRINT_SERVER_URL not configured");
+      return false;
+    }
 
-  const response = await fetch(`${baseUrl}/print`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(job)
-  });
+    const response = await fetch(`${baseUrl}/print`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(job)
+    });
 
-  if (!response.ok) {
-    throw new Error("Print server error");
+    if (!response.ok) {
+      console.warn("Print server responded with error", await response.text());
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("Critical print job failure:", err);
+    return false;
   }
 }
 

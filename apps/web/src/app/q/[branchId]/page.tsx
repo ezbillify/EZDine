@@ -265,37 +265,36 @@ export default function QrOrderPage() {
         <div className="min-h-screen bg-slate-50 font-outfit select-none">
             <Toaster position="top-center" richColors />
 
-            {/* Premium Header - Only show if not success step, or maybe show always for branding */}
+            {/* Premium Header */}
             {step !== "onboarding_type" && step !== "onboarding_mobile" && step !== "onboarding_name" && step !== "success" && (
-                <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 px-4 py-4">
-                    <div className="flex items-center justify-between mb-2">
+                <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-4">
+                    <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 bg-gradient-to-br from-brand-600 to-brand-700 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-brand-500/30 transform transition-transform hover:rotate-6">
+                            <div className="h-10 w-10 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg">
                                 <Utensils size={20} />
                             </div>
                             <div>
-                                <h1 className="font-black text-xl tracking-tighter leading-none text-slate-900">
+                                <h1 className="font-extrabold text-xl tracking-tight leading-none text-slate-900">
                                     {branchInfo?.restaurant?.name || "EZDine"}
                                 </h1>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 italic">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-1.5">
+                                    <span className="h-1 w-1 bg-brand-500 rounded-full" />
                                     {branchInfo?.name || "Main Branch"}
                                 </p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 shadow-sm border ${orderType === 'dine_in' ? 'bg-brand-50 border-brand-100 text-brand-600' : 'bg-slate-900 border-slate-900 text-white'}`}>
-                                {orderType === 'dine_in' ? (
-                                    <>
-                                        <span className="h-2 w-2 rounded-full bg-brand-600 animate-pulse" />
-                                        <span className="text-xs font-black uppercase tracking-widest">{initialTableId ? `Table ${initialTableId.split('-')[0]}` : "Dine In"}</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <ShoppingBag size={14} />
-                                        <span className="text-xs font-black uppercase tracking-widest">Takeaway</span>
-                                    </>
-                                )}
-                            </div>
+                        <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 border ${orderType === 'dine_in' ? 'bg-brand-50 border-brand-100 text-brand-600' : 'bg-slate-900 border-slate-900 text-white'}`}>
+                            {orderType === 'dine_in' ? (
+                                <>
+                                    <span className="h-2 w-2 rounded-full bg-brand-600 animate-pulse" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{initialTableId ? `Table ${initialTableId.split('-')[0]}` : "Dine In"}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <ShoppingBag size={14} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">Takeaway</span>
+                                </>
+                            )}
                         </div>
                     </div>
                 </header>
@@ -303,162 +302,152 @@ export default function QrOrderPage() {
 
             {/* Onboarding: Step 1 - Order Type */}
             {step === "onboarding_type" && (
-                <main className="min-h-screen flex flex-col items-center justify-center p-5 animate-in fade-in zoom-in-95 duration-700">
-                    <div className="w-full max-w-[360px] bg-white rounded-[2.5rem] shadow-2xl shadow-brand-100/40 border border-brand-50 p-6 pt-10 relative overflow-hidden text-center">
-                        {/* Decorative Background */}
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-brand-50 rounded-full -mr-12 -mt-12 blur-3xl opacity-40" />
-                        <div className="absolute bottom-0 left-0 w-24 h-24 bg-amber-50 rounded-full -ml-12 -mb-12 blur-3xl opacity-40" />
-
-                        <div className="relative z-10 text-center mb-8">
-                            <div className="h-16 w-16 bg-brand-600 rounded-2xl flex items-center justify-center text-white mx-auto shadow-xl shadow-brand-500/20 mb-5 rotate-3">
-                                <Coffee size={28} />
+                <main className="min-h-[90vh] flex flex-col items-center justify-center p-4 animate-in fade-in zoom-in-95 duration-700">
+                    <div className="w-full max-w-[340px] bg-white rounded-3xl shadow-xl border border-slate-100 p-6 pt-8 text-center">
+                        <div className="mb-6">
+                            <div className="h-14 w-14 bg-slate-900 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-lg shadow-slate-200">
+                                <Coffee size={24} />
                             </div>
-                            <h2 className="text-[9px] font-black uppercase tracking-[0.3em] text-brand-600 mb-1.5">Welcome to</h2>
-                            <h1 className="text-2xl font-black text-slate-900 tracking-tighter leading-none mb-3">
+                            <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-1">Welcome to</h2>
+                            <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-2">
                                 {branchInfo?.restaurant?.name || "EZDine"}
                             </h1>
-                            <p className="text-slate-400 font-medium text-[11px] tracking-wide">How would you like to enjoy your meal today?</p>
+                            <p className="text-slate-400 font-medium text-[11px] tracking-wide">Select your dining preference</p>
                         </div>
 
-                        {/* Order Type Selection */}
-                        <div className="grid grid-cols-2 gap-3 mb-8">
+                        <div className="grid grid-cols-2 gap-3 mb-6">
                             <button
                                 onClick={() => setOrderType("dine_in")}
-                                className={`p-4 rounded-[1.75rem] flex flex-col items-center gap-2.5 transition-all border-2 ${orderType === "dine_in"
-                                    ? "bg-brand-50 border-brand-500 shadow-lg shadow-brand-100 scale-102"
-                                    : "bg-white border-slate-100 grayscale opacity-60 hover:opacity-100 hover:grayscale-0"
+                                className={`p-4 rounded-2xl flex flex-col items-center gap-2 transition-all border-2 ${orderType === "dine_in"
+                                    ? "bg-slate-50 border-slate-900"
+                                    : "bg-white border-slate-100 opacity-60"
                                     }`}
                             >
-                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${orderType === "dine_in" ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-400"}`}>
+                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${orderType === "dine_in" ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-400"}`}>
                                     <Utensils size={18} />
                                 </div>
-                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-900">Dine-In</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">Dine-In</span>
                             </button>
                             <button
                                 onClick={() => setOrderType("takeaway")}
-                                className={`p-4 rounded-[1.75rem] flex flex-col items-center gap-2.5 transition-all border-2 ${orderType === "takeaway"
-                                    ? "bg-slate-900 border-slate-900 shadow-lg shadow-slate-200 scale-102 text-white"
-                                    : "bg-white border-slate-100 grayscale opacity-60 hover:opacity-100 hover:grayscale-0"
+                                className={`p-4 rounded-2xl flex flex-col items-center gap-2 transition-all border-2 ${orderType === "takeaway"
+                                    ? "bg-slate-900 border-slate-900 text-white"
+                                    : "bg-white border-slate-100 opacity-60"
                                     }`}
                             >
-                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${orderType === "takeaway" ? "bg-amber-400 text-slate-900" : "bg-slate-100 text-slate-400"}`}>
+                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${orderType === "takeaway" ? "bg-amber-400 text-slate-900" : "bg-slate-50 text-slate-400"}`}>
                                     <ShoppingBag size={18} />
                                 </div>
-                                <span className="text-[9px] font-black uppercase tracking-widest">Takeaway</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest">Takeaway</span>
                             </button>
                         </div>
 
-                        <Button
-                            className="w-full h-14 rounded-[1.5rem] bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-slate-900/20 active:scale-95 transition-all flex items-center justify-center gap-2 hover:bg-brand-600"
+                        <button
+                            className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[12px] shadow-lg shadow-slate-200 active:scale-95 transition-all flex items-center justify-center gap-3"
                             onClick={() => setStep("onboarding_mobile")}
                         >
-                            Continue <ArrowRight size={16} className="ml-2" />
-                        </Button>
-                    </div>
-
-                    <p className="mt-6 text-[8px] font-bold text-slate-300 uppercase tracking-[0.2em] text-center">
-                        Powered by <span className="text-brand-500">EZDine Premium</span>
-                    </p>
-                </main>
-            )}
-
-            {/* Onboarding: Step 2 - Mobile Number */}
-            {step === "onboarding_mobile" && (
-                <main className="min-h-screen flex flex-col items-center justify-center p-5 animate-in slide-in-from-bottom-10 duration-500">
-                    <div className="w-full max-w-[360px] bg-white rounded-[2.5rem] shadow-2xl shadow-brand-100/40 border border-brand-50 p-6 pt-10 relative overflow-hidden">
-                        <div className="mb-8 text-center">
-                            <h2 className="text-[9px] font-black uppercase tracking-[0.3em] text-brand-600 mb-1.5">Verification</h2>
-                            <h1 className="text-2xl font-black text-slate-900 tracking-tighter leading-none mb-3">Your Mobile</h1>
-                            <p className="text-slate-400 font-medium text-[11px] tracking-wide">Enter your number to view our menu</p>
-                        </div>
-
-                        <div className="relative mb-8">
-                            <Phone className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${phone ? 'text-brand-600' : 'text-slate-300'}`} size={18} />
-                            <input
-                                placeholder="Phone Number"
-                                type="tel"
-                                value={phone}
-                                onChange={e => setPhone(e.target.value)}
-                                className="w-full h-14 pl-12 pr-6 rounded-[1.25rem] bg-slate-50 border-2 border-transparent focus:border-brand-500/20 focus:bg-white transition-all outline-none font-bold text-sm text-slate-900 placeholder:text-slate-300"
-                            />
-                        </div>
-
-                        <Button
-                            className="w-full h-14 rounded-[1.5rem] bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-slate-900/20 disabled:opacity-50"
-                            onClick={handleMobileSubmit}
-                            disabled={loading || phone.length < 10}
-                        >
-                            {loading ? "Checking..." : "Verify & Open Menu"} <ArrowRight size={16} className="ml-2" />
-                        </Button>
-
-                        <button onClick={() => setStep("onboarding_type")} className="w-full mt-6 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                            Go Back
+                            Continue <ArrowRight size={18} />
                         </button>
                     </div>
                 </main>
             )}
 
-            {/* Onboarding: Step 3 - Name Entry (New Customers Only) */}
-            {step === "onboarding_name" && (
-                <main className="min-h-screen flex flex-col items-center justify-center p-5 animate-in fade-in duration-500 bg-slate-900/10 backdrop-blur-sm z-50 fixed inset-0">
-                    <div className="w-full max-w-[340px] bg-white rounded-[2.5rem] shadow-2xl p-6 pt-10 text-center relative">
-                        <div className="h-14 w-14 bg-brand-50 rounded-full flex items-center justify-center text-brand-600 mx-auto mb-5">
-                            <User size={24} />
+            {/* Onboarding: Step 2 - Mobile Number */}
+            {step === "onboarding_mobile" && (
+                <main className="min-h-[90vh] flex flex-col items-center justify-center p-4 animate-in slide-in-from-bottom-10 duration-500">
+                    <div className="w-full max-w-[340px] bg-white rounded-3xl shadow-xl border border-slate-100 p-6 pt-8 relative overflow-hidden">
+                        <div className="mb-6 text-center">
+                            <div className="h-12 w-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                <Zap size={20} />
+                            </div>
+                            <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-1">Quick Login</h2>
+                            <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-2">Your Mobile</h1>
+                            <p className="text-slate-400 font-medium text-[11px] tracking-wide">Enter your number to continue</p>
                         </div>
-                        <h2 className="text-[9px] font-black uppercase tracking-[0.3em] text-brand-600 mb-1.5">New Customer</h2>
-                        <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none mb-3">What's your name?</h1>
-                        <p className="text-slate-400 font-medium text-[10px] tracking-wide mb-8">We'd love to know who we're serving today!</p>
 
-                        <div className="relative mb-8">
-                            <User className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${name ? 'text-brand-600' : 'text-slate-300'}`} size={18} />
+                        <div className="relative mb-6">
+                            <Phone className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${phone ? 'text-slate-900' : 'text-slate-300'}`} size={18} />
+                            <input
+                                placeholder="Phone Number"
+                                type="tel"
+                                value={phone}
+                                onChange={e => setPhone(e.target.value)}
+                                className="w-full h-14 pl-12 pr-6 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-slate-900/10 focus:bg-white transition-all outline-none font-bold text-base text-slate-900 placeholder:text-slate-300"
+                            />
+                        </div>
+
+                        <button
+                            className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[12px] shadow-lg shadow-slate-200 disabled:opacity-50 transition-all active:scale-95"
+                            onClick={handleMobileSubmit}
+                            disabled={loading || phone.length < 10}
+                        >
+                            {loading ? "Verifying..." : "Proceed to Menu"}
+                        </button>
+
+                        <button onClick={() => setStep("onboarding_type")} className="w-full mt-4 text-[9px] font-black uppercase tracking-widest text-slate-400">
+                            Back
+                        </button>
+                    </div>
+                </main>
+            )}
+
+            {/* Onboarding: Step 3 - Name Entry */}
+            {step === "onboarding_name" && (
+                <main className="min-h-[90vh] flex flex-col items-center justify-center p-4 animate-in fade-in duration-500">
+                    <div className="w-full max-w-[340px] bg-white rounded-3xl shadow-xl border border-slate-100 p-6 pt-8 text-center relative">
+                        <div className="h-12 w-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <User size={20} />
+                        </div>
+                        <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-1">New Guest</h2>
+                        <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-2">What's your name?</h1>
+                        <p className="text-slate-400 font-medium text-[11px] tracking-wide mb-6">We'd love to know who we're serving!</p>
+
+                        <div className="relative mb-6">
+                            <User className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${name ? 'text-slate-900' : 'text-slate-300'}`} size={18} />
                             <input
                                 placeholder="Your Name"
                                 value={name}
                                 onChange={e => setName(e.target.value)}
                                 autoFocus
-                                className="w-full h-14 pl-12 pr-6 rounded-[1.25rem] bg-slate-50 border-2 border-transparent focus:border-brand-500/20 focus:bg-white transition-all outline-none font-bold text-sm text-slate-900 placeholder:text-slate-300"
+                                className="w-full h-14 pl-12 pr-6 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-slate-900/10 focus:bg-white transition-all outline-none font-bold text-base text-slate-900 placeholder:text-slate-300"
                             />
                         </div>
 
-                        <Button
-                            className="w-full h-14 rounded-[1.5rem] bg-brand-600 text-white font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-brand-500/20 disabled:opacity-50"
+                        <button
+                            className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[12px] shadow-lg shadow-slate-200 disabled:opacity-50 transition-all active:scale-95"
                             onClick={handleNameSubmit}
                             disabled={loading || !name}
                         >
-                            {loading ? "Welcome..." : "Start Dining"}
-                        </Button>
+                            {loading ? "Welcome..." : "Start Ordering"}
+                        </button>
                     </div>
                 </main>
             )}
 
+            {/* Menu Screen */}
             {step === "menu" && (
-                <main className="animate-in fade-in duration-700 slide-in-from-bottom-2">
-                    {/* Search & Categories Bar */}
-                    <div className="px-4 pt-4 pb-2 bg-white/40 sticky top-[73px] z-40 backdrop-blur-sm">
-                        <div className="relative mb-6">
+                <main className="animate-in fade-in duration-700 slide-in-from-bottom-2 pb-32">
+                    <div className="px-4 pt-4 pb-2 bg-slate-50/80 sticky top-[73px] z-40 backdrop-blur-md">
+                        <div className="relative mb-4">
                             <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
                                 <Search size={20} />
                             </div>
                             <input
-                                placeholder="Craving something specific?"
+                                placeholder="Search menu..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full h-14 bg-white border-0 shadow-sm ring-1 ring-slate-100 rounded-[1.25rem] pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-brand-500 transition-all outline-none placeholder:text-slate-300"
+                                className="w-full h-12 bg-white border border-slate-200 rounded-2xl pl-12 pr-4 text-base font-medium focus:ring-2 focus:ring-slate-900/5 transition-all outline-none"
                             />
                         </div>
 
-                        {/* Category Scroller */}
-                        <div
-                            ref={categoryRef}
-                            className="flex gap-2 overflow-x-auto no-scrollbar pb-2 mask-linear-r"
-                        >
+                        <div ref={categoryRef} className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                             {categories.map(cat => (
                                 <button
                                     key={cat.id}
                                     onClick={() => setActiveCategory(cat.name)}
-                                    className={`whitespace-nowrap px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeCategory === cat.name
-                                        ? "bg-slate-900 text-white shadow-xl shadow-slate-900/20 scale-105"
-                                        : "bg-white text-slate-500 hover:bg-slate-50 ring-1 ring-slate-100"
+                                    className={`whitespace-nowrap px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === cat.name
+                                        ? "bg-slate-900 text-white shadow-md shadow-slate-200"
+                                        : "bg-white text-slate-500 border border-slate-100"
                                         }`}
                                 >
                                     {cat.name}
@@ -467,51 +456,34 @@ export default function QrOrderPage() {
                         </div>
                     </div>
 
-                    {/* Menu Items */}
-                    <div className="p-4 flex flex-col gap-4">
+                    <div className="p-4 grid gap-4">
                         {filteredItems.length === 0 ? (
-                            <div className="py-20 text-center flex flex-col items-center opacity-50">
-                                <div className="h-20 w-20 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                                    <Search size={32} className="text-slate-300" />
-                                </div>
-                                <h3 className="font-black text-slate-400 uppercase tracking-widest text-xs">No Items Found</h3>
-                                <p className="text-xs text-slate-300 mt-1">Try another category or search term</p>
+                            <div className="py-20 text-center flex flex-col items-center opacity-40">
+                                <Search size={40} className="text-slate-300 mb-4" />
+                                <h3 className="font-black text-slate-400 uppercase tracking-widest text-[10px]">No matches</h3>
                             </div>
                         ) : (
                             filteredItems.map(item => (
-                                <div
-                                    key={item.id}
-                                    className={`group relative bg-white rounded-[2rem] p-5 flex gap-5 shadow-sm ring-1 ring-slate-100 items-center transition-all duration-500 hover:shadow-2xl hover:shadow-slate-200/50 hover:ring-brand-100 ${!item.is_available ? 'opacity-60 grayscale bg-slate-50' : ''}`}
-                                >
+                                <div key={item.id} className={`bg-white rounded-3xl p-5 flex gap-5 border border-slate-100 shadow-sm items-center ${!item.is_available ? 'opacity-50 grayscale' : ''}`}>
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <div className={`h-2.5 w-2.5 rounded-full ring-2 ring-white shadow-sm ${item.is_veg ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                                            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-300">
-                                                {item.menu_categories?.name || "Kitchen"}
-                                            </span>
-                                            {!item.is_available && (
-                                                <span className="bg-rose-100 text-rose-600 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ml-auto">Sold Out</span>
-                                            )}
+                                            <div className={`h-2.5 w-2.5 rounded-full ${item.is_veg ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">{item.menu_categories?.name}</span>
+                                            {!item.is_available && <span className="text-[9px] font-black text-rose-500 uppercase ml-auto tracking-widest">Sold Out</span>}
                                         </div>
-                                        <h3 className="font-black text-lg text-slate-900 tracking-tight leading-none mb-2">{item.name}</h3>
-                                        <p className="text-[11px] font-medium text-slate-400 line-clamp-2 leading-relaxed mb-4">{item.description}</p>
-                                        <div className="flex items-center justify-between">
-                                            <p className="font-black text-xl text-slate-900 tracking-tighter">
-                                                <span className="text-xs font-bold text-slate-300 mr-0.5">₹</span>
-                                                {item.base_price}
-                                            </p>
+                                        <h3 className="font-extrabold text-lg text-slate-900 leading-tight mb-1">{item.name}</h3>
+                                        <p className="text-[11px] font-medium text-slate-400 line-clamp-2 mb-3">{item.description}</p>
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-xs font-bold text-slate-400">₹</span>
+                                            <span className="font-black text-xl text-slate-900 italic tracking-tighter">{item.base_price}</span>
                                         </div>
                                     </div>
-
                                     <button
                                         onClick={() => addToCart(item)}
                                         disabled={!item.is_available}
-                                        className={`h-14 w-14 rounded-[1.5rem] flex items-center justify-center transition-all active:scale-95 shadow-lg group-hover:scale-105 ${item.is_available
-                                            ? 'bg-brand-600 text-white shadow-brand-500/20 hover:bg-slate-900'
-                                            : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                                            }`}
+                                        className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all active:scale-90 ${item.is_available ? 'bg-slate-900 text-white shadow-lg shadow-slate-200' : 'bg-slate-100 text-slate-300'}`}
                                     >
-                                        {item.is_available ? <Plus size={24} strokeWidth={3} /> : <Zap size={20} className="opacity-30" />}
+                                        <Plus size={22} strokeWidth={2.5} />
                                     </button>
                                 </div>
                             ))
@@ -520,38 +492,37 @@ export default function QrOrderPage() {
                 </main>
             )}
 
+            {/* Cart Screen */}
             {step === "cart" && (
-                <main className="p-4 px-6 animate-in slide-in-from-bottom-8 duration-500">
+                <main className="p-4 animate-in slide-in-from-bottom-8 duration-500">
                     <div className="flex items-center justify-between mb-8">
-                        <button onClick={() => setStep("menu")} className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center shadow-sm ring-1 ring-slate-100 text-slate-400 hover:text-brand-600 transition-all">
+                        <button onClick={() => setStep("menu")} className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center border border-slate-100 text-slate-400">
                             <ChevronLeft size={24} />
                         </button>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight text-center flex-1">Your Basket</h2>
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight text-center flex-1">Your Order</h2>
                         <div className="w-12" />
                     </div>
 
-                    <div className="space-y-4 mb-8">
+                    <div className="space-y-3 mb-6">
                         {cart.length === 0 ? (
-                            <div className="py-20 text-center flex flex-col items-center opacity-50">
-                                <div className="h-24 w-24 bg-slate-100 rounded-[2.5rem] flex items-center justify-center mb-6">
-                                    <ShoppingBag size={40} className="text-slate-300" />
-                                </div>
-                                <h3 className="font-black text-slate-400 uppercase tracking-widest text-sm">Basket is empty</h3>
+                            <div className="py-20 text-center opacity-40">
+                                <ShoppingBag size={40} className="mx-auto mb-4" />
+                                <h3 className="font-black uppercase tracking-widest text-[10px]">Your basket is empty</h3>
                             </div>
                         ) : (
                             cart.map(item => (
-                                <div key={item.item_id} className="bg-white rounded-[2rem] p-5 flex items-center justify-between gap-4 ring-1 ring-slate-100 shadow-sm transition-all hover:shadow-md">
+                                <div key={item.item_id} className="bg-white rounded-2xl p-4 flex items-center justify-between border border-slate-100">
                                     <div className="flex-1">
-                                        <p className="font-black text-slate-900 text-lg leading-none mb-1">{item.name}</p>
-                                        <p className="text-xs font-bold text-slate-400">₹{item.price} each</p>
+                                        <p className="font-black text-slate-900 leading-none mb-1">{item.name}</p>
+                                        <p className="text-[10px] font-bold text-slate-400">₹{item.price}</p>
                                     </div>
-                                    <div className="flex items-center gap-4 bg-slate-50 rounded-2xl p-1.5 ring-1 ring-slate-200/50">
-                                        <button onClick={() => updateQty(item.item_id, -1)} className="h-10 w-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-slate-400 hover:text-rose-500 active:scale-90 transition-all">
-                                            <Minus size={18} strokeWidth={3} />
+                                    <div className="flex items-center gap-4 bg-slate-50 rounded-xl p-1 border border-slate-100">
+                                        <button onClick={() => updateQty(item.item_id, -1)} className="h-8 w-8 bg-white rounded-lg flex items-center justify-center text-slate-400 shadow-sm">
+                                            <Minus size={16} strokeWidth={3} />
                                         </button>
-                                        <span className="font-black text-base w-6 text-center text-slate-900 font-mono">{item.qty}</span>
-                                        <button onClick={() => updateQty(item.item_id, 1)} className="h-10 w-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-slate-400 hover:text-brand-600 active:scale-90 transition-all">
-                                            <Plus size={18} strokeWidth={3} />
+                                        <span className="font-black text-sm w-4 text-center text-slate-900">{item.qty}</span>
+                                        <button onClick={() => updateQty(item.item_id, 1)} className="h-8 w-8 bg-white rounded-lg flex items-center justify-center text-slate-400 shadow-sm">
+                                            <Plus size={16} strokeWidth={3} />
                                         </button>
                                     </div>
                                 </div>
@@ -560,199 +531,158 @@ export default function QrOrderPage() {
                     </div>
 
                     {cart.length > 0 && (
-                        <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-slate-900/30 mb-8 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-[40%] h-full bg-gradient-to-l from-brand-600/20 to-transparent pointer-events-none" />
-                            <div className="relative z-10 space-y-4">
-                                <div className="flex justify-between items-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">
-                                    <span>Subtotal</span>
-                                    <span>₹{total.toFixed(2)}</span>
+                        <>
+                            <div className="bg-slate-900 rounded-3xl p-6 text-white mb-6">
+                                <div className="space-y-2 mb-4">
+                                    <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        <span>Subtotal</span>
+                                        <span>₹{total.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        <span>Taxes</span>
+                                        <span className="text-emerald-500">Free</span>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-center text-slate-400 font-bold uppercase tracking-widest text-[10px]">
-                                    <span>Taxes & Fees</span>
-                                    <span className="text-emerald-500">Free</span>
-                                </div>
-                                <div className="h-px bg-white/10 w-full" />
-                                <div className="flex justify-between items-end pt-2">
-                                    <span className="text-xs font-black uppercase tracking-widest text-slate-400 mb-1">Total Payable</span>
-                                    <span className="text-4xl font-black text-brand-500 tracking-tighter">
-                                        <span className="text-lg font-bold mr-1">₹</span>
-                                        {total.toFixed(2)}
-                                    </span>
+                                <div className="h-px bg-white/10 mb-4" />
+                                <div className="flex justify-between items-end">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total</span>
+                                    <span className="text-3xl font-black text-brand-500 tracking-tighter italic">₹{total.toFixed(2)}</span>
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {cart.length > 0 && (
-                        <Button
-                            className="w-full h-16 rounded-[2rem] bg-brand-600 text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl shadow-brand-500/40 active:scale-95 transition-all group"
-                            onClick={() => setStep("payment")}
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-white" />
-                            ) : (
-                                <>Confirm Order <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" /></>
-                            )}
-                        </Button>
+                            <button
+                                className="w-full h-16 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[12px] shadow-lg shadow-slate-200 active:scale-95 transition-all"
+                                onClick={() => setStep("payment")}
+                                disabled={loading}
+                            >
+                                {loading ? "Processing..." : "Select Payment Method"}
+                            </button>
+                        </>
                     )}
                 </main>
             )}
 
+            {/* Payment Screen */}
             {step === "payment" && (
-                <main className="p-4 px-6 animate-in slide-in-from-right duration-500">
+                <main className="p-6 animate-in slide-in-from-right duration-500">
                     <div className="flex items-center justify-between mb-8">
-                        <button onClick={() => setStep("cart")} className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center shadow-sm ring-1 ring-slate-100 text-slate-400 hover:text-brand-600 transition-all">
+                        <button onClick={() => setStep("cart")} className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center border border-slate-100 text-slate-400">
                             <ChevronLeft size={24} />
                         </button>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight text-center flex-1">Payment</h2>
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight text-center flex-1">Checkout</h2>
                         <div className="w-12" />
                     </div>
 
-                    <div className="space-y-4 mb-4">
-                        <div className="bg-slate-900 rounded-[2rem] p-6 text-white text-center shadow-xl shadow-slate-900/20">
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Amount</p>
-                            <p className="text-4xl font-black tracking-tighter">₹{total.toFixed(2)}</p>
+                    <div className="space-y-4 mb-8">
+                        <div className="bg-slate-900 rounded-3xl p-6 text-white text-center shadow-lg shadow-slate-200">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2">Amount to Pay</p>
+                            <p className="text-4xl font-black tracking-tighter italic">₹{total.toFixed(2)}</p>
                         </div>
 
-                        <p className="text-slate-900 text-sm font-black uppercase tracking-widest px-2 pt-4">Choose Method</p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 px-2 mt-6 mb-2">Payment Method</p>
 
                         <button
                             onClick={() => setPaymentMethod('online')}
-                            className={`w-full p-5 rounded-[2rem] flex items-center gap-4 transition-all border-2 relative overflow-hidden group ${paymentMethod === 'online'
-                                ? 'bg-emerald-50 border-emerald-500 shadow-xl shadow-emerald-100'
-                                : 'bg-white border-slate-100'
-                                }`}
+                            className={`w-full p-5 rounded-3xl flex items-center gap-4 transition-all border-2 ${paymentMethod === 'online' ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-100'}`}
                         >
-                            <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'online' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${paymentMethod === 'online' ? 'bg-emerald-500 text-white' : 'bg-slate-50 text-slate-400'}`}>
                                 <Zap size={24} />
                             </div>
-                            <div className="text-left flex-1 relative z-10">
-                                <h3 className={`font-black uppercase tracking-tight ${paymentMethod === 'online' ? 'text-emerald-900' : 'text-slate-900'}`}>Pay Online</h3>
+                            <div className="text-left flex-1">
+                                <h3 className={`font-black text-sm uppercase tracking-tight ${paymentMethod === 'online' ? 'text-emerald-900' : 'text-slate-900'}`}>Pay Online</h3>
                                 <p className="text-[10px] font-bold text-slate-400">UPI, Cards, Netbanking</p>
                             </div>
-                            {paymentMethod === 'online' && <CheckCircle2 className="text-emerald-500 mr-2" size={24} />}
+                            {paymentMethod === 'online' && <CheckCircle2 className="text-emerald-500" size={24} />}
                         </button>
 
                         <button
                             onClick={() => setPaymentMethod('cash')}
-                            className={`w-full p-5 rounded-[2rem] flex items-center gap-4 transition-all border-2 relative overflow-hidden group ${paymentMethod === 'cash'
-                                ? 'bg-brand-50 border-brand-500 shadow-xl shadow-brand-100'
-                                : 'bg-white border-slate-100'
-                                }`}
+                            className={`w-full p-5 rounded-3xl flex items-center gap-4 transition-all border-2 ${paymentMethod === 'cash' ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-100'}`}
                         >
-                            <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'cash' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                            <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${paymentMethod === 'cash' ? 'bg-white/20 text-white' : 'bg-slate-50 text-slate-400'}`}>
                                 <Utensils size={24} />
                             </div>
-                            <div className="text-left flex-1 relative z-10">
-                                <h3 className={`font-black uppercase tracking-tight ${paymentMethod === 'cash' ? 'text-brand-900' : 'text-slate-900'}`}>Pay at Counter</h3>
-                                <p className="text-[10px] font-bold text-slate-400">Cash or Card at counter</p>
+                            <div className="text-left flex-1">
+                                <h3 className={`font-black text-sm uppercase tracking-tight ${paymentMethod === 'cash' ? 'text-white' : 'text-slate-900'}`}>Pay at Counter</h3>
+                                <p className={`text-[10px] font-bold ${paymentMethod === 'cash' ? 'text-white/50' : 'text-slate-400'}`}>Cash or Card at desk</p>
                             </div>
-                            {paymentMethod === 'cash' && <CheckCircle2 className="text-brand-500 mr-2" size={24} />}
+                            {paymentMethod === 'cash' && <Check size={24} className="text-white" />}
                         </button>
                     </div>
 
-                    <div className="mt-8">
-                        <Button
-                            className="w-full h-16 rounded-[2rem] bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl shadow-slate-900/40 active:scale-95 transition-all"
-                            onClick={handleCheckout}
-                            disabled={loading}
-                        >
-                            {loading ? "Processing..." : paymentMethod === 'online' ? "Pay & Order" : "Place Order"}
-                        </Button>
-                    </div>
+                    <button
+                        className="w-full h-16 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[12px] shadow-lg shadow-slate-200 active:scale-95 transition-all"
+                        onClick={handleCheckout}
+                        disabled={loading}
+                    >
+                        {loading ? "Processing..." : paymentMethod === 'online' ? "Proceed to Payment" : "Confirm Order"}
+                    </button>
                 </main>
             )}
 
+            {/* Success Screen */}
             {step === "success" && (
-                <main className="p-8 flex flex-col items-center justify-center min-h-[90vh] text-center animate-in zoom-in-95 duration-1000">
-                    <div className="relative mb-12">
-                        <div className="absolute inset-0 bg-emerald-500/20 rounded-[3rem] animate-ping duration-[3s]" />
-                        <div className="relative h-32 w-32 bg-emerald-500 rounded-[3rem] flex items-center justify-center text-white shadow-2xl shadow-emerald-500/40">
-                            <Check size={64} strokeWidth={4} className="animate-in fade-in zoom-in duration-500 delay-500" />
-                        </div>
-                        <div className="absolute -top-4 -right-4 h-12 w-12 bg-amber-400 rounded-2xl flex items-center justify-center text-amber-900 shadow-xl border-4 border-white rotate-12">
-                            <Star size={24} fill="currentColor" />
-                        </div>
+                <main className="p-6 flex flex-col items-center justify-center min-h-[90vh] text-center animate-in zoom-in-95 duration-1000">
+                    <div className="h-24 w-24 bg-emerald-500 rounded-3xl flex items-center justify-center text-white shadow-xl mb-8">
+                        <Check size={48} strokeWidth={4} />
                     </div>
 
-                    <h2 className="text-4xl font-black text-slate-900 tracking-tighter leading-none mb-3 italic">Awesome!</h2>
-                    <p className="text-slate-500 font-bold mb-12 max-w-[240px]">We've received your order. Please show this token at the counter.</p>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2 italic">Bravo!</h2>
+                    <p className="text-slate-400 font-bold mb-10 max-w-[240px] text-xs">Your order has been placed. Show this ticket at the counter.</p>
 
-                    <div className="w-full max-w-sm relative">
-                        {/* Decorative side cutouts */}
-                        <div className="absolute left-[-15px] top-1/2 -translate-y-1/2 h-8 w-8 bg-[#FDFDFF] rounded-full z-10 shadow-inner" />
-                        <div className="absolute right-[-15px] top-1/2 -translate-y-1/2 h-8 w-8 bg-[#FDFDFF] rounded-full z-10 shadow-inner" />
+                    <div className="w-full max-w-[320px] bg-white rounded-3xl border border-slate-100 p-8 shadow-xl relative overflow-hidden">
+                        <div className="flex items-center justify-center gap-2 mb-6 opacity-20">
+                            <span className="h-0.5 w-6 bg-slate-900 rounded-full" />
+                            <span className="text-[10px] font-black uppercase tracking-[0.4em]">Dining Pass</span>
+                            <span className="h-0.5 w-6 bg-slate-900 rounded-full" />
+                        </div>
 
-                        <div className="bg-white rounded-[3rem] border border-slate-100 p-10 shadow-2xl shadow-slate-200/50 overflow-hidden">
-                            <div className="flex items-center justify-center gap-2 mb-8">
-                                <span className="h-1 w-12 bg-slate-100 rounded-full" />
-                                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300">Your Ticket</span>
-                                <span className="h-1 w-12 bg-slate-100 rounded-full" />
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Token Number</p>
+                        <div className="text-7xl font-black text-slate-900 leading-none mb-6 tracking-tighter">
+                            <span className="text-2xl text-slate-200 mr-1 font-bold">#</span>
+                            {tokenNumber ?? '---'}
+                        </div>
+
+                        <div className="pt-6 border-t-2 border-dashed border-slate-100 space-y-3">
+                            <div className="flex justify-between items-center">
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status</span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">Confirmed</span>
                             </div>
-
-                            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand-600 mb-2">Token Number</p>
-                            <div className="text-[100px] font-black text-slate-900 leading-none mb-4 tracking-tighter flex items-center justify-center gap-2">
-                                <span className="text-3xl text-slate-200 mt-6 -mr-4">#</span>
-                                {tokenNumber ?? '---'}
-                            </div>
-
-                            <div className="pt-8 mt-4 border-t-2 border-dashed border-slate-100 space-y-4">
-                                <div className="flex justify-between items-center group">
-                                    <div className="flex items-center gap-2 text-slate-400">
-                                        <Clock size={12} className="group-hover:text-amber-500 transition-colors" />
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status</span>
-                                    </div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-amber-600 bg-amber-50 px-3 py-1 rounded-full ring-1 ring-amber-100">Preparing</span>
-                                </div>
-                                <div className="flex justify-between items-center group">
-                                    <div className="flex items-center gap-2 text-slate-400">
-                                        <Info size={12} className="group-hover:text-brand-500 transition-colors" />
-                                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Order Ref</span>
-                                    </div>
-                                    <span className="text-[10px] font-black text-slate-400 font-mono tracking-wider">{orderId?.slice(0, 8).toUpperCase()}</span>
-                                </div>
+                            <div className="flex justify-between items-center text-[9px] font-bold text-slate-300">
+                                <span>Ref ID</span>
+                                <span className="font-mono">{orderId?.slice(0, 8)}</span>
                             </div>
                         </div>
                     </div>
 
-                    <p className="mt-12 text-[10px] font-black uppercase tracking-widest text-slate-300">Thank you for dining with us!</p>
-
-                    <Button
-                        variant="ghost"
-                        className="mt-6 text-brand-600 font-black uppercase tracking-[0.2em] text-[10px] hover:bg-brand-50 rounded-full px-8 py-4 transition-all"
+                    <button
+                        className="mt-12 text-slate-400 font-black uppercase tracking-widest text-[10px] hover:text-slate-900 transition-colors"
                         onClick={() => setStep("onboarding_type")}
                     >
-                        Order More Items
-                    </Button>
+                        Place Another Order
+                    </button>
                 </main>
             )}
 
-            {/* Floating Cart Pill - Minimal & Sexy */}
+            {/* Floating Cart Pill */}
             {cart.length > 0 && step === "menu" && (
-                <div className="fixed bottom-8 left-0 right-0 z-50 px-6 animate-in slide-in-from-bottom-10 duration-700">
+                <div className="fixed bottom-6 left-0 right-0 px-6 z-50 animate-in slide-in-from-bottom-10">
                     <button
                         onClick={() => setStep("cart")}
-                        className="mx-auto max-w-[320px] bg-slate-900 text-white h-16 rounded-[2rem] px-8 flex items-center justify-between shadow-[0_20px_50px_rgba(0,0,0,0.3)] active:scale-95 transition-all transform hover:translate-y-[-4px] ring-4 ring-white"
+                        className="mx-auto max-w-[320px] bg-slate-900 text-white h-14 rounded-2xl px-6 flex items-center justify-between shadow-2xl active:scale-95 transition-all w-full"
                     >
-                        <div className="flex items-center gap-4">
-                            <div className="relative">
-                                <ShoppingBag size={20} className="text-brand-500" />
-                                <div className="absolute -top-2 -right-2 h-5 w-5 bg-brand-600 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-slate-900 animate-bounce">
-                                    {cart.length}
-                                </div>
-                            </div>
-                            <span className="font-black uppercase tracking-[0.1em] text-[11px]">View Order</span>
+                        <div className="flex items-center gap-3">
+                            <ShoppingBag size={18} className="text-brand-500" />
+                            <span className="font-black uppercase tracking-[0.2em] text-[10px]">Basket ({cart.length})</span>
                         </div>
-                        <div className="flex items-center gap-2 pl-4 border-l border-white/10">
-                            <span className="text-xs font-bold text-slate-400 mr-1">₹</span>
-                            <span className="font-black text-lg tracking-tighter">{total.toFixed(0)}</span>
-                            <ChevronRight size={18} className="text-slate-500" />
+                        <div className="flex items-center gap-3 pl-4 border-l border-white/10">
+                            <span className="font-black text-lg italic tracking-tighter">₹{total.toFixed(0)}</span>
+                            <ArrowRight size={16} />
                         </div>
                     </button>
                 </div>
             )}
-            {/* Razorpay SDK */}
+
+            {/* SDKs */}
             <Script src="https://checkout.razorpay.com/v1/checkout.js" />
         </div>
     );

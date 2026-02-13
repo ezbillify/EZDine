@@ -75,20 +75,71 @@ export function KdsBoard() {
     }
   };
 
+  const playBuzzer = () => {
+    try {
+      console.log("🔊 Playing Loud KDS Buzzer...");
+      const AudioCtxClass = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!AudioCtxClass) return;
+
+      const audioCtx = new AudioCtxClass();
+
+      const playPulse = (delay: number) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'sawtooth'; // Harsher waveform
+        osc.frequency.setValueAtTime(220, audioCtx.currentTime + delay); // Low G
+
+        gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
+        gain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + delay + 0.05); // Rapid attack
+        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + delay + 0.3); // Decay
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(audioCtx.currentTime + delay);
+        osc.stop(audioCtx.currentTime + delay + 0.3);
+      };
+
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      // Triple Pulse
+      playPulse(0);
+      playPulse(0.4);
+      playPulse(0.8);
+
+      console.log("🔊 KDS Buzzer sequence finished");
+    } catch (e) {
+      console.error("Audio buzzer failed", e);
+    }
+  };
+
   useEffect(() => {
     load();
 
     // Realtime Subscription
     const channel = supabase
-      .channel('kds-orders')
+      .channel('kds-orders-realtime')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'orders' },
         (payload) => {
-          // We could filter by branch_id in the subscription if possible, 
-          // but row level security might handle it, or we check payload.
-          // Ideally we just reload to be safe and simple.
-          console.log("KDS Update:", payload);
+          console.log("🔔 KDS Realtime Event:", payload.eventType, payload.new);
+          const newOrder = payload.new as any;
+          const eventType = payload.eventType;
+
+          // Sound Trigger: Play if it's a new or updated order that kitchen needs to see
+          const isVisibleInKds = newOrder.status === 'pending' && (newOrder.source === 'pos' || newOrder.payment_status === 'paid');
+
+          if (isVisibleInKds && (eventType === 'INSERT' || eventType === 'UPDATE')) {
+            console.log("🔥 Triggering Buzzer for Order:", newOrder.order_number);
+            playBuzzer();
+            toast.info(`New Kitchen Order: #${newOrder.order_number}`, {
+              description: `Table: ${newOrder.table_id || 'Quick Bill'}`,
+              duration: 5000
+            });
+          }
+
           load();
         }
       )
@@ -164,9 +215,17 @@ export function KdsBoard() {
                 <p className="text-[10px] font-bold text-orange-500 uppercase tracking-wider">New Items</p>
               </div>
             </div>
-            <span className="flex h-6 min-w-[24px] items-center justify-center rounded-full bg-orange-100 px-2 text-xs font-bold text-orange-700">
-              {pendingOrders.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={playBuzzer}
+                className="flex h-6 items-center gap-1 rounded-full bg-slate-100 px-2 text-[10px] font-bold text-slate-500 hover:bg-slate-200 transition-colors"
+              >
+                Test Sound
+              </button>
+              <span className="flex h-6 min-w-[24px] items-center justify-center rounded-full bg-orange-100 px-2 text-xs font-bold text-orange-700">
+                {pendingOrders.length}
+              </span>
+            </div>
           </header>
 
           <div className="flex-1 overflow-y-auto space-y-4 pr-1">

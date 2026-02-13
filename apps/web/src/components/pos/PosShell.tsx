@@ -90,27 +90,34 @@ export function PosShell() {
 
   const playBuzzer = () => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
+      const AudioCtxClass = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!AudioCtxClass) return;
 
-      const audioCtx = new AudioContext();
+      const audioCtx = new AudioCtxClass();
 
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
+      const playPulse = (delay: number) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
 
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, audioCtx.currentTime + delay);
 
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
-      oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5); // Drop to A4
+        gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
+        gain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + delay + 0.05);
+        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + delay + 0.3);
 
-      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.1);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
 
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.5);
+        osc.start(audioCtx.currentTime + delay);
+        osc.stop(audioCtx.currentTime + delay + 0.3);
+      };
+
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      playPulse(0);
+      playPulse(0.4);
+      playPulse(0.8);
     } catch (e) {
       console.error("Audio buzzer failed", e);
     }
@@ -664,9 +671,10 @@ export function PosShell() {
       setSelectedCustomerName(null);
       if (isQuickBill) setIsQuickBill(false); // Reset Quick Bill state
 
-      // Refresh History
+      // Refresh History & QR List
       const data = await getSettledBills();
       setHistory(data);
+      fetchQrOrders();
       toast.success("Order Settled & Paid!");
     } catch (err: any) {
       toast.error(err.message || "Failed to process payment");
@@ -698,6 +706,7 @@ export function PosShell() {
       setSelectedCustomerName(null);
       if (isQuickBill) setIsQuickBill(false);
 
+      fetchQrOrders();
       toast.success("Order Cancelled");
     } catch (err: any) {
       toast.error("Failed to cancel order");
@@ -804,7 +813,14 @@ export function PosShell() {
 
       const bill = await createBill(currentOrderId!, billItems);
       const billTotal = billItems.reduce((sum, i) => sum + i.qty * i.price, 0);
-      await addPayment(bill.id, "cash", billTotal);
+
+      // Only add cash payment if there isn't already a payment linked to this order
+      // We check if currentOrder exists and is already paid to avoid duplicate revenue
+      const { data: existingOrder } = await supabase.from('orders').select('payment_status').eq('id', currentOrderId!).single();
+      if (existingOrder?.payment_status !== 'paid') {
+        await addPayment(bill.id, "cash", billTotal);
+        await supabase.from('orders').update({ payment_status: 'paid' }).eq('id', currentOrderId!);
+      }
 
       try {
         const settings = await getPrintingSettings();
@@ -844,6 +860,7 @@ export function PosShell() {
       setSelectedCustomerName(null);
       if (isQuickBill) setIsQuickBill(false);
 
+      fetchQrOrders();
       toast.success("Bill created and settled!");
     } catch (err: any) {
       toast.error(err.message || "Failed to create bill");
@@ -881,9 +898,17 @@ export function PosShell() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between px-2">
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-600">Incoming QR</h3>
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[10px] font-bold text-white leading-none animate-pulse">
-                      {qrOrders.length}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={playBuzzer}
+                        className="text-[9px] font-bold text-slate-400 hover:text-brand-600 uppercase tracking-tighter bg-slate-50 px-2 rounded-lg py-0.5 border border-slate-100 transition-all"
+                      >
+                        Test Sound
+                      </button>
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[10px] font-bold text-white leading-none animate-pulse">
+                        {qrOrders.length}
+                      </span>
+                    </div>
                   </div>
                   <div className="space-y-2">
                     {qrOrders.map((order) => (

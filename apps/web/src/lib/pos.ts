@@ -280,7 +280,10 @@ export async function getPendingQrOrders() {
     .eq("is_open", true)
     .in("source", ["qr", "table"])
     .neq("status", "cancelled")
-    .or(`payment_status.neq.paid,and(payment_status.eq.paid,created_at.gt.${threeMinutesAgo})`)
+    // 1. Show all unpaid orders
+    // 2. Show online paid orders for only 3 mins (grace period)
+    // 3. Hide all cash/manual paid orders immediately
+    .or(`payment_status.neq.paid,and(payment_status.eq.paid,payment_method.eq.online,created_at.gt.${threeMinutesAgo})`)
     .order("created_at", { ascending: false })
     .limit(25);
 
