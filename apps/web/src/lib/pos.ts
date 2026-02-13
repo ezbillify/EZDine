@@ -114,9 +114,18 @@ export async function createOrder(
   notes?: string,
   customerId?: string | null,
   source: 'pos' | 'table' | 'qr' = 'pos',
-  paymentStatus: 'pending' | 'paid' | 'counter_pending' = 'pending'
+  paymentStatus: 'pending' | 'paid' | 'counter_pending' = 'pending',
+  explicitBranchId?: string,
+  explicitRestaurantId?: string
 ) {
-  const { restaurantId, branchId } = await getContext();
+  let restaurantId = explicitRestaurantId;
+  let branchId = explicitBranchId;
+
+  if (!restaurantId || !branchId) {
+    const context = await getContext();
+    restaurantId = context.restaurantId;
+    branchId = context.branchId;
+  }
 
   // 1. Generate Order Number
   const { data: orderNumberData, error: orderNumberError } = await supabase.rpc(

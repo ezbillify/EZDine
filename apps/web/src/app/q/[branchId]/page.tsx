@@ -171,12 +171,14 @@ export default function QrOrderPage() {
         setLoading(true);
         try {
             const result = await createOrder(
-                orderType === "dine_in" ? initialTableId : null,
+                orderType === "dine_in" ? (initialTableId || null) : null,
                 cart,
                 undefined,
-                null,
-                orderType === "dine_in" ? 'table' : 'qr',
-                'counter_pending'
+                customerId,
+                initialTableId ? 'table' : 'qr',
+                'counter_pending',
+                branchId,
+                branchInfo.restaurant_id
             );
             setOrderId(result.id);
             setTokenNumber(result.token_number);
