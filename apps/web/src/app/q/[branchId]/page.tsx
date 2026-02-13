@@ -6,7 +6,7 @@ import Script from "next/script";
 import {
     Search, Plus, Minus, ShoppingBag, User, Phone,
     Check, ChevronRight, Utensils, Zap, Star, Clock,
-    ChevronLeft, ArrowRight, Info, Coffee
+    ChevronLeft, ArrowRight, Info, Coffee, CheckCircle2
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { getPublicBranchMenu, createOrder, CartItem, getPublicBranchDetails, getMenuCategories, checkCustomerExist, createPublicCustomer } from "../../../lib/pos";

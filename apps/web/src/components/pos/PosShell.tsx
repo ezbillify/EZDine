@@ -419,8 +419,8 @@ export function PosShell() {
       return;
     }
 
-    // Enforce Customer Selection for Table Orders
-    if (!selectedCustomerId) {
+    // Enforce Customer Selection ONLY for Table Orders (Quick Bill is optional)
+    if (!selectedCustomerId && !isQuickBill) {
       toast.warning("Please select a customer first!");
       const input = document.getElementById('customer-search-input');
       if (input) input.focus();
