@@ -275,3 +275,28 @@ export async function toggleItemAvailability(itemId: string, isAvailable: boolea
     .eq("id", itemId);
   if (error) throw error;
 }
+
+export async function checkCustomerExist(restaurantId: string, phone: string) {
+  const { data, error } = await supabase
+    .from("customers")
+    .select("id, name")
+    .eq("restaurant_id", restaurantId)
+    .eq("phone", phone)
+    .single();
+
+  if (error && error.code !== "PGRST116") throw error; // PGRST116 is "no rows found"
+  return data;
+}
+
+export async function createPublicCustomer(restaurantId: string, name: string, phone: string) {
+  const { data, error } = await supabase
+    .from("customers")
+    .insert([
+      { restaurant_id: restaurantId, name, phone }
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}

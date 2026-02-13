@@ -8,7 +8,7 @@ import {
     ChevronLeft, ArrowRight, Info, Coffee
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
-import { getPublicBranchMenu, createOrder, CartItem, getPublicBranchDetails, getMenuCategories } from "../../../lib/pos";
+import { getPublicBranchMenu, createOrder, CartItem, getPublicBranchDetails, getMenuCategories, checkCustomerExist, createPublicCustomer } from "../../../lib/pos";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 
@@ -25,12 +25,13 @@ export default function QrOrderPage() {
     const [activeCategory, setActiveCategory] = useState<string>("All");
     const [searchQuery, setSearchQuery] = useState("");
     const [cart, setCart] = useState<CartItem[]>([]);
-    const [step, setStep] = useState<"onboarding" | "menu" | "cart" | "success">("onboarding");
+    const [step, setStep] = useState<"onboarding_type" | "onboarding_mobile" | "onboarding_name" | "menu" | "cart" | "success">("onboarding_type");
 
     // Customer & Order Data
     const [orderType, setOrderType] = useState<"dine_in" | "takeaway">(initialTableId ? "dine_in" : "takeaway");
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
+    const [customerId, setCustomerId] = useState<string | null>(null);
     const [orderId, setOrderId] = useState<string | null>(null);
     const [tokenNumber, setTokenNumber] = useState<number | null>(null);
 
@@ -102,6 +103,55 @@ export default function QrOrderPage() {
 
     const total = useMemo(() => cart.reduce((sum, i) => sum + i.price * i.qty, 0), [cart]);
 
+    const handleMobileSubmit = async () => {
+        if (!phone || phone.length < 10) {
+            toast.error("Please enter a valid phone number");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const customer = await checkCustomerExist(branchInfo.restaurant_id, phone);
+            if (customer) {
+                setName(customer.name);
+                setCustomerId(customer.id);
+                localStorage.setItem("ezdine_cust_name", customer.name);
+                localStorage.setItem("ezdine_cust_phone", phone);
+                setStep("menu");
+                toast.success(`Welcome back, ${customer.name}!`);
+            } else {
+                setStep("onboarding_name");
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Error checking customer details");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleNameSubmit = async () => {
+        if (!name) {
+            toast.error("Please enter your name");
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const customer = await createPublicCustomer(branchInfo.restaurant_id, name, phone);
+            setCustomerId(customer.id);
+            localStorage.setItem("ezdine_cust_name", name);
+            localStorage.setItem("ezdine_cust_phone", phone);
+            setStep("menu");
+            toast.success("Details saved! Enjoy your meal.");
+        } catch (err) {
+            console.error(err);
+            toast.error("Error saving your details");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleOnboardingComplete = () => {
         if (!name.trim()) {
             toast.error("Please enter your name");
@@ -140,28 +190,23 @@ export default function QrOrderPage() {
         }
     };
 
-    if (loading && step === "onboarding") {
+    if (loading && (step === "onboarding_type" || step === "onboarding_mobile")) {
         return (
-            <div className="flex h-screen flex-col items-center justify-center p-4 bg-white">
-                <div className="relative h-24 w-24 mb-6">
-                    <div className="absolute inset-0 bg-brand-600/10 rounded-full animate-ping" />
-                    <div className="absolute inset-2 bg-brand-600/20 rounded-full animate-pulse" />
-                    <div className="relative h-24 w-24 bg-brand-600 rounded-full flex items-center justify-center text-white shadow-2xl">
-                        <Utensils size={36} className="animate-pulse" />
-                    </div>
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="h-12 w-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-slate-500 font-bold animate-pulse uppercase tracking-widest text-xs">Getting things ready...</p>
                 </div>
-                <h2 className="text-xl font-black text-slate-900 tracking-tight mb-2">Setting the Table</h2>
-                <p className="text-sm text-slate-400 font-medium animate-pulse uppercase tracking-[0.2em]">Preparing the Menu</p>
             </div>
         );
     }
 
     return (
-        <div className="min-h-screen bg-[#FDFDFF] font-outfit text-slate-900 pb-24 selection:bg-brand-100 selection:text-brand-900">
+        <div className="min-h-screen bg-slate-50 font-outfit select-none">
             <Toaster position="top-center" richColors />
 
             {/* Premium Header - Only show if not success step, or maybe show always for branding */}
-            {step !== "onboarding" && step !== "success" && (
+            {step !== "onboarding_type" && step !== "onboarding_mobile" && step !== "onboarding_name" && step !== "success" && (
                 <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-white/20 px-4 py-4">
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
@@ -196,9 +241,10 @@ export default function QrOrderPage() {
                 </header>
             )}
 
-            {step === "onboarding" && (
+            {/* Onboarding: Step 1 - Order Type */}
+            {step === "onboarding_type" && (
                 <main className="min-h-screen flex flex-col items-center justify-center p-5 animate-in fade-in zoom-in-95 duration-700">
-                    <div className="w-full max-w-[360px] bg-white rounded-[2.5rem] shadow-2xl shadow-brand-100/40 border border-brand-50 p-6 pt-10 relative overflow-hidden">
+                    <div className="w-full max-w-[360px] bg-white rounded-[2.5rem] shadow-2xl shadow-brand-100/40 border border-brand-50 p-6 pt-10 relative overflow-hidden text-center">
                         {/* Decorative Background */}
                         <div className="absolute top-0 right-0 w-24 h-24 bg-brand-50 rounded-full -mr-12 -mt-12 blur-3xl opacity-40" />
                         <div className="absolute bottom-0 left-0 w-24 h-24 bg-amber-50 rounded-full -ml-12 -mb-12 blur-3xl opacity-40" />
@@ -211,11 +257,11 @@ export default function QrOrderPage() {
                             <h1 className="text-2xl font-black text-slate-900 tracking-tighter leading-none mb-3">
                                 {branchInfo?.restaurant?.name || "EZDine"}
                             </h1>
-                            <p className="text-slate-400 font-medium text-[11px] tracking-wide">Select experience & share details</p>
+                            <p className="text-slate-400 font-medium text-[11px] tracking-wide">How would you like to enjoy your meal today?</p>
                         </div>
 
                         {/* Order Type Selection */}
-                        <div className="grid grid-cols-2 gap-3 mb-6">
+                        <div className="grid grid-cols-2 gap-3 mb-8">
                             <button
                                 onClick={() => setOrderType("dine_in")}
                                 className={`p-4 rounded-[1.75rem] flex flex-col items-center gap-2.5 transition-all border-2 ${orderType === "dine_in"
@@ -242,40 +288,86 @@ export default function QrOrderPage() {
                             </button>
                         </div>
 
-                        {/* Customer Form */}
-                        <div className="space-y-3 mb-8">
-                            <div className="relative group">
-                                <User className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${name ? 'text-brand-600' : 'text-slate-300'}`} size={18} />
-                                <input
-                                    placeholder="Your Name"
-                                    value={name}
-                                    onChange={e => setName(e.target.value)}
-                                    className="w-full h-14 pl-12 pr-6 rounded-[1.25rem] bg-slate-50 border-2 border-transparent focus:border-brand-500/20 focus:bg-white transition-all outline-none font-bold text-sm text-slate-900 placeholder:text-slate-300"
-                                />
-                            </div>
-                            <div className="relative group">
-                                <Phone className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${phone ? 'text-brand-600' : 'text-slate-300'}`} size={18} />
-                                <input
-                                    placeholder="Phone Number"
-                                    type="tel"
-                                    value={phone}
-                                    onChange={e => setPhone(e.target.value)}
-                                    className="w-full h-14 pl-12 pr-6 rounded-[1.25rem] bg-slate-50 border-2 border-transparent focus:border-brand-500/20 focus:bg-white transition-all outline-none font-bold text-sm text-slate-900 placeholder:text-slate-300"
-                                />
-                            </div>
-                        </div>
-
                         <Button
                             className="w-full h-14 rounded-[1.5rem] bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-slate-900/20 active:scale-95 transition-all flex items-center justify-center gap-2 hover:bg-brand-600"
-                            onClick={handleOnboardingComplete}
+                            onClick={() => setStep("onboarding_mobile")}
                         >
-                            Open Menu <ArrowRight size={16} />
+                            Continue <ArrowRight size={16} className="ml-2" />
                         </Button>
                     </div>
 
                     <p className="mt-6 text-[8px] font-bold text-slate-300 uppercase tracking-[0.2em] text-center">
                         Powered by <span className="text-brand-500">EZDine Premium</span>
                     </p>
+                </main>
+            )}
+
+            {/* Onboarding: Step 2 - Mobile Number */}
+            {step === "onboarding_mobile" && (
+                <main className="min-h-screen flex flex-col items-center justify-center p-5 animate-in slide-in-from-bottom-10 duration-500">
+                    <div className="w-full max-w-[360px] bg-white rounded-[2.5rem] shadow-2xl shadow-brand-100/40 border border-brand-50 p-6 pt-10 relative overflow-hidden">
+                        <div className="mb-8 text-center">
+                            <h2 className="text-[9px] font-black uppercase tracking-[0.3em] text-brand-600 mb-1.5">Verification</h2>
+                            <h1 className="text-2xl font-black text-slate-900 tracking-tighter leading-none mb-3">Your Mobile</h1>
+                            <p className="text-slate-400 font-medium text-[11px] tracking-wide">Enter your number to view our menu</p>
+                        </div>
+
+                        <div className="relative mb-8">
+                            <Phone className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${phone ? 'text-brand-600' : 'text-slate-300'}`} size={18} />
+                            <input
+                                placeholder="Phone Number"
+                                type="tel"
+                                value={phone}
+                                onChange={e => setPhone(e.target.value)}
+                                className="w-full h-14 pl-12 pr-6 rounded-[1.25rem] bg-slate-50 border-2 border-transparent focus:border-brand-500/20 focus:bg-white transition-all outline-none font-bold text-sm text-slate-900 placeholder:text-slate-300"
+                            />
+                        </div>
+
+                        <Button
+                            className="w-full h-14 rounded-[1.5rem] bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-slate-900/20 disabled:opacity-50"
+                            onClick={handleMobileSubmit}
+                            disabled={loading || phone.length < 10}
+                        >
+                            {loading ? "Checking..." : "Verify & Open Menu"} <ArrowRight size={16} className="ml-2" />
+                        </Button>
+
+                        <button onClick={() => setStep("onboarding_type")} className="w-full mt-6 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                            Go Back
+                        </button>
+                    </div>
+                </main>
+            )}
+
+            {/* Onboarding: Step 3 - Name Entry (New Customers Only) */}
+            {step === "onboarding_name" && (
+                <main className="min-h-screen flex flex-col items-center justify-center p-5 animate-in fade-in duration-500 bg-slate-900/10 backdrop-blur-sm z-50 fixed inset-0">
+                    <div className="w-full max-w-[340px] bg-white rounded-[2.5rem] shadow-2xl p-6 pt-10 text-center relative">
+                        <div className="h-14 w-14 bg-brand-50 rounded-full flex items-center justify-center text-brand-600 mx-auto mb-5">
+                            <User size={24} />
+                        </div>
+                        <h2 className="text-[9px] font-black uppercase tracking-[0.3em] text-brand-600 mb-1.5">New Customer</h2>
+                        <h1 className="text-xl font-black text-slate-900 tracking-tighter leading-none mb-3">What's your name?</h1>
+                        <p className="text-slate-400 font-medium text-[10px] tracking-wide mb-8">We'd love to know who we're serving today!</p>
+
+                        <div className="relative mb-8">
+                            <User className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${name ? 'text-brand-600' : 'text-slate-300'}`} size={18} />
+                            <input
+                                placeholder="Your Name"
+                                value={name}
+                                onChange={e => setName(e.target.value)}
+                                autoFocus
+                                className="w-full h-14 pl-12 pr-6 rounded-[1.25rem] bg-slate-50 border-2 border-transparent focus:border-brand-500/20 focus:bg-white transition-all outline-none font-bold text-sm text-slate-900 placeholder:text-slate-300"
+                            />
+                        </div>
+
+                        <Button
+                            className="w-full h-14 rounded-[1.5rem] bg-brand-600 text-white font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-brand-500/20 disabled:opacity-50"
+                            onClick={handleNameSubmit}
+                            disabled={loading || !name}
+                        >
+                            {loading ? "Welcome..." : "Start Dining"}
+                        </Button>
+                    </div>
                 </main>
             )}
 
@@ -504,7 +596,7 @@ export default function QrOrderPage() {
                     <Button
                         variant="ghost"
                         className="mt-6 text-brand-600 font-black uppercase tracking-[0.2em] text-[10px] hover:bg-brand-50 rounded-full px-8 py-4 transition-all"
-                        onClick={() => setStep("onboarding")}
+                        onClick={() => setStep("onboarding_type")}
                     >
                         Order More Items
                     </Button>
