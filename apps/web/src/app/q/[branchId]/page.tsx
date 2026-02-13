@@ -9,7 +9,10 @@ import {
     ChevronLeft, ArrowRight, Info, Coffee, CheckCircle2
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
-import { getPublicBranchMenu, createOrder, CartItem, getPublicBranchDetails, getMenuCategories, checkCustomerExist, createPublicCustomer } from "../../../lib/pos";
+import {
+    getPublicBranchMenu, createOrder, CartItem, getPublicBranchDetails,
+    getMenuCategories, checkCustomerExist, createPublicCustomer, getOrdersByPhone
+} from "../../../lib/pos";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { verifyPayment } from "../../../lib/pos";
@@ -33,7 +36,7 @@ export default function QrOrderPage() {
     const [activeCategory, setActiveCategory] = useState<string>("All");
     const [searchQuery, setSearchQuery] = useState("");
     const [cart, setCart] = useState<CartItem[]>([]);
-    const [step, setStep] = useState<"onboarding_type" | "onboarding_mobile" | "onboarding_name" | "menu" | "cart" | "payment" | "success">("onboarding_type");
+    const [step, setStep] = useState<"onboarding_type" | "onboarding_mobile" | "onboarding_name" | "menu" | "cart" | "payment" | "success" | "track_lookup" | "track_view">("onboarding_type");
 
     // Customer & Order Data
     const [orderType, setOrderType] = useState<"dine_in" | "takeaway">(initialTableId ? "dine_in" : "takeaway");
@@ -43,6 +46,8 @@ export default function QrOrderPage() {
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
     const [orderId, setOrderId] = useState<string | null>(null);
     const [tokenNumber, setTokenNumber] = useState<number | null>(null);
+    const [trackedOrders, setTrackedOrders] = useState<any[]>([]);
+    const [trackPhone, setTrackPhone] = useState("");
 
     const categoryRef = useRef<HTMLDivElement>(null);
 
@@ -156,6 +161,28 @@ export default function QrOrderPage() {
         } catch (err) {
             console.error(err);
             toast.error("Error saving your details");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleTrackLookup = async () => {
+        if (!trackPhone || trackPhone.length < 10) {
+            toast.error("Please enter your valid phone number");
+            return;
+        }
+        setLoading(true);
+        try {
+            const orders = await getOrdersByPhone(branchId, trackPhone);
+            if (orders.length === 0) {
+                toast.error("No active orders found for this number");
+            } else {
+                setTrackedOrders(orders);
+                setStep("track_view");
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Error looking up orders");
         } finally {
             setLoading(false);
         }
@@ -328,18 +355,14 @@ export default function QrOrderPage() {
                                 </div>
                                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">Dine-In</span>
                             </button>
-                            <button
+                            <Button
+                                variant="primary"
+                                className="w-full h-16 rounded-2xl flex flex-col items-center justify-center gap-1 group relative overflow-hidden active:scale-[0.98] transition-all bg-emerald-600 hover:bg-emerald-700"
                                 onClick={() => setOrderType("takeaway")}
-                                className={`p-4 rounded-2xl flex flex-col items-center gap-2 transition-all border-2 ${orderType === "takeaway"
-                                    ? "bg-slate-900 border-slate-900 text-white"
-                                    : "bg-white border-slate-100 opacity-60"
-                                    }`}
                             >
-                                <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${orderType === "takeaway" ? "bg-amber-400 text-slate-900" : "bg-slate-50 text-slate-400"}`}>
-                                    <ShoppingBag size={18} />
-                                </div>
-                                <span className="text-[10px] font-black uppercase tracking-widest">Takeaway</span>
-                            </button>
+                                <span className="font-black uppercase tracking-[0.2em] text-[10px]">Takeaway</span>
+                                <span className="text-[10px] font-bold opacity-60">Collect at Counter</span>
+                            </Button>
                         </div>
 
                         <button
@@ -347,6 +370,14 @@ export default function QrOrderPage() {
                             onClick={() => setStep("onboarding_mobile")}
                         >
                             Continue <ArrowRight size={18} />
+                        </button>
+
+                        <button
+                            onClick={() => setStep("track_lookup")}
+                            className="mt-12 group flex items-center gap-2 text-slate-400 font-black uppercase tracking-widest text-[10px] hover:text-slate-900 transition-colors"
+                        >
+                            <Clock size={14} className="group-hover:animate-spin-slow" />
+                            Already Ordered? Check Status
                         </button>
                     </div>
                 </main>
@@ -627,7 +658,11 @@ export default function QrOrderPage() {
                     </div>
 
                     <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2 italic">Bravo!</h2>
-                    <p className="text-slate-400 font-bold mb-10 max-w-[240px] text-xs">Your order has been placed. Show this ticket at the counter.</p>
+                    <p className="text-slate-400 font-bold mb-10 max-w-[240px] text-xs">
+                        {paymentMethod === 'cash'
+                            ? "Please pay at the counter. Your order will start once confirmed."
+                            : "Your order has been placed. Show this ticket at the counter."}
+                    </p>
 
                     <div className="w-full max-w-[320px] bg-white rounded-3xl border border-slate-100 p-8 shadow-xl relative overflow-hidden">
                         <div className="flex items-center justify-center gap-2 mb-6 opacity-20">
@@ -645,7 +680,12 @@ export default function QrOrderPage() {
                         <div className="pt-6 border-t-2 border-dashed border-slate-100 space-y-3">
                             <div className="flex justify-between items-center">
                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status</span>
-                                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">Confirmed</span>
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${paymentMethod === 'cash'
+                                    ? 'text-amber-600 bg-amber-50'
+                                    : 'text-emerald-600 bg-emerald-50'
+                                    }`}>
+                                    {paymentMethod === 'cash' ? 'Awaiting Payment' : 'Confirmed'}
+                                </span>
                             </div>
                             <div className="flex justify-between items-center text-[9px] font-bold text-slate-300">
                                 <span>Ref ID</span>
