@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, Save, Trash2, User, Search, Plus, Phone, X, UserPlus, ArrowRight, Check, Eye, Zap } from "lucide-react";
+import { AlertCircle, CheckCircle2, Save, Trash2, User, Search, Plus, Phone, X, UserPlus, ArrowRight, Check, Eye, Zap, History } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast, Toaster } from "sonner";
 
@@ -15,6 +15,7 @@ import {
   getOpenOrderForTable,
   getOrderItems,
   getPendingQrOrders,
+  getSettledBills,
   getTables,
   toggleItemAvailability
 } from "../../lib/pos";
@@ -51,6 +52,9 @@ export function PosShell() {
   const [activeTokenNumber, setActiveTokenNumber] = useState<number | null>(null);
   const [isQuickBill, setIsQuickBill] = useState(false);
   const [qrOrders, setQrOrders] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"live" | "history">("live");
+  const [history, setHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   // Customer State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -79,6 +83,25 @@ export function PosShell() {
 
   const [status, setStatus] = useState<"idle" | "saving">("idle");
 
+  const playBuzzer = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.1);
+      gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.4);
+    } catch (e) {
+      console.error("Audio buzzer failed", e);
+    }
+  };
+
   // Load initial data
   useEffect(() => {
     const load = async () => {
@@ -98,15 +121,28 @@ export function PosShell() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "orders", filter: "payment_status=eq.counter_pending" },
-        () => {
+        (payload) => {
           fetchQrOrders();
+          // Only buzz for cash orders immediately. Online orders buzz when paid.
+          if (payload.new.payment_method === 'cash') {
+            playBuzzer();
+            toast.success("New Cash Order (QR)", {
+              description: "Customer waiting for settlement.",
+              action: { label: "View", onClick: () => setActiveTab("live") }
+            });
+          }
         }
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "orders", filter: "payment_status=eq.counter_pending" },
+        { event: "UPDATE", schema: "public", table: "orders", filter: "payment_status=eq.paid" },
         () => {
           fetchQrOrders();
+          playBuzzer();
+          toast.success("Online Payment Received!", {
+            description: "Order marked as paid.",
+            action: { label: "View", onClick: () => setActiveTab("live") }
+          });
         }
       )
       .subscribe();
@@ -117,6 +153,24 @@ export function PosShell() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "history") {
+      loadHistory();
+    }
+  }, [activeTab]);
+
+  const loadHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const data = await getSettledBills();
+      setHistory(data);
+    } catch (err) {
+      toast.error("Failed to load order history");
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   const fetchQrOrders = async () => {
     try {
@@ -447,7 +501,7 @@ export function PosShell() {
           setStatus("idle");
           return;
         }
-        const order = await createOrder(null, cart, undefined, selectedCustomerId);
+        const order = await createOrder(null, cart, undefined, selectedCustomerId || null, 'pos', 'pending', undefined, undefined, 'cash', 'takeaway');
         currentOrderId = order.id;
         // Print KOT for Quick Bill too if needed? Usually yes.
         try {
@@ -552,89 +606,153 @@ export function PosShell() {
     <div className="flex h-full w-full gap-4 overflow-hidden">
       <Toaster position="bottom-center" richColors />
 
-      {/* 1. Tables Column */}
+      {/* 1. Tables/History Column */}
       <section className="flex w-64 flex-none flex-col gap-4 overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm">
-        <div className="border-b border-slate-100 bg-slate-50/50 p-4">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500">Live Status</h2>
+        <div className="border-b border-slate-100 bg-slate-50/50 p-2 flex gap-1">
+          <button
+            onClick={() => setActiveTab("live")}
+            className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'live' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            Live Status
+          </button>
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-100' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            History
+          </button>
         </div>
+
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* QR Incoming Orders */}
-          {qrOrders.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between px-2">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-600">Incoming QR</h3>
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[10px] font-bold text-white leading-none animate-pulse">
-                  {qrOrders.length}
-                </span>
-              </div>
-              <div className="space-y-2">
-                {qrOrders.map((order) => (
-                  <button
-                    key={order.id}
-                    onClick={() => loadQrOrder(order)}
-                    className="w-full rounded-xl border border-brand-100 bg-brand-50/50 p-3 text-left transition-all hover:bg-brand-50 hover:shadow-md active:scale-[0.98]"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-black text-brand-700">T{order.token_number}</span>
-                      <span className="text-[9px] font-bold uppercase text-brand-500">{order.table_id ? 'Dine-in' : 'Takeaway'}</span>
+          {activeTab === 'live' ? (
+            <>
+              {/* QR Incoming Orders */}
+              {qrOrders.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between px-2">
+                    <h3 className="text-[10px] font-black uppercase tracking-widest text-brand-600">Incoming QR</h3>
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 text-[10px] font-bold text-white leading-none animate-pulse">
+                      {qrOrders.length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {qrOrders.map((order) => (
+                      <button
+                        key={order.id}
+                        onClick={() => loadQrOrder(order)}
+                        className={`w-full rounded-[1.5rem] border p-3 text-left transition-all hover:shadow-lg active:scale-[0.98] ${order.payment_method === 'online' && order.payment_status === 'paid'
+                            ? 'border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50'
+                            : order.payment_method === 'online'
+                              ? 'border-slate-100 bg-slate-50/50 hover:bg-slate-100 opacity-60'
+                              : 'border-brand-100 bg-brand-50/50 hover:bg-brand-50'
+                          }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl font-black text-lg shadow-sm ${order.payment_method === 'online' && order.payment_status === 'paid' ? 'bg-emerald-500 text-white'
+                              : order.payment_method === 'online' ? 'bg-slate-200 text-slate-500'
+                                : 'bg-brand-600 text-white'
+                            }`}>
+                            {order.token_number}
+                          </div>
+                          <div className="flex-1 overflow-hidden">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className={`text-[9px] font-black uppercase tracking-wider ${order.payment_method === 'online' && order.payment_status === 'paid' ? 'text-emerald-600'
+                                  : order.payment_method === 'online' ? 'text-slate-400'
+                                    : 'text-brand-600'
+                                }`}>
+                                {order.payment_method === 'online' && order.payment_status === 'paid' ? 'Paid Online'
+                                  : order.payment_method === 'online' ? 'Paying...'
+                                    : 'Cash Counter'}
+                              </span>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
+                                {order.order_type === 'dine_in' ? 'Dine-in' : 'Takeaway'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs font-black text-slate-900">
+                              <span className="truncate">{order.customer?.name || "Guest"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="h-px bg-slate-100 mx-2" />
+                </div>
+              )}
+
+              <button
+                onClick={() => {
+                  setActiveTableId(null);
+                  setIsQuickBill(true);
+                  setExistingItems([]);
+                  setActiveOrderId(null);
+                  setActiveOrderNumber(null);
+                  setActiveTokenNumber(null);
+                }}
+                className={`group relative w-full overflow-hidden rounded-[1.5rem] border-2 p-4 text-left transition-all hover:shadow-lg active:scale-[0.98] ${isQuickBill && !activeTableId
+                  ? "border-amber-500 bg-amber-50"
+                  : "border-slate-100 bg-white hover:border-amber-200"
+                  }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${isQuickBill && !activeTableId ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-amber-100 group-hover:text-amber-600"}`}>
+                      <Zap size={20} />
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
-                      <User size={12} className="text-slate-400" />
-                      <span className="truncate">{order.customer?.name || "Guest"}</span>
+                    <div>
+                      <h3 className={`text-sm font-black uppercase tracking-tight ${isQuickBill && !activeTableId ? "text-amber-900" : "text-slate-900"}`}>Quick Bill</h3>
+                      <p className={`text-[10px] font-bold uppercase tracking-wider ${isQuickBill && !activeTableId ? "text-amber-600" : "text-slate-400"}`}>Direct / Walk-in</p>
+                    </div>
+                  </div>
+                  {isQuickBill && !activeTableId && <CheckCircle2 size={18} className="text-amber-500" />}
+                </div>
+              </button>
+
+              <div className="h-px bg-slate-100 mx-2" />
+
+              <div className="grid grid-cols-1 gap-2">
+                {tables.map((table) => (
+                  <button
+                    key={table.id}
+                    onClick={() => setActiveTableId(table.id)}
+                    className={`relative rounded-xl border p-3 text-left text-sm font-semibold transition-all hover:shadow-md ${activeTableId === table.id
+                      ? "border-brand-600 bg-brand-50 text-brand-700 ring-1 ring-brand-200"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-brand-200"
+                      }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span>{table.name}</span>
+                      {activeTableId === table.id && <CheckCircle2 size={16} />}
                     </div>
                   </button>
                 ))}
               </div>
-              <div className="h-px bg-slate-100 mx-2" />
+            </>
+          ) : (
+            <div className="space-y-3">
+              {loadingHistory ? (
+                <div className="flex justify-center p-8"><div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-brand-500" /></div>
+              ) : history.length === 0 ? (
+                <div className="text-center p-8 opacity-40">
+                  <History size={32} className="mx-auto mb-2 text-slate-300" />
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No settled bills</p>
+                </div>
+              ) : (
+                history.map((bill) => (
+                  <div key={bill.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all cursor-pointer">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-black text-slate-900">#{bill.order?.order_number}</span>
+                      <span className="text-[10px] font-black text-brand-600">₹{bill.total}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] font-bold text-slate-400 truncate max-w-[80px]">{bill.order?.customer?.name || "Guest"}</p>
+                      <span className="text-[8px] font-medium text-slate-300">{new Date(bill.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
-
-          <button
-            onClick={() => {
-              setActiveTableId(null);
-              setIsQuickBill(true);
-              setExistingItems([]);
-              setActiveOrderId(null);
-              setActiveOrderNumber(null);
-            }}
-            className={`group relative w-full overflow-hidden rounded-[1.5rem] border-2 p-4 text-left transition-all hover:shadow-lg active:scale-[0.98] ${isQuickBill && !activeTableId
-              ? "border-amber-500 bg-amber-50"
-              : "border-slate-100 bg-white hover:border-amber-200"
-              }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${isQuickBill && !activeTableId ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-amber-100 group-hover:text-amber-600"}`}>
-                  <Zap size={20} />
-                </div>
-                <div>
-                  <h3 className={`text-sm font-black uppercase tracking-tight ${isQuickBill && !activeTableId ? "text-amber-900" : "text-slate-900"}`}>Quick Bill</h3>
-                  <p className={`text-[10px] font-bold uppercase tracking-wider ${isQuickBill && !activeTableId ? "text-amber-600" : "text-slate-400"}`}>Direct / Walk-in</p>
-                </div>
-              </div>
-              {isQuickBill && !activeTableId && <CheckCircle2 size={18} className="text-amber-500" />}
-            </div>
-          </button>
-
-          <div className="h-px bg-slate-100 mx-2" />
-
-          <div className="grid grid-cols-1 gap-2">
-            {tables.map((table) => (
-              <button
-                key={table.id}
-                onClick={() => setActiveTableId(table.id)}
-                className={`relative rounded-xl border p-3 text-left text-sm font-semibold transition-all hover:shadow-md ${activeTableId === table.id
-                  ? "border-brand-600 bg-brand-50 text-brand-700 ring-1 ring-brand-200"
-                  : "border-slate-200 bg-white text-slate-700 hover:border-brand-200"
-                  }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span>{table.name}</span>
-                  {activeTableId === table.id && <CheckCircle2 size={16} />}
-                </div>
-              </button>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -855,23 +973,23 @@ export function PosShell() {
             Finalize & Print Bill
           </Button>
         </div>
-
-        {showCustomerModal && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <Card className="bg-white border-slate-200 w-full animate-slide-up shadow-2xl">
-              <h3 className="text-sm font-black uppercase text-slate-900 mb-4">Register New Guest</h3>
-              <div className="space-y-4">
-                <Input placeholder="Guest Name" value={newCustName} onChange={e => setNewCustName(e.target.value)} className="h-11" />
-                <Input placeholder="Phone Number" value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)} className="h-11" />
-                <div className="flex gap-2 pt-2">
-                  <Button variant="ghost" onClick={() => setShowCustomerModal(false)} className="flex-1">Cancel</Button>
-                  <Button onClick={handleAddCustomer} className="flex-2 bg-brand-600 text-white h-11 rounded-xl">Register & Link</Button>
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
       </section>
+
+      {showCustomerModal && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <Card className="bg-white border-slate-200 w-full animate-slide-up shadow-2xl max-w-sm p-6 rounded-3x">
+            <h3 className="text-sm font-black uppercase text-slate-900 mb-4">Register New Guest</h3>
+            <div className="space-y-4">
+              <Input placeholder="Guest Name" value={newCustName} onChange={e => setNewCustName(e.target.value)} className="h-11" />
+              <Input placeholder="Phone Number" value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)} className="h-11" />
+              <div className="flex gap-2 pt-2">
+                <Button variant="ghost" onClick={() => setShowCustomerModal(false)} className="flex-1">Cancel</Button>
+                <Button onClick={handleAddCustomer} className="flex-[2] bg-brand-600 text-white h-11 rounded-xl">Register & Link</Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       <PrintPreviewModal
         isOpen={previewData.isOpen}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useSearchParams, useParams } from "next/navigation";
+import Script from "next/script";
 import {
     Search, Plus, Minus, ShoppingBag, User, Phone,
     Check, ChevronRight, Utensils, Zap, Star, Clock,
@@ -11,6 +12,13 @@ import { toast, Toaster } from "sonner";
 import { getPublicBranchMenu, createOrder, CartItem, getPublicBranchDetails, getMenuCategories, checkCustomerExist, createPublicCustomer } from "../../../lib/pos";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
+import { verifyPayment } from "../../../lib/pos";
+
+declare global {
+    interface Window {
+        Razorpay: any;
+    }
+}
 
 export default function QrOrderPage() {
     const params = useParams();
@@ -25,13 +33,14 @@ export default function QrOrderPage() {
     const [activeCategory, setActiveCategory] = useState<string>("All");
     const [searchQuery, setSearchQuery] = useState("");
     const [cart, setCart] = useState<CartItem[]>([]);
-    const [step, setStep] = useState<"onboarding_type" | "onboarding_mobile" | "onboarding_name" | "menu" | "cart" | "success">("onboarding_type");
+    const [step, setStep] = useState<"onboarding_type" | "onboarding_mobile" | "onboarding_name" | "menu" | "cart" | "payment" | "success">("onboarding_type");
 
     // Customer & Order Data
     const [orderType, setOrderType] = useState<"dine_in" | "takeaway">(initialTableId ? "dine_in" : "takeaway");
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
     const [customerId, setCustomerId] = useState<string | null>(null);
+    const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
     const [orderId, setOrderId] = useState<string | null>(null);
     const [tokenNumber, setTokenNumber] = useState<number | null>(null);
 
@@ -170,18 +179,67 @@ export default function QrOrderPage() {
     const handleCheckout = async () => {
         setLoading(true);
         try {
+            // 1. Create Order first (status: pending/counter_pending)
             const result = await createOrder(
                 orderType === "dine_in" ? (initialTableId || null) : null,
                 cart,
                 undefined,
                 customerId,
                 initialTableId ? 'table' : 'qr',
-                'counter_pending',
+                'counter_pending', // Always start as counter_pending until paid
                 branchId,
-                branchInfo.restaurant_id
+                branchInfo.restaurant_id,
+                paymentMethod,
+                orderType
             );
+
             setOrderId(result.id);
             setTokenNumber(result.token_number);
+
+            // 2. Handle Online Payment if selected
+            if (paymentMethod === 'online') {
+                if (!branchInfo.razorpay_enabled || !branchInfo.razorpay_key) {
+                    toast.error("Online payments are currently unavailable for this branch.");
+                    setLoading(false);
+                    return;
+                }
+
+                const options = {
+                    key: branchInfo.razorpay_key,
+                    amount: Math.round(total * 100), // In paise
+                    currency: "INR",
+                    name: branchInfo.restaurant?.name || "EZDine",
+                    description: `Order #${result.order_number}`,
+                    order_id: "", // We can use direct capture or pass a Razorpay Order ID if implemented
+                    handler: async function (response: any) {
+                        try {
+                            setLoading(true);
+                            await verifyPayment(result.id, response.razorpay_payment_id, response.razorpay_signature);
+                            setStep("success");
+                            setCart([]);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                        } catch (err) {
+                            toast.error("Payment verification failed. Please contact staff.");
+                        } finally {
+                            setLoading(false);
+                        }
+                    },
+                    prefill: {
+                        name: name,
+                        contact: phone,
+                    },
+                    theme: {
+                        color: "#0F172A",
+                    },
+                };
+
+                const rzp = new window.Razorpay(options);
+                rzp.open();
+                setLoading(false);
+                return;
+            }
+
+            // 3. For Cash, proceed to success immediately
             setStep("success");
             setCart([]);
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -528,7 +586,7 @@ export default function QrOrderPage() {
                     {cart.length > 0 && (
                         <Button
                             className="w-full h-16 rounded-[2rem] bg-brand-600 text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl shadow-brand-500/40 active:scale-95 transition-all group"
-                            onClick={handleCheckout}
+                            onClick={() => setStep("payment")}
                             disabled={loading}
                         >
                             {loading ? (
@@ -629,6 +687,8 @@ export default function QrOrderPage() {
                     </button>
                 </div>
             )}
+            {/* Razorpay SDK */}
+            <Script src="https://checkout.razorpay.com/v1/checkout.js" />
         </div>
     );
 }

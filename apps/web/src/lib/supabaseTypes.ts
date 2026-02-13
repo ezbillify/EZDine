@@ -22,6 +22,9 @@ export type Branch = {
   pincode: string | null;
   phone: string | null;
   is_active: boolean;
+  razorpay_key: string | null;
+  razorpay_secret: string | null;
+  razorpay_enabled: boolean;
   created_at: string;
 };
 

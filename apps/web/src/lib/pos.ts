@@ -116,7 +116,9 @@ export async function createOrder(
   source: 'pos' | 'table' | 'qr' = 'pos',
   paymentStatus: 'pending' | 'paid' | 'counter_pending' = 'pending',
   explicitBranchId?: string,
-  explicitRestaurantId?: string
+  explicitRestaurantId?: string,
+  paymentMethod: 'cash' | 'online' = 'cash',
+  orderType: 'dine_in' | 'takeaway' = 'dine_in'
 ) {
   let restaurantId = explicitRestaurantId;
   let branchId = explicitBranchId;
@@ -156,6 +158,8 @@ export async function createOrder(
       token_number: tokenData,
       source: source,
       payment_status: paymentStatus,
+      payment_method: paymentMethod,
+      order_type: orderType,
       is_open: true
     })
     .select("id, order_number, token_number")
@@ -262,7 +266,8 @@ export async function getPendingQrOrders() {
     .select("*, customer:customers(name)")
     .eq("branch_id", branchId)
     .eq("is_open", true)
-    .eq("payment_status", "counter_pending")
+    .in("source", ["qr", "table"])
+    .in("payment_status", ["counter_pending", "paid"])
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -300,11 +305,50 @@ export async function checkCustomerExist(restaurantId: string, phone: string) {
 export async function createPublicCustomer(restaurantId: string, name: string, phone: string) {
   const { data, error } = await supabase
     .from("customers")
-    .insert([
-      { restaurant_id: restaurantId, name, phone }
-    ])
+    .insert({
+      restaurant_id: restaurantId,
+      name: name,
+      phone: phone
+    })
     .select()
     .single();
+
+  if (error) throw error;
+  return data;
+}
+export async function getSettledBills() {
+  const { branchId } = await getContext();
+  const { data, error } = await supabase
+    .from("bills")
+    .select("*, order:orders(order_number, token_number, customer:customers(name))")
+    .eq("branch_id", branchId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+  return data;
+}
+
+export async function saveRazorpaySettings(branchId: string, settings: { key: string; secret: string; enabled: boolean }) {
+  const { error } = await supabase
+    .from("branches")
+    .update({
+      razorpay_key: settings.key,
+      razorpay_secret: settings.secret,
+      razorpay_enabled: settings.enabled
+    })
+    .eq("id", branchId);
+
+  if (error) throw error;
+  return true;
+}
+
+export async function verifyPayment(orderId: string, paymentId: string, signature: string) {
+  const { data, error } = await supabase.rpc("verify_razorpay_payment", {
+    p_order_id: orderId,
+    p_payment_id: paymentId,
+    p_signature: signature
+  });
 
   if (error) throw error;
   return data;

@@ -13,7 +13,8 @@ import {
   Store,
   CreditCard,
   UserCog,
-  QrCode
+  QrCode,
+  Link2
 } from "lucide-react";
 
 import { AuthGate } from "../../components/auth/AuthGate";
@@ -27,6 +28,7 @@ import { PrintTestCard } from "../../components/printing/PrintTestCard";
 import { PrintingSettings } from "../../components/printing/PrintingSettings";
 import { NumberingSettings } from "../../components/settings/NumberingSettings";
 import { QrSettings } from "../../components/settings/QrSettings";
+import { RazorpaySettings } from "../../components/settings/RazorpaySettings";
 import { Card } from "../../components/ui/Card";
 
 const sections = [
@@ -60,6 +62,12 @@ const sections = [
     label: "QR Ordering",
     icon: QrCode,
     description: "Generate QR codes for table and direct ordering"
+  },
+  {
+    id: "integrations",
+    label: "Integrations",
+    icon: Link2,
+    description: "Connect Razorpay and other third-party services"
   }
 ];
 
@@ -171,6 +179,16 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-slate-500">Scan-to-order system for tables and counters</p>
                 </div>
                 <QrSettings />
+              </section>
+            )}
+
+            {activeSection === 'integrations' && (
+              <section className="space-y-6">
+                <div className="mb-8">
+                  <h2 className="text-2xl font-black text-slate-900">Integrations</h2>
+                  <p className="text-sm font-medium text-slate-500">Connect and manage third-party service credentials</p>
+                </div>
+                <RazorpaySettings />
               </section>
             )}
           </div>
