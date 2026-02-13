@@ -1116,38 +1116,58 @@ export function PosShell() {
             <Button
               onClick={handlePlaceOrder}
               disabled={status === "saving" || cart.length === 0}
-              className="w-full h-11 bg-brand-600 hover:bg-brand-700 text-white rounded-xl"
+              className="w-full h-11 bg-slate-900 hover:bg-black text-white rounded-xl"
             >
               {status === "saving" ? "Saving..." : <span className="flex items-center gap-2"><Save size={16} /> KOT / Save</span>}
             </Button>
           </div>
 
-          <Button
-            onClick={handleCreateBill}
-            variant="secondary"
-            disabled={status === "saving" || (!activeOrderId && cart.length === 0)}
-            className="w-full h-12 rounded-xl bg-slate-900 text-white hover:bg-black font-black uppercase tracking-widest text-xs"
-          >
-            Finalize & Print Bill
-          </Button>
+          <div className="flex gap-3">
+            {isQuickBill && cart.length > 0 && !activeOrderId && (
+              <Button
+                onClick={() => setShowPaymentModal(true)}
+                disabled={status === "saving"}
+                className="flex-1 h-12 rounded-xl bg-brand-600 text-white hover:bg-brand-700 font-black uppercase tracking-widest text-xs shadow-lg shadow-brand-500/20"
+              >
+                Pay & Order
+              </Button>
+            )}
+            <Button
+              onClick={handleCreateBill}
+              variant="secondary"
+              disabled={status === "saving" || (!activeOrderId && cart.length === 0)}
+              className={`flex-1 h-12 rounded-xl ${isQuickBill && !activeOrderId ? 'bg-slate-100 text-slate-400' : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-500/20'} font-black uppercase tracking-widest text-xs`}
+            >
+              Finalize & Print
+            </Button>
+          </div>
         </div>
       </section>
 
-      {showCustomerModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <Card className="bg-white border-slate-200 w-full animate-slide-up shadow-2xl max-w-sm p-6 rounded-3x">
-            <h3 className="text-sm font-black uppercase text-slate-900 mb-4">Register New Guest</h3>
-            <div className="space-y-4">
-              <Input placeholder="Guest Name" value={newCustName} onChange={e => setNewCustName(e.target.value)} className="h-11" />
-              <Input placeholder="Phone Number" value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)} className="h-11" />
-              <div className="flex gap-2 pt-2">
-                <Button variant="ghost" onClick={() => setShowCustomerModal(false)} className="flex-1">Cancel</Button>
-                <Button onClick={handleAddCustomer} className="flex-[2] bg-brand-600 text-white h-11 rounded-xl">Register & Link</Button>
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onConfirm={handlePaymentConfirm}
+        totalAmount={cart.reduce((sum, item) => sum + (item.price * item.qty), 0)}
+      />
+
+      {
+        showCustomerModal && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <Card className="bg-white border-slate-200 w-full animate-slide-up shadow-2xl max-w-sm p-6 rounded-3x">
+              <h3 className="text-sm font-black uppercase text-slate-900 mb-4">Register New Guest</h3>
+              <div className="space-y-4">
+                <Input placeholder="Guest Name" value={newCustName} onChange={e => setNewCustName(e.target.value)} className="h-11" />
+                <Input placeholder="Phone Number" value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)} className="h-11" />
+                <div className="flex gap-2 pt-2">
+                  <Button variant="ghost" onClick={() => setShowCustomerModal(false)} className="flex-1">Cancel</Button>
+                  <Button onClick={handleAddCustomer} className="flex-[2] bg-brand-600 text-white h-11 rounded-xl">Register & Link</Button>
+                </div>
               </div>
-            </div>
-          </Card>
-        </div>
-      )}
+            </Card>
+          </div>
+        )
+      }
 
       <PrintPreviewModal
         isOpen={previewData.isOpen}
@@ -1157,6 +1177,6 @@ export function PosShell() {
         width={previewData.width}
         onPrint={handleCreateBill}
       />
-    </div>
+    </div >
   );
 }
