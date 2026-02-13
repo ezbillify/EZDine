@@ -40,12 +40,21 @@ export async function getPublicBranchMenu(branchId: string) {
 export async function getPublicBranchDetails(branchId: string) {
   const { data, error } = await supabase
     .from("branches")
-    .select("id, name, restaurant_id, restaurant:restaurants(name, logo)")
+    .select("id, name, restaurant_id, razorpay_key, razorpay_enabled, restaurant:restaurants(name, logo, razorpay_key, razorpay_enabled)")
     .eq("id", branchId)
     .single();
 
   if (error) throw error;
-  return data;
+
+  // Merge logic: Branch overrides Restaurant
+  const effectiveKey = data.razorpay_key || data.restaurant?.razorpay_key;
+  const effectiveEnabled = data.razorpay_enabled || data.restaurant?.razorpay_enabled;
+
+  return {
+    ...data,
+    razorpay_key: effectiveKey,
+    razorpay_enabled: effectiveEnabled
+  };
 }
 
 export async function getMenuCategories(branchId?: string) {

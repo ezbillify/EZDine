@@ -59,6 +59,7 @@ export function PosShell() {
   // Customer State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomerName, setSelectedCustomerName] = useState<string | null>(null);
+  const [isOrderSettled, setIsOrderSettled] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [newCustName, setNewCustName] = useState("");
@@ -183,6 +184,7 @@ export function PosShell() {
 
   const loadQrOrder = async (order: any) => {
     try {
+      setIsOrderSettled(false);
       setActiveTableId(order.table_id);
       setIsQuickBill(!order.table_id);
       setActiveOrderId(order.id);
@@ -205,6 +207,51 @@ export function PosShell() {
       toast.info(`Loaded QR Order - Token ${order.token_number}`);
     } catch (err) {
       toast.error("Failed to load QR order details");
+    }
+  };
+
+  const loadSettledBill = async (bill: any) => {
+    try {
+      if (!bill.order_id) return;
+
+      const orderData = bill.order; // Joined data from getSettledBills
+
+      // Determine if it was table or quick bill based on bill details or fetch order details if needed.
+      // For simplicity, we treat settled bills essentially as Quick Bills visually unless table info is needed.
+      // But let's try to be accurate if possible. 
+      // Since getSettledBills doesn't join table_id yet, we might need to fetch order details.
+
+      // Actually, let's fetch full order details to be safe
+      const orderItems = await getOrderItems(bill.order_id);
+
+      // Map items
+      const mappedItems: OrderItem[] = orderItems.map((i) => ({
+        id: i.id,
+        item_id: i.item_id,
+        name: menuItems.find((m) => m.id === i.item_id)?.name ?? "Unknown Item",
+        quantity: i.quantity,
+        price: i.price,
+        status: i.status
+      }));
+
+      setCart([]);
+      setExistingItems(mappedItems);
+      setActiveOrderId(bill.order_id);
+      setActiveOrderNumber(orderData?.order_number);
+      setActiveTokenNumber(orderData?.token_number);
+      setSelectedCustomerName(orderData?.customer?.name || "Guest");
+
+      // IMPORTANT: Set Read-Only Mode
+      setIsOrderSettled(true);
+
+      // Optional: Reset table selection to avoid confusion?
+      setActiveTableId(null);
+      setIsQuickBill(true); // Visually detached from tables
+
+      toast.info(`Loaded Settled Bill #${bill.order?.order_number}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load bill details");
     }
   };
 
@@ -260,6 +307,7 @@ export function PosShell() {
         return;
       }
       try {
+        setIsOrderSettled(false);
         setIsQuickBill(false); // If table selected, it's not a quick bill
         const order = await getOpenOrderForTable(activeTableId);
         if (order) {
@@ -641,24 +689,24 @@ export function PosShell() {
                         key={order.id}
                         onClick={() => loadQrOrder(order)}
                         className={`w-full rounded-[1.5rem] border p-3 text-left transition-all hover:shadow-lg active:scale-[0.98] ${order.payment_method === 'online' && order.payment_status === 'paid'
-                            ? 'border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50'
-                            : order.payment_method === 'online'
-                              ? 'border-slate-100 bg-slate-50/50 hover:bg-slate-100 opacity-60'
-                              : 'border-brand-100 bg-brand-50/50 hover:bg-brand-50'
+                          ? 'border-emerald-100 bg-emerald-50/50 hover:bg-emerald-50'
+                          : order.payment_method === 'online'
+                            ? 'border-slate-100 bg-slate-50/50 hover:bg-slate-100 opacity-60'
+                            : 'border-brand-100 bg-brand-50/50 hover:bg-brand-50'
                           }`}
                       >
                         <div className="flex items-center gap-3">
                           <div className={`flex h-12 w-12 items-center justify-center rounded-2xl font-black text-lg shadow-sm ${order.payment_method === 'online' && order.payment_status === 'paid' ? 'bg-emerald-500 text-white'
-                              : order.payment_method === 'online' ? 'bg-slate-200 text-slate-500'
-                                : 'bg-brand-600 text-white'
+                            : order.payment_method === 'online' ? 'bg-slate-200 text-slate-500'
+                              : 'bg-brand-600 text-white'
                             }`}>
                             {order.token_number}
                           </div>
                           <div className="flex-1 overflow-hidden">
                             <div className="flex items-center justify-between mb-0.5">
                               <span className={`text-[9px] font-black uppercase tracking-wider ${order.payment_method === 'online' && order.payment_status === 'paid' ? 'text-emerald-600'
-                                  : order.payment_method === 'online' ? 'text-slate-400'
-                                    : 'text-brand-600'
+                                : order.payment_method === 'online' ? 'text-slate-400'
+                                  : 'text-brand-600'
                                 }`}>
                                 {order.payment_method === 'online' && order.payment_status === 'paid' ? 'Paid Online'
                                   : order.payment_method === 'online' ? 'Paying...'
@@ -682,6 +730,7 @@ export function PosShell() {
 
               <button
                 onClick={() => {
+                  setIsOrderSettled(false);
                   setActiveTableId(null);
                   setIsQuickBill(true);
                   setExistingItems([]);
@@ -739,9 +788,18 @@ export function PosShell() {
                 </div>
               ) : (
                 history.map((bill) => (
-                  <div key={bill.id} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all cursor-pointer">
+                  <div
+                    key={bill.id}
+                    onClick={() => loadSettledBill(bill)}
+                    className="p-3 bg-slate-50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all cursor-pointer"
+                  >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-black text-slate-900">#{bill.order?.order_number}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-slate-200 text-[10px] font-black text-slate-600">
+                          {bill.order?.token_number || "-"}
+                        </span>
+                        <span className="text-[10px] font-black text-slate-900">#{bill.order?.order_number}</span>
+                      </div>
                       <span className="text-[10px] font-black text-brand-600">₹{bill.total}</span>
                     </div>
                     <div className="flex items-center justify-between">

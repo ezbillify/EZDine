@@ -599,6 +599,71 @@ export default function QrOrderPage() {
                 </main>
             )}
 
+            {step === "payment" && (
+                <main className="p-4 px-6 animate-in slide-in-from-right duration-500">
+                    <div className="flex items-center justify-between mb-8">
+                        <button onClick={() => setStep("cart")} className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center shadow-sm ring-1 ring-slate-100 text-slate-400 hover:text-brand-600 transition-all">
+                            <ChevronLeft size={24} />
+                        </button>
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight text-center flex-1">Payment</h2>
+                        <div className="w-12" />
+                    </div>
+
+                    <div className="space-y-4 mb-4">
+                        <div className="bg-slate-900 rounded-[2rem] p-6 text-white text-center shadow-xl shadow-slate-900/20">
+                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Amount</p>
+                            <p className="text-4xl font-black tracking-tighter">₹{total.toFixed(2)}</p>
+                        </div>
+
+                        <p className="text-slate-900 text-sm font-black uppercase tracking-widest px-2 pt-4">Choose Method</p>
+
+                        <button
+                            onClick={() => setPaymentMethod('online')}
+                            className={`w-full p-5 rounded-[2rem] flex items-center gap-4 transition-all border-2 relative overflow-hidden group ${paymentMethod === 'online'
+                                ? 'bg-emerald-50 border-emerald-500 shadow-xl shadow-emerald-100'
+                                : 'bg-white border-slate-100'
+                                }`}
+                        >
+                            <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'online' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                <Zap size={24} />
+                            </div>
+                            <div className="text-left flex-1 relative z-10">
+                                <h3 className={`font-black uppercase tracking-tight ${paymentMethod === 'online' ? 'text-emerald-900' : 'text-slate-900'}`}>Pay Online</h3>
+                                <p className="text-[10px] font-bold text-slate-400">UPI, Cards, Netbanking</p>
+                            </div>
+                            {paymentMethod === 'online' && <CheckCircle2 className="text-emerald-500 mr-2" size={24} />}
+                        </button>
+
+                        <button
+                            onClick={() => setPaymentMethod('cash')}
+                            className={`w-full p-5 rounded-[2rem] flex items-center gap-4 transition-all border-2 relative overflow-hidden group ${paymentMethod === 'cash'
+                                ? 'bg-brand-50 border-brand-500 shadow-xl shadow-brand-100'
+                                : 'bg-white border-slate-100'
+                                }`}
+                        >
+                            <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-colors ${paymentMethod === 'cash' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                <Utensils size={24} />
+                            </div>
+                            <div className="text-left flex-1 relative z-10">
+                                <h3 className={`font-black uppercase tracking-tight ${paymentMethod === 'cash' ? 'text-brand-900' : 'text-slate-900'}`}>Pay at Counter</h3>
+                                <p className="text-[10px] font-bold text-slate-400">Cash or Card at counter</p>
+                            </div>
+                            {paymentMethod === 'cash' && <CheckCircle2 className="text-brand-500 mr-2" size={24} />}
+                        </button>
+                    </div>
+
+                    <div className="mt-8">
+                        <Button
+                            className="w-full h-16 rounded-[2rem] bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-sm shadow-2xl shadow-slate-900/40 active:scale-95 transition-all"
+                            onClick={handleCheckout}
+                            disabled={loading}
+                        >
+                            {loading ? "Processing..." : paymentMethod === 'online' ? "Pay & Order" : "Place Order"}
+                        </Button>
+                    </div>
+                </main>
+            )}
+
             {step === "success" && (
                 <main className="p-8 flex flex-col items-center justify-center min-h-[90vh] text-center animate-in zoom-in-95 duration-1000">
                     <div className="relative mb-12">
