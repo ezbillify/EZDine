@@ -1,12 +1,13 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { X, CreditCard, Banknote, Smartphone, Check } from "lucide-react";
 import { Button } from "../ui/Button";
 
 type PaymentModalProps = {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (method: 'cash' | 'card' | 'upi' | 'online') => void;
+    onConfirm: (payments: any[]) => void;
     totalAmount: number;
 };
 
@@ -16,7 +17,19 @@ export function PaymentModal({
     onConfirm,
     totalAmount
 }: PaymentModalProps) {
-    if (!isOpen) return null;
+    const [amounts, setAmounts] = useState<Record<string, string>>({
+        cash: "",
+        card: "",
+        upi: "",
+        online: ""
+    });
+
+    // Reset when opened
+    useEffect(() => {
+        if (isOpen) {
+            setAmounts({ cash: "", card: "", upi: "", online: "" });
+        }
+    }, [isOpen]);
 
     const methods = [
         { id: 'cash', label: 'Cash', icon: Banknote, color: 'bg-emerald-500' },
@@ -25,11 +38,50 @@ export function PaymentModal({
         { id: 'online', label: 'Online / Razorpay', icon: ZapIcon, color: 'bg-sky-500' },
     ] as const;
 
+    const currentTotal = Object.values(amounts).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
+    const remaining = Math.max(0, totalAmount - currentTotal);
+    const isPaid = currentTotal >= totalAmount - 0.5; // Tolerance
+
+    const handleConfirm = () => {
+        // Build the result
+        // onConfirm expects a single method string strictly, but we need to pass data.
+        // We will need to update the Parent to accept an object or array.
+        // For now, let's pass a special object via 'any' or refactor the parent first.
+        // Wait, the instruction says "Pass list of payments to onConfirm". 
+        // I need to update the interface first or cast it.
+        // Let's coerce it for now and update Parent immediately after.
+
+        const payments = Object.entries(amounts)
+            .map(([method, amount]) => ({ method, amount: parseFloat(amount) || 0 }))
+            .filter(p => p.amount > 0);
+
+        if (payments.length === 0 && totalAmount > 0) return;
+
+        // We'll pass the array disguised as the first arg, or we need to update the prop type.
+        // Since I can't change the parent in this same tool call, and TypeScript will error if I change the prop type here without changing parent,
+        // I will update the prop type definition in this file to `any` temporarily or `(method: string | any[])`.
+        // Actually, I can just update the type definition here!
+        onConfirm(payments as any);
+    };
+
+    const handleQuickFill = (methodId: string) => {
+        const otherTotal = Object.entries(amounts)
+            .filter(([key]) => key !== methodId)
+            .reduce((sum, [_, val]) => sum + (parseFloat(val) || 0), 0);
+
+        const toFill = Math.max(0, totalAmount - otherTotal);
+        if (toFill > 0) {
+            setAmounts(prev => ({ ...prev, [methodId]: toFill.toFixed(2) }));
+        }
+    };
+
+    if (!isOpen) return null;
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="relative w-full max-w-sm overflow-hidden rounded-[2rem] bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+            <div className="relative w-full max-w-md overflow-hidden rounded-[2rem] bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 flex flex-col max-h-[90vh]">
                 {/* Header */}
-                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4 flex-none">
                     <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">Record Payment</h3>
                     <button
                         onClick={onClose}
@@ -39,9 +91,9 @@ export function PaymentModal({
                     </button>
                 </div>
 
-                {/* Body */}
-                <div className="p-6">
-                    <div className="text-center mb-8">
+                {/* Body - Scrollable */}
+                <div className="p-6 overflow-y-auto">
+                    <div className="text-center mb-6">
                         <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-1">Total Payable</p>
                         <div className="text-4xl font-black text-slate-900 tracking-tighter">
                             <span className="text-lg text-slate-400 mr-1">₹</span>
@@ -49,29 +101,52 @@ export function PaymentModal({
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-3">
                         {methods.map((method) => (
-                            <button
-                                key={method.id}
-                                onClick={() => onConfirm(method.id)}
-                                className="group relative flex flex-col items-center justify-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:bg-white hover:border-brand-200 hover:shadow-lg active:scale-95"
-                            >
-                                <div className={`flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md transition-transform group-hover:scale-110 ${method.color}`}>
-                                    <method.icon size={24} />
+                            <div key={method.id} className="flex items-center gap-3 group">
+                                <button
+                                    onClick={() => handleQuickFill(method.id)}
+                                    className={`flex h-12 w-12 flex-none items-center justify-center rounded-2xl text-white shadow-md transition-transform active:scale-95 ${method.color}`}
+                                    title="Click to fill remaining"
+                                >
+                                    <method.icon size={20} />
+                                </button>
+                                <div className="flex-1 relative">
+                                    <label className="absolute -top-2 left-2 px-1 bg-white text-[10px] font-bold uppercase text-slate-400">
+                                        {method.label}
+                                    </label>
+                                    <input
+                                        type="number"
+                                        placeholder="0.00"
+                                        value={amounts[method.id]}
+                                        onChange={e => setAmounts(prev => ({ ...prev, [method.id]: e.target.value }))}
+                                        className="h-12 w-full rounded-xl border border-slate-200 pl-4 pr-4 font-mono font-bold text-lg text-slate-900 placeholder:text-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all"
+                                    />
                                 </div>
-                                <span className="text-xs font-black uppercase tracking-wide text-slate-600 group-hover:text-slate-900">
-                                    {method.label}
-                                </span>
-                            </button>
+                            </div>
                         ))}
                     </div>
                 </div>
 
                 {/* Footer */}
-                <div className="border-t border-slate-100 bg-slate-50/30 p-4 px-6 text-center">
-                    <p className="text-[10px] font-medium text-slate-400">
-                        Recording payment will mark the order as <span className="font-bold text-emerald-600">PAID</span> and print the bill.
-                    </p>
+                <div className="border-t border-slate-100 bg-slate-50 p-4 px-6 space-y-3 flex-none">
+                    <div className="flex justify-between items-center text-sm font-bold">
+                        <span className="text-slate-500">Paid: <span className="text-slate-900">₹{currentTotal.toFixed(2)}</span></span>
+                        <span className={remaining > 0 ? "text-rose-600" : "text-emerald-600"}>
+                            {remaining > 0 ? `Remaining: ₹${remaining.toFixed(2)}` : "Fully Paid"}
+                        </span>
+                    </div>
+
+                    <Button
+                        onClick={handleConfirm}
+                        disabled={!isPaid && totalAmount > 0}
+                        className={`w-full h-14 text-lg rounded-2xl shadow-xl transition-all ${isPaid
+                            ? "bg-slate-900 hover:bg-black text-white shadow-slate-900/10 hover:shadow-slate-900/20"
+                            : "bg-slate-100 text-slate-300 cursor-not-allowed"
+                            }`}
+                    >
+                        Confirm Settlement
+                    </Button>
                 </div>
             </div>
         </div>

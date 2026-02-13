@@ -524,7 +524,7 @@ export function PosShell() {
     }
   };
 
-  const handlePaymentConfirm = async (method: 'cash' | 'card' | 'upi' | 'online') => {
+  const handlePaymentConfirm = async (payments: { method: string, amount: number }[]) => {
     setShowPaymentModal(false);
     setStatus("saving");
 
@@ -532,6 +532,8 @@ export function PosShell() {
       let orderId = activeOrderId;
       let orderNumber = activeOrderNumber;
       let tokenNumber = activeTokenNumber;
+
+      const primaryMethod = payments.length > 0 ? payments[0].method : 'cash';
 
       // 1. Create or Update Order
       if (!orderId) {
@@ -545,7 +547,7 @@ export function PosShell() {
           'paid',
           undefined,
           undefined,
-          method === 'online' ? 'online' : 'cash'
+          primaryMethod as any
         );
         orderId = order.id;
         orderNumber = order.order_number;
@@ -591,14 +593,13 @@ export function PosShell() {
 
       const totalAmount = fullItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
-      // Create Bill with ALL items
-      // We pass fullItems to createBill to ensure accurate record
-      // But wait, createBill implementation expects CartItem[] which has item_id, name, qty, price.
-      // fullItems matches this structure.
-      // However, TypeScript might complain about missing properties if CartItem has more.
-      // Let's cast fullItems as any to be safe or ensure it matches CartItem
       const bill = await createBill(orderId!, fullItems as any);
-      await addPayment(bill.id, method, totalAmount);
+
+      // Add all payments
+      for (const p of payments) {
+        await addPayment(bill.id, p.method, p.amount);
+      }
+
       await closeOrder(orderId!);
 
       // 4. Print Bill
