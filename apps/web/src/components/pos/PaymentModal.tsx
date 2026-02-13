@@ -24,11 +24,37 @@ export function PaymentModal({
         online: ""
     });
 
-    // Reset when opened
+    // Reset & Auto-fill Logic
     useEffect(() => {
         if (isOpen) {
-            setAmounts({ cash: "", card: "", upi: "", online: "" });
+            // Default to Full Cash for speed
+            setAmounts({
+                cash: totalAmount > 0 ? totalAmount.toFixed(2) : "",
+                card: "",
+                upi: "",
+                online: ""
+            });
         }
+    }, [isOpen, totalAmount]);
+
+    // Keyboard Shortcut (Enter to Confirm)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (!isOpen) return;
+            if (e.key === "Enter") {
+                e.preventDefault();
+                // We need a way to reference the latest state. 
+                // Since this effect depends on isPaid/amounts, we might need a ref or include them in dependency.
+                // Or better, just attach onKeyDown to the inputs and a global listener for the modal scope.
+                document.getElementById("btn-confirm-payment")?.click();
+            }
+            if (e.key === "Escape") {
+                onClose();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
     }, [isOpen]);
 
     const methods = [
@@ -120,6 +146,7 @@ export function PaymentModal({
                                         placeholder="0.00"
                                         value={amounts[method.id]}
                                         onChange={e => setAmounts(prev => ({ ...prev, [method.id]: e.target.value }))}
+                                        autoFocus={method.id === 'cash'}
                                         className="h-12 w-full rounded-xl border border-slate-200 pl-4 pr-4 font-mono font-bold text-lg text-slate-900 placeholder:text-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all"
                                     />
                                 </div>
@@ -138,6 +165,7 @@ export function PaymentModal({
                     </div>
 
                     <Button
+                        id="btn-confirm-payment"
                         onClick={handleConfirm}
                         disabled={!isPaid && totalAmount > 0}
                         className={`w-full h-14 text-lg rounded-2xl shadow-xl transition-all ${isPaid

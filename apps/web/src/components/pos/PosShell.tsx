@@ -1207,7 +1207,7 @@ export function PosShell() {
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         onConfirm={handlePaymentConfirm}
-        totalAmount={cart.reduce((sum, item) => sum + (item.price * item.qty), 0)}
+        totalAmount={existingTotal + cartTotal}
       />
 
       {
