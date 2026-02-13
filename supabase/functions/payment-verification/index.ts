@@ -13,10 +13,16 @@ serve(async (req: Request) => {
     }
 
     try {
+        // Use Service Role Key to bypass RLS (required to fetch secrets & update order)
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+            {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
+                }
+            }
         )
 
         const { orderId, paymentId, signature } = await req.json()
