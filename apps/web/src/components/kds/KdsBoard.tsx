@@ -75,8 +75,31 @@ export function KdsBoard() {
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 5000); // Polling every 5s
-    return () => clearInterval(id);
+
+    // Realtime Subscription
+    const channel = supabase
+      .channel('kds-orders')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload) => {
+          // We could filter by branch_id in the subscription if possible, 
+          // but row level security might handle it, or we check payload.
+          // Ideally we just reload to be safe and simple.
+          console.log("KDS Update:", payload);
+          load();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'order_items' },
+        () => load()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const advance = async (id: string, currentStatus: string, nextStatus: string) => {

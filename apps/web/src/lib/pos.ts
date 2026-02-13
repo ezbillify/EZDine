@@ -127,7 +127,7 @@ export async function createOrder(
   paymentStatus: 'pending' | 'paid' | 'counter_pending' = 'pending',
   explicitBranchId?: string,
   explicitRestaurantId?: string,
-  paymentMethod: 'cash' | 'online' = 'cash',
+  paymentMethod: string = 'cash',
   orderType: 'dine_in' | 'takeaway' = 'dine_in'
 ) {
   let restaurantId = explicitRestaurantId;
@@ -354,10 +354,9 @@ export async function saveRazorpaySettings(branchId: string, settings: { key: st
 }
 
 export async function verifyPayment(orderId: string, paymentId: string, signature: string) {
-  const { data, error } = await supabase.rpc("verify_razorpay_payment", {
-    p_order_id: orderId,
-    p_payment_id: paymentId,
-    p_signature: signature
+  // Use Edge Function
+  const { data, error } = await supabase.functions.invoke('payment-verification', {
+    body: { orderId, paymentId, signature }
   });
 
   if (error) throw error;

@@ -136,26 +136,13 @@ export function PosShell() {
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
         async (payload) => {
-          // 1. Refresh QR / Incoming List
           fetchQrOrders();
-
-          // 2. Refresh Active Table if affected
           if (activeTableId && payload.new && (payload.new as any).table_id === activeTableId) {
-            // Toggle a dummy state or call a refresh function to re-fetch table order
-            // For now, we can just re-trigger the loadTableOrder effect by updating a timestamp or similar, 
-            // but effectively we just need to re-fetch.
-            // Simplest way: setStatus to trigger re-fetch if we add it as dependency, but better to call a function.
-            // We'll use a hack or refactor loadTableOrder to be callable.
-            // Actually, let's just create a refresh trigger.
-            setStatus((prev) => prev === 'idle' ? 'idle' : 'idle'); // Force re-render? No.
-            // We will depend on a "lastUpdated" state.
             setLastUpdated(Date.now());
           }
 
-          // 3. Sound & Toast Logic
           const newOrder = payload.new as any;
           const eventType = payload.eventType;
-
           if (eventType === 'INSERT' || (eventType === 'UPDATE' && newOrder.payment_status === 'paid')) {
             playBuzzer();
             toast.success("New Order / Payment Update", {
@@ -163,6 +150,20 @@ export function PosShell() {
               action: { label: "Refresh", onClick: () => fetchQrOrders() }
             });
           }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "order_items" },
+        (payload) => {
+          // If items change, we definitely need to refresh active table if it matches
+          // For QR orders list, usually total amount or item count might show, so safe to refresh.
+          fetchQrOrders();
+          // We don't have table_id in order_items payload usually, so we might just force refresh active table
+          // to be safe, or we could fetch the order to check table_id. 
+          // For simplicity/performance balance: just trigger refresh. 
+          // The loadTableOrder hook is cheap enough.
+          setLastUpdated(Date.now());
         }
       )
       .subscribe();
@@ -533,7 +534,7 @@ export function PosShell() {
       let orderNumber = activeOrderNumber;
       let tokenNumber = activeTokenNumber;
 
-      const primaryMethod = payments.length > 0 ? payments[0].method : 'cash';
+      const primaryMethod = payments[0]?.method ?? 'cash';
 
       // 1. Create or Update Order
       if (!orderId) {
@@ -600,7 +601,9 @@ export function PosShell() {
         await addPayment(bill.id, p.method, p.amount);
       }
 
-      await closeOrder(orderId!);
+      // await closeOrder(orderId!); 
+      // Do not close order immediately. Let KDS handle status.
+      // We just ensure it is marked as Paid (via bill & payments)
 
       // 4. Print Bill
       try {
