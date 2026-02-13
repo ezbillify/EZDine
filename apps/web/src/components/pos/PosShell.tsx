@@ -86,20 +86,31 @@ export function PosShell() {
 
   const [status, setStatus] = useState<"idle" | "saving">("idle");
 
+  const [lastUpdated, setLastUpdated] = useState(Date.now());
+
   const playBuzzer = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+
+      const audioCtx = new AudioContext();
+
       const oscillator = audioCtx.createOscillator();
       const gainNode = audioCtx.createGain();
+
       oscillator.connect(gainNode);
       gainNode.connect(audioCtx.destination);
+
       oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+      oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.5); // Drop to A4
+
       gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + 0.1);
-      gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
+      gainNode.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.1);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+
       oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.4);
+      oscillator.stop(audioCtx.currentTime + 0.5);
     } catch (e) {
       console.error("Audio buzzer failed", e);
     }
@@ -118,34 +129,40 @@ export function PosShell() {
     };
     load();
 
-    // Listen for new QR orders
+    // Listen for Realtime Order Updates
     const channel = supabase
-      .channel("qr-orders")
+      .channel("pos-realtime")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "orders", filter: "payment_status=eq.counter_pending" },
-        (payload) => {
+        { event: "*", schema: "public", table: "orders" },
+        async (payload) => {
+          // 1. Refresh QR / Incoming List
           fetchQrOrders();
-          // Only buzz for cash orders immediately. Online orders buzz when paid.
-          if (payload.new.payment_method === 'cash') {
+
+          // 2. Refresh Active Table if affected
+          if (activeTableId && payload.new && (payload.new as any).table_id === activeTableId) {
+            // Toggle a dummy state or call a refresh function to re-fetch table order
+            // For now, we can just re-trigger the loadTableOrder effect by updating a timestamp or similar, 
+            // but effectively we just need to re-fetch.
+            // Simplest way: setStatus to trigger re-fetch if we add it as dependency, but better to call a function.
+            // We'll use a hack or refactor loadTableOrder to be callable.
+            // Actually, let's just create a refresh trigger.
+            setStatus((prev) => prev === 'idle' ? 'idle' : 'idle'); // Force re-render? No.
+            // We will depend on a "lastUpdated" state.
+            setLastUpdated(Date.now());
+          }
+
+          // 3. Sound & Toast Logic
+          const newOrder = payload.new as any;
+          const eventType = payload.eventType;
+
+          if (eventType === 'INSERT' || (eventType === 'UPDATE' && newOrder.payment_status === 'paid')) {
             playBuzzer();
-            toast.success("New Cash Order (QR)", {
-              description: "Customer waiting for settlement.",
-              action: { label: "View", onClick: () => setActiveTab("live") }
+            toast.success("New Order / Payment Update", {
+              description: `Order #${newOrder.order_number} Updated`,
+              action: { label: "Refresh", onClick: () => fetchQrOrders() }
             });
           }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "orders", filter: "payment_status=eq.paid" },
-        () => {
-          fetchQrOrders();
-          playBuzzer();
-          toast.success("Online Payment Received!", {
-            description: "Order marked as paid.",
-            action: { label: "View", onClick: () => setActiveTab("live") }
-          });
         }
       )
       .subscribe();
@@ -155,7 +172,10 @@ export function PosShell() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [activeTableId]); // Add activeTableId dependency to listener? No, listener should be stable.
+  // We need to handle activeTableId refresh carefully. 
+
+
 
   useEffect(() => {
     if (activeTab === "history") {
@@ -342,7 +362,7 @@ export function PosShell() {
       }
     };
     loadTableOrder();
-  }, [activeTableId, menuItems, status]);
+  }, [activeTableId, menuItems, status, lastUpdated]);
 
   const cartTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.qty * item.price, 0),
