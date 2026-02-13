@@ -8,7 +8,9 @@ const https = require('https');
 const PACKAGE_JSON_PATH = path.join(__dirname, '../package.json');
 const VERSION_TS_PATH = path.join(__dirname, '../src/version.ts');
 const ENV_PATH = path.join(__dirname, '../.env.local');
-const CHANGELOG_PATH = path.join(__dirname, '../../../../CHANGELOG.md'); // Adjust based on repo root
+// Correct: 3 levels up from apps/web/scripts -> apps/web -> apps -> ROOT
+const PROJECT_ROOT = path.resolve(__dirname, '../../../');
+const CHANGELOG_PATH = path.join(PROJECT_ROOT, 'CHANGELOG.md');
 
 // Load .env.local manually
 if (fs.existsSync(ENV_PATH)) {
@@ -29,13 +31,7 @@ if (!GROQ_API_KEY) {
 }
 
 // --- Helpers ---
-function run(command) {
-    try {
-        return execSync(command, { encoding: 'utf8' }).trim();
-    } catch (e) {
-        return '';
-    }
-}
+// The 'run' helper function is no longer used as execSync calls are now direct with cwd option.
 
 async function generateChangelog(commits) {
     console.log("🤖 Asking Llama 3 (via Groq) to write changelog...");
@@ -98,7 +94,7 @@ Format output as markdown (just the content, no title or markdown block ticks).
 // --- Main ---
 (async () => {
     try {
-        console.log("🚀 Starting Release Process...");
+        console.log("🚀 Starting Release Process (Root: " + PROJECT_ROOT + ")...");
 
         // 1. Read Package.json
         const pkg = require(PACKAGE_JSON_PATH);
@@ -109,11 +105,17 @@ Format output as markdown (just the content, no title or markdown block ticks).
         const newVersion = `${major}.${minor}.${patch + 1}`;
         console.log(`🆙 Bumping version: ${currentVersion} -> ${newVersion}`);
 
-        // 3. Get Commits since last tag (or last 10 if no tags)
-        let commits = run(`git log $(git describe --tags --abbrev=0 2>/dev/null)..HEAD --oneline`);
+        // 3. Get Commits (Run git from ROOT)
+        let commits = '';
+        try {
+            commits = execSync(`git log $(git describe --tags --abbrev=0 2>/dev/null)..HEAD --oneline`, { cwd: PROJECT_ROOT, encoding: 'utf8' }).trim();
+        } catch (e) {
+            commits = '';
+        }
+
         if (!commits) {
             console.log("⚠️ No tags found, using last 10 commits.");
-            commits = run('git log -n 10 --oneline');
+            commits = execSync('git log -n 10 --oneline', { cwd: PROJECT_ROOT, encoding: 'utf8' }).trim();
         }
 
         // 4. Generate AI Changelog
@@ -123,7 +125,7 @@ Format output as markdown (just the content, no title or markdown block ticks).
         console.log(aiChangelog);
         console.log("------------------------------------------------\n");
 
-        // 5. Update Files
+        // 5. Update Files (File writes are absolute paths so they work fine)
 
         // package.json
         pkg.version = newVersion;
@@ -144,19 +146,18 @@ Format output as markdown (just the content, no title or markdown block ticks).
         }
         fs.writeFileSync(CHANGELOG_PATH, newEntry + changelogContent);
 
-        // 6. Git Operations
+        // 6. Git Operations (Run from ROOT to include CHANGELOG.md)
         console.log("📦 Committing and Pushing...");
-        run('git add .');
-        run(`git commit -m "chore: release v${newVersion} 🚀"`);
-        run('git push origin main');
+        execSync('git add .', { cwd: PROJECT_ROOT, stdio: 'inherit' });
+        execSync(`git commit -m "chore: release v${newVersion} 🚀"`, { cwd: PROJECT_ROOT, stdio: 'inherit' });
+        execSync('git push origin main', { cwd: PROJECT_ROOT, stdio: 'inherit' });
 
         console.log(`\n✅ Successfully released v${newVersion}!`);
 
-        // 7. Deploy Supabase Functions
+        // 7. Deploy Supabase Functions (Run from ROOT)
         console.log("⚡️ Deploying Supabase Edge Functions...");
         try {
-            // Use inherit to show live logs (and prove it works without docker)
-            execSync('npx supabase functions deploy --no-verify-jwt', { stdio: 'inherit' });
+            execSync('npx supabase functions deploy --no-verify-jwt', { cwd: PROJECT_ROOT, stdio: 'inherit' });
             console.log("✅ Supabase Functions Deployed!");
         } catch (err) {
             console.error("⚠️ Supabase deployment failed (but git push succeeded). Check logs.");

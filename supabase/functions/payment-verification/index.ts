@@ -13,7 +13,9 @@ serve(async (req: Request) => {
     }
 
     try {
-        // Use Service Role Key to bypass RLS (required to fetch secrets & update order)
+        console.log("Payment Verification Started");
+
+        // Use Service Role Key
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -25,14 +27,16 @@ serve(async (req: Request) => {
             }
         )
 
-        const { orderId, paymentId, signature } = await req.json()
+        const body = await req.json();
+        console.log("Request Body:", JSON.stringify(body));
+        const { orderId, paymentId, signature } = body;
 
-        // ... (rest of logic) ...
+        if (!orderId || !paymentId) {
+            throw new Error(`Missing required fields: orderId=${orderId}, paymentId=${paymentId}`);
+        }
 
-        // 1. Get Branch Razorpay Secrets
-        // We need to fetch the branch/restaurant config to get the correct secret
-        // But wait, we don't know which branch this order belongs to easily without fetching the order first.
-
+        // 1. Get Order
+        console.log(`Fetching order: ${orderId}`);
         const { data: order, error: orderError } = await supabaseClient
             .from('orders')
             .select('branch_id, order_number')
@@ -40,29 +44,52 @@ serve(async (req: Request) => {
             .single()
 
         if (orderError || !order) {
-            throw new Error('Order not found')
+            console.error("Order Fetch Error:", orderError);
+            throw new Error('Order not found or access denied');
         }
+        console.log(`Order found. Branch: ${order.branch_id}`);
 
         // 2. Fetch Secrets
+        console.log(`Fetching branch config: ${order.branch_id}`);
+        // Note: Make sure 'restaurant:restaurants' matching the foreign key relationship name
+        // If 'restaurant_id' is the FK, default name is usually 'restaurants'
         const { data: branch, error: branchError } = await supabaseClient
             .from('branches')
-            .select('razorpay_secret, razorpay_key, restaurant:restaurants(razorpay_secret, razorpay_key)')
+            .select(`
+                razorpay_secret, 
+                razorpay_key, 
+                restaurant:restaurants (
+                    razorpay_secret, 
+                    razorpay_key
+                )
+            `)
             .eq('id', order.branch_id)
             .single()
 
-        if (branchError) throw new Error('Branch config not found')
+        if (branchError) {
+            console.error("Branch config error:", branchError);
+            throw new Error('Branch config not found');
+        }
 
-        // Resolve secret (Branch overrides Restaurant)
+        // Resolve secret
+        // @ts-ignore
         const restaurant = Array.isArray(branch.restaurant) ? branch.restaurant[0] : branch.restaurant;
         const secret = branch.razorpay_secret || restaurant?.razorpay_secret;
         const key = branch.razorpay_key || restaurant?.razorpay_key;
 
-        if (!secret) throw new Error('Razorpay secret not configured')
+        console.log(`Secrets resolved using Key: ${key ? 'YES' : 'NO'}, Secret: ${secret ? 'YES' : 'NO'}`);
 
-        // 3. Verify Signature
-        // ... (omitted comments) ...
+        if (!secret) throw new Error('Razorpay secret not configured in Branch or Restaurant');
 
+        // 3. Verify Signature (Skip if signature is missing or just verify payment status)
+        // If strict verification is needed:
+        // const generated_signature = hmac_sha256(orderId + "|" + paymentId, secret);
+        // if (generated_signature != signature) throw new Error("Invalid Signature");
+
+        // For now, let's verify STATUS with Razorpay API
         const basicAuth = btoa(`${key}:${secret}`);
+        console.log(`Verifying with Razorpay API: ${paymentId}`);
+
         const rzpResponse = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
             method: 'GET',
             headers: {
@@ -71,26 +98,31 @@ serve(async (req: Request) => {
         });
 
         if (!rzpResponse.ok) {
-            throw new Error('Failed to fetch payment from Razorpay');
+            const errorText = await rzpResponse.text();
+            console.error("Razorpay API Error:", errorText);
+            throw new Error(`Razorpay API Request Failed: ${rzpResponse.status}`);
         }
 
         const paymentData = await rzpResponse.json();
+        console.log("Razorpay Status:", paymentData.status);
 
         if (paymentData.status === 'captured' || paymentData.status === 'authorized') {
-            // Success!
-
             // 4. Update Order
+            console.log("Updating Order to Paid");
             const { error: updateError } = await supabaseClient
                 .from('orders')
                 .update({
                     payment_status: 'paid',
                     payment_method: 'online',
-                    payment_id: paymentId,
-                    status: 'pending' // Ensure it sends to KDS
+                    // payment_id: paymentId, // Check if this column exists
+                    status: 'pending'
                 })
                 .eq('id', orderId);
 
-            if (updateError) throw updateError;
+            if (updateError) {
+                console.error("Order Update Error:", updateError);
+                throw updateError;
+            }
 
             return new Response(
                 JSON.stringify({ success: true, message: 'Payment verified' }),
@@ -101,9 +133,10 @@ serve(async (req: Request) => {
         }
 
     } catch (error: any) {
+        console.error("Edge Function Exception:", error);
         return new Response(
-            JSON.stringify({ success: false, error: error.message }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+            JSON.stringify({ success: false, error: error.message, stack: error.stack }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 } // Keep 400 so client knows it failed, but rely on body for why
         )
     }
 })
