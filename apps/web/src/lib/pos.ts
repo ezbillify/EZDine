@@ -47,8 +47,9 @@ export async function getPublicBranchDetails(branchId: string) {
   if (error) throw error;
 
   // Merge logic: Branch overrides Restaurant
-  const effectiveKey = data.razorpay_key || data.restaurant?.razorpay_key;
-  const effectiveEnabled = data.razorpay_enabled || data.restaurant?.razorpay_enabled;
+  const restaurant = Array.isArray(data.restaurant) ? data.restaurant[0] : data.restaurant;
+  const effectiveKey = data.razorpay_key || restaurant?.razorpay_key;
+  const effectiveEnabled = data.razorpay_enabled || restaurant?.razorpay_enabled;
 
   return {
     ...data,

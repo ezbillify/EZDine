@@ -26,6 +26,7 @@ import { Input } from "../ui/Input";
 import { supabase } from "../../lib/supabaseClient";
 import { getCurrentUserProfile } from "../../lib/tenant";
 import { PrintPreviewModal } from "../printing/PrintPreviewModal";
+import { PaymentModal } from "./PaymentModal";
 
 type MenuItem = {
   id: string;
@@ -62,6 +63,7 @@ export function PosShell() {
   const [isOrderSettled, setIsOrderSettled] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [newCustName, setNewCustName] = useState("");
   const [newCustPhone, setNewCustPhone] = useState("");
 
@@ -498,7 +500,105 @@ export function PosShell() {
       localStorage.removeItem(cacheKey);
       toast.success("Order placed successfully");
     } catch (err: any) {
-      toast.error(err.message || "Failed to place order");
+      setStatus("idle");
+    }
+  };
+
+  const handlePaymentConfirm = async (method: 'cash' | 'card' | 'upi' | 'online') => {
+    setShowPaymentModal(false);
+    setStatus("saving");
+
+    try {
+      // 1. Create Order
+      // For Pay & Order, we create it immediately as paid
+      const order = await createOrder(
+        activeTableId,
+        cart,
+        undefined,
+        selectedCustomerId,
+        'pos',
+        'paid',
+        undefined,
+        undefined,
+        method === 'online' ? 'online' : 'cash'
+      );
+
+      const orderId = order.id;
+      const orderNumber = order.order_number;
+      const tokenNumber = order.token_number;
+
+      // 2. Print KOT
+      try {
+        const settings = await getPrintingSettings();
+        if (settings) {
+          const kotLines = buildKotLines({
+            restaurantName: "EZDine",
+            branchName: "Branch",
+            tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
+            orderId: orderNumber ?? "--",
+            tokenNumber: tokenNumber?.toString(),
+            items: cart.map((c) => ({ name: c.name, qty: c.qty }))
+          });
+          await sendPrintJob({
+            printerId: settings.printerIdKot ?? "kitchen-1",
+            width: settings.widthKot ?? 58,
+            type: "kot",
+            lines: kotLines
+          });
+        }
+      } catch (printErr: any) {
+        console.error("KOT Print failed", printErr);
+        toast.error("Order saved, but KOT printing failed: " + printErr.message);
+      }
+
+      // 3. Create Bill & Payment
+      const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      const bill = await createBill(orderId, cart);
+      await addPayment(bill.id, method, totalAmount);
+      await closeOrder(orderId);
+
+      // 4. Print Bill
+      try {
+        const settings = await getPrintingSettings();
+        if (settings) {
+          const billLines = buildInvoiceLines({
+            restaurantName: "EZDine",
+            branchName: "Branch",
+            billId: `${orderNumber}`, // Use Order Number as Bill ID for simplicity or fetch actual bill number
+            items: cart.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
+            subtotal: totalAmount,
+            tax: 0,
+            total: totalAmount
+          });
+          await sendPrintJob({
+            printerId: settings.printerIdBill ?? "counter-1",
+            width: settings.widthBill ?? 80,
+            type: "invoice",
+            lines: billLines
+          });
+        }
+      } catch (printErr: any) {
+        console.error("Bill Print failed", printErr);
+        toast.error("Order paid, but Bill printing failed: " + printErr.message);
+      }
+
+      // 5. Reset
+      const cacheKey = isQuickBill ? 'ezdine_cart_quick' : `ezdine_cart_${activeTableId}`;
+      setCart([]);
+      localStorage.removeItem(cacheKey);
+      setActiveOrderId(null);
+      setActiveOrderNumber(null);
+      setActiveTokenNumber(null);
+      setSelectedCustomerId(null);
+      setSelectedCustomerName(null);
+
+      // Refresh History
+      const updatedHistory = await getSettledBills();
+      setHistory(updatedHistory);
+
+      toast.success("Order Placed & Paid Successfully!");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to process payment");
     } finally {
       setStatus("idle");
     }
