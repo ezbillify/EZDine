@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import '../services/auth_service.dart';
+import '../services/audio_service.dart';
 import '../core/theme.dart';
 
 final purchaseOrdersProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, branchId) async {
@@ -27,12 +28,14 @@ class PurchaseScreen extends ConsumerWidget {
     final ordersAsync = ref.watch(purchaseOrdersProvider(ctx.branchId!));
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('PROCUREMENT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+        title: const Text('PROCUREMENT'),
         leading: IconButton(
           icon: const Icon(LucideIcons.chevronLeft),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            AudioService.instance.playClick();
+            Navigator.pop(context);
+          },
         ),
       ),
       body: ordersAsync.when(
@@ -59,55 +62,63 @@ class PurchaseScreen extends ConsumerWidget {
               final status = order['status'].toString().toUpperCase();
               final amount = NumberFormat.currency(symbol: '₹', decimalDigits: 0).format(order['total_amount']);
 
-              return Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.grey.shade100),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(16),
+              return GestureDetector(
+                onTap: () {
+                  AudioService.instance.playClick();
+                  // No detail view implemented yet, but haptic for consistency
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.black.withOpacity(0.03)),
+                    boxShadow: AppTheme.premiumShadow,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(LucideIcons.fileText, color: AppTheme.primary, size: 20),
                       ),
-                      child: const Icon(LucideIcons.fileText, color: AppTheme.primary),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(order['order_number'], style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                          Text(order['vendors']?['name'] ?? 'Generic Vendor', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _StatusChip(status: status),
-                              const Spacer(),
-                              Text(amount, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppTheme.secondary)),
-                            ],
-                          ),
-                        ],
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(order['order_number'], style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                            Text(order['vendors']?['name'] ?? 'Generic Vendor', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, height: 1.1)),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _StatusChip(status: status),
+                                Text(amount, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: AppTheme.secondary)),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ).animate().fadeIn(delay: (index * 50).ms).slideY(begin: 0.1, end: 0);
+              ).animate().fadeIn(delay: (index * 50).ms).scale(begin: const Offset(0.95, 0.95));
             },
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, s) => Center(child: Text('Purchase Error: $e')),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppTheme.secondary,
-        onPressed: () {},
-        child: const Icon(LucideIcons.plus, color: Colors.white),
-      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: AppTheme.primary,
+        onPressed: () => AudioService.instance.playClick(),
+        icon: const Icon(LucideIcons.plus, color: Colors.white, size: 20),
+        label: const Text('NEW ORDER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+      ).animate().scale(),
     );
   }
 }

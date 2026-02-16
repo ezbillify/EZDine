@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, Save, Trash2, User, Search, Plus, Phone, X, UserPlus, ArrowRight, Check, Eye, Zap, History } from "lucide-react";
+import { AlertCircle, CheckCircle2, Save, Trash2, User, Search, Plus, Phone, X, UserPlus, ArrowRight, Check, Eye, Zap, History, Utensils, ShoppingBag, Printer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast, Toaster } from "sonner";
 
@@ -60,10 +60,12 @@ export function PosShell() {
   // Customer State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [selectedCustomerName, setSelectedCustomerName] = useState<string | null>(null);
+  const [orderType, setOrderType] = useState<"dine_in" | "takeaway">("dine_in");
   const [isOrderSettled, setIsOrderSettled] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [bypassKitchen, setBypassKitchen] = useState(false);
   const [newCustName, setNewCustName] = useState("");
   const [newCustPhone, setNewCustPhone] = useState("");
 
@@ -230,6 +232,7 @@ export function PosShell() {
       setActiveTokenNumber(order.token_number);
       setSelectedCustomerId(order.customer_id);
       setSelectedCustomerName(order.customer?.name || null);
+      setOrderType(order.order_type || "takeaway");
 
       const items = await getOrderItems(order.id);
       const mappedItems: OrderItem[] = items.map((i) => ({
@@ -354,6 +357,7 @@ export function PosShell() {
           setActiveTokenNumber(order.token_number);
           setSelectedCustomerId(order.customer_id);
           setSelectedCustomerName((order as any).customer?.name || null);
+          setOrderType(order.order_type || "dine_in");
           const items = await getOrderItems(order.id);
           const mappedItems: OrderItem[] = items.map((i) => ({
             id: i.id,
@@ -497,7 +501,7 @@ export function PosShell() {
       let orderNumber = activeOrderNumber;
 
       if (!orderId) {
-        const order = await createOrder(activeTableId, cart, undefined, selectedCustomerId);
+        const order = await createOrder(activeTableId, cart, undefined, selectedCustomerId, 'pos', 'pending', undefined, undefined, 'cash', orderType);
         orderId = order.id;
         orderNumber = order.order_number;
         setActiveOrderId(orderId);
@@ -563,7 +567,8 @@ export function PosShell() {
           'paid',
           undefined,
           undefined,
-          primaryMethod as any
+          primaryMethod as any,
+          orderType
         );
         orderId = order.id;
         orderNumber = order.order_number;
@@ -575,8 +580,8 @@ export function PosShell() {
         }
       }
 
-      // 2. Print KOT (Only if new items exist)
-      if (cart.length > 0) {
+      // 2. Print KOT (Only if new items exist AND not bypassing kitchen)
+      if (cart.length > 0 && !bypassKitchen) {
         try {
           const settings = await getPrintingSettings();
           if (settings) {
@@ -643,6 +648,7 @@ export function PosShell() {
             restaurantName: "EZDine",
             branchName: "Branch",
             billId: `${orderNumber}`,
+            tokenNumber: tokenNumber,
             items: fullItems.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
             subtotal: totalAmount,
             tax: 0,
@@ -669,6 +675,7 @@ export function PosShell() {
       setActiveTokenNumber(null);
       setSelectedCustomerId(null);
       setSelectedCustomerName(null);
+      setBypassKitchen(false);
       if (isQuickBill) setIsQuickBill(false); // Reset Quick Bill state
 
       // Refresh History & QR List
@@ -729,6 +736,7 @@ export function PosShell() {
       restaurantName: "EZDine",
       branchName: isQuickBill ? "Walk-in" : (tables.find(t => t.id === activeTableId)?.name ?? "Branch"),
       billId: "PREVIEW",
+      tokenNumber: activeTokenNumber,
       items: billable,
       subtotal: total,
       tax: 0,
@@ -760,7 +768,7 @@ export function PosShell() {
           setStatus("idle");
           return;
         }
-        const order = await createOrder(null, cart, undefined, selectedCustomerId || null, 'pos', 'pending', undefined, undefined, 'cash', 'takeaway');
+        const order = await createOrder(null, cart, undefined, selectedCustomerId || null, 'pos', 'pending', undefined, undefined, 'cash', orderType);
         currentOrderId = order.id;
         // Print KOT for Quick Bill too if needed? Usually yes.
         try {
@@ -811,6 +819,14 @@ export function PosShell() {
         price: i.price
       }));
 
+      // For table orders, show payment modal instead of auto-settling with cash
+      if (!isQuickBill) {
+        setBypassKitchen(true);
+        setShowPaymentModal(true);
+        setStatus("idle");
+        return;
+      }
+
       const bill = await createBill(currentOrderId!, billItems);
       const billTotal = billItems.reduce((sum, i) => sum + i.qty * i.price, 0);
 
@@ -829,6 +845,7 @@ export function PosShell() {
             restaurantName: "EZDine",
             branchName: isQuickBill ? "Direct" : "Branch",
             billId: bill.bill_number,
+            tokenNumber: activeTokenNumber,
             items: billItems.map((c) => ({ name: c.name, qty: c.qty, price: c.price })),
             subtotal: billTotal,
             tax: 0,
@@ -1133,40 +1150,73 @@ export function PosShell() {
             )}
           </div>
 
-          <div className="relative">
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => !activeOrderId && setOrderType("dine_in")}
+              disabled={!!activeOrderId}
+              className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 ${orderType === "dine_in"
+                ? "bg-slate-900 border-slate-900 text-white shadow-sm"
+                : "bg-white border-slate-200 text-slate-400 hover:border-slate-300"
+                } ${!!activeOrderId && orderType !== "dine_in" ? "opacity-30 cursor-not-allowed" : ""}`}
+            >
+              <Utensils size={12} />
+              Dine-In
+            </button>
+            <button
+              onClick={() => !activeOrderId && setOrderType("takeaway")}
+              disabled={!!activeOrderId}
+              className={`flex-1 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all flex items-center justify-center gap-1.5 ${orderType === "takeaway"
+                ? "bg-slate-900 border-slate-900 text-white shadow-sm"
+                : "bg-white border-slate-200 text-slate-400 hover:border-slate-300"
+                } ${!!activeOrderId && orderType !== "takeaway" ? "opacity-30 cursor-not-allowed" : ""}`}
+            >
+              <ShoppingBag size={12} />
+              Takeaway
+            </button>
+          </div>
+
+          <div className="space-y-3">
             {!selectedCustomerId ? (
-              <div className="flex items-center gap-2 bg-white rounded-xl border border-slate-200 p-1.5 focus-within:border-brand-500 transition-all">
-                <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-slate-50 text-slate-400">
-                  <UserPlus size={16} />
+              <div className="group relative">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-brand-600 transition-colors">
+                  <UserPlus size={18} />
                 </div>
                 <input
                   type="text"
-                  placeholder="Customer Phone..."
+                  placeholder="Guest Phone Number..."
                   value={customerSearch}
-                  onChange={e => setCustomerSearch(e.target.value)}
+                  onChange={e => setCustomerSearch(e.target.value.replace(/\D/g, ''))}
                   onKeyPress={e => e.key === 'Enter' && handleCustomerLookup()}
-                  className="flex-1 bg-transparent border-none text-xs font-medium placeholder:text-slate-400 focus:ring-0 text-slate-700"
+                  className="w-full h-12 pl-11 pr-12 rounded-2xl border-2 border-slate-100 bg-slate-50/50 text-sm font-bold placeholder:text-slate-400 focus:border-brand-500 focus:bg-white focus:ring-4 focus:ring-brand-500/5 transition-all outline-none"
                 />
                 {customerSearch.length >= 10 && (
-                  <button onClick={handleCustomerLookup} className="h-7 w-7 flex items-center justify-center rounded-lg bg-brand-600 text-white shadow-sm">
-                    <ArrowRight size={14} />
+                  <button
+                    onClick={handleCustomerLookup}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-9 px-3 flex items-center gap-1.5 rounded-xl bg-slate-900 text-white shadow-lg shadow-slate-200 hover:bg-black active:scale-95 transition-all text-[10px] font-black uppercase tracking-widest"
+                  >
+                    Find
+                    <ArrowRight size={12} />
                   </button>
                 )}
               </div>
             ) : (
-              <div className="flex items-center justify-between bg-emerald-50 rounded-xl border border-emerald-100 p-1.5 group">
-                <div className="flex items-center gap-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500 text-white">
-                    <User size={16} />
+              <div className="flex items-center justify-between bg-white rounded-2xl border-2 border-emerald-100 p-2 shadow-sm shadow-emerald-500/5 group">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500 text-white shadow-lg shadow-emerald-200">
+                    <User size={20} />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase text-emerald-600">Guest</p>
-                    <p className="text-xs font-bold text-slate-900">{selectedCustomerName}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-0.5">Linked Guest</p>
+                    <p className="text-sm font-black text-slate-900 leading-none">{selectedCustomerName}</p>
                   </div>
                 </div>
                 {!activeOrderId && (
-                  <button onClick={() => { setSelectedCustomerId(null); setSelectedCustomerName(null) }} className="h-7 w-7 text-slate-400 hover:text-rose-500 transition-colors">
-                    <X size={16} />
+                  <button
+                    onClick={() => { setSelectedCustomerId(null); setSelectedCustomerName(null) }}
+                    className="h-9 w-9 flex items-center justify-center rounded-xl text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-all"
+                    title="Remove Customer"
+                  >
+                    <X size={18} />
                   </button>
                 )}
               </div>
@@ -1249,7 +1299,15 @@ export function PosShell() {
             >
               <Eye size={16} /> Preview Bill
             </Button>
-            {(!isQuickBill) && (
+            {isQuickBill ? (
+              <Button
+                onClick={() => setShowPaymentModal(true)}
+                disabled={status === "saving" || cart.length === 0}
+                className="w-full h-11 bg-slate-900 hover:bg-black text-white rounded-xl text-xs gap-2"
+              >
+                <Printer size={16} /> Order & Print
+              </Button>
+            ) : (
               <Button
                 onClick={handlePlaceOrder}
                 disabled={status === "saving" || cart.length === 0}
@@ -1296,7 +1354,7 @@ export function PosShell() {
               <h3 className="text-sm font-black uppercase text-slate-900 mb-4">Register New Guest</h3>
               <div className="space-y-4">
                 <Input placeholder="Guest Name" value={newCustName} onChange={e => setNewCustName(e.target.value)} className="h-11" />
-                <Input placeholder="Phone Number" value={newCustPhone} onChange={e => setNewCustPhone(e.target.value)} className="h-11" />
+                <Input placeholder="Phone Number" value={newCustPhone} onChange={e => setNewCustPhone(e.target.value.replace(/\D/g, ''))} className="h-11" />
                 <div className="flex gap-2 pt-2">
                   <Button variant="ghost" onClick={() => setShowCustomerModal(false)} className="flex-1">Cancel</Button>
                   <Button onClick={handleAddCustomer} className="flex-[2] bg-brand-600 text-white h-11 rounded-xl">Register & Link</Button>

@@ -50,6 +50,7 @@ export function OrderBoard({ selectedDate }: OrderBoardProps) {
         .select(`
           id, 
           order_number, 
+          token_number,
           status, 
           table_id, 
           created_at,
@@ -218,6 +219,12 @@ export function OrderBoard({ selectedDate }: OrderBoardProps) {
                   </div>
                 </div>
 
+                {order.token_number && (
+                  <div className="absolute top-20 right-4 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white shadow-lg ring-4 ring-white">
+                    <span className="text-lg font-black">{order.token_number}</span>
+                  </div>
+                )}
+
                 {/* Status Bar */}
                 <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-50">
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${config.bg} ${config.color}`}>
@@ -286,8 +293,8 @@ export function OrderBoard({ selectedDate }: OrderBoardProps) {
                           else if (order.status === "ready") updateStatus(order.id, "served");
                         }}
                         className={`flex flex-1 items-center justify-center gap-2 bg-white py-4 text-xs font-black uppercase tracking-widest transition-colors ${order.status === "pending" ? "text-blue-600 hover:bg-blue-50" :
-                            order.status === "preparing" ? "text-emerald-600 hover:bg-emerald-50" :
-                              "text-slate-900 hover:bg-slate-50"
+                          order.status === "preparing" ? "text-emerald-600 hover:bg-emerald-50" :
+                            "text-slate-900 hover:bg-slate-50"
                           }`}
                       >
                         {order.status === "pending" && <><ChefHat size={14} /> Start Prep</>}

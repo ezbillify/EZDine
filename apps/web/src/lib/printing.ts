@@ -140,6 +140,7 @@ export function buildInvoiceLines(input: {
   restaurantName: string;
   branchName: string;
   billId: string;
+  tokenNumber?: string | number | null;
   items: { name: string; qty: number; price: number }[];
   subtotal: number;
   tax: number;
@@ -148,6 +149,11 @@ export function buildInvoiceLines(input: {
   const lines: PrintLine[] = [
     { text: input.restaurantName, align: "center", bold: true },
     { text: input.branchName, align: "center" },
+    ...(input.tokenNumber ? [
+      { text: "----------------------------", align: "center" as const },
+      { text: `TOKEN: ${input.tokenNumber}`, align: "center" as const, bold: true },
+      { text: "----------------------------", align: "center" as const },
+    ] : []),
     { text: `Bill: ${input.billId}`, align: "left" },
     { text: "----------------------------", align: "center" }
   ];

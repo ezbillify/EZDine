@@ -28,11 +28,6 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-50 selection:bg-brand-100 selection:text-brand-900">
-      {/* Dynamic Aura Background */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-brand-200/5 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-indigo-200/5 blur-[120px] rounded-full" />
-      </div>
 
       {/* Desktop Navigation */}
       {showNav && <Sidebar className="hidden lg:flex" />}

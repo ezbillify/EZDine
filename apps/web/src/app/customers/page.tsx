@@ -203,7 +203,7 @@ export default function CustomersPage() {
               </form>
             </Card>
 
-            <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-none text-white overflow-hidden relative">
+            <Card className="bg-slate-900 border-none text-white overflow-hidden relative">
               <div className="absolute top-0 right-0 -translate-y-4 translate-x-4 opacity-10">
                 <Star size={120} />
               </div>

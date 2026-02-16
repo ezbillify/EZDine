@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../services/auth_service.dart';
+import '../services/audio_service.dart';
 import '../core/theme.dart';
 
 final staffProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, branchId) async {
@@ -59,35 +60,42 @@ class StaffRosterScreen extends ConsumerWidget {
               final role = member['role'].toString().toUpperCase();
 
               return Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.grey.shade100),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.black.withOpacity(0.03)),
+                  boxShadow: AppTheme.premiumShadow,
                 ),
                 child: Row(
                   children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: AppTheme.primary.withOpacity(0.1),
-                      child: Text(name[0], style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold)),
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppTheme.primary.withOpacity(0.1), width: 2),
+                      ),
+                      child: CircleAvatar(
+                        radius: 28,
+                        backgroundColor: AppTheme.primary.withOpacity(0.08),
+                        child: Text(name[0].toUpperCase(), style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w900, fontSize: 18)),
+                      ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 20),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 4),
+                          Text(name, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, height: 1.1)),
+                          const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppTheme.secondary.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(4),
+                              color: AppTheme.secondary.withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               role,
-                              style: TextStyle(color: AppTheme.secondary.withOpacity(0.7), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1),
+                              style: TextStyle(color: AppTheme.secondary, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 1.5),
                             ),
                           ),
                         ],
@@ -95,11 +103,11 @@ class StaffRosterScreen extends ConsumerWidget {
                     ),
                     IconButton(
                       icon: const Icon(LucideIcons.phone, size: 18, color: Colors.grey),
-                      onPressed: () {},
+                      onPressed: () => AudioService.instance.playClick(),
                     ),
                   ],
                 ),
-              ).animate().fadeIn(delay: (index * 50).ms);
+              ).animate().fadeIn(delay: (index * 50).ms).scale(begin: const Offset(0.95, 0.95));
             },
           );
         },

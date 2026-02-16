@@ -389,7 +389,7 @@ export default function GuestManagementPage() {
 
                         {/* Sidebar Stats */}
                         <div className="space-y-4">
-                            <Card title="Today's Summary" className="bg-gradient-to-br from-brand-500 to-brand-700 border-none text-white overflow-hidden relative">
+                            <Card title="Today's Summary" className="bg-brand-600 border-none text-white overflow-hidden relative">
                                 <div className="absolute top-0 right-0 -translate-y-4 translate-x-4 opacity-10">
                                     <CalendarIcon size={120} />
                                 </div>

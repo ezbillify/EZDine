@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../services/auth_service.dart';
+import '../services/audio_service.dart';
 import '../core/theme.dart';
 
 final inventoryProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, branchId) async {
@@ -26,17 +27,22 @@ class InventoryScreen extends ConsumerWidget {
     final itemsAsync = ref.watch(inventoryProvider(ctx.branchId!));
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('STOCK CONTROL', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+        title: const Text('STOCK CONTROL'),
         leading: IconButton(
           icon: const Icon(LucideIcons.chevronLeft),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            AudioService.instance.playClick();
+            Navigator.pop(context);
+          },
         ),
         actions: [
           IconButton(
             icon: const Icon(LucideIcons.refreshCcw, size: 20),
-            onPressed: () => ref.refresh(inventoryProvider(ctx.branchId!)),
+            onPressed: () {
+               AudioService.instance.playClick();
+               ref.refresh(inventoryProvider(ctx.branchId!));
+            },
           ),
         ],
       ),
@@ -64,21 +70,25 @@ class InventoryScreen extends ConsumerWidget {
               final bool isLow = (item['current_stock'] as num) <= (item['reorder_level'] as num);
 
               return GestureDetector(
-                onTap: () => _showUpdateStock(context, ref, item),
+                onTap: () {
+                  AudioService.instance.playClick();
+                  _showUpdateStock(context, ref, item);
+                },
                 child: Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: isLow ? Colors.red.withOpacity(0.2) : Colors.grey.shade100),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: isLow ? Colors.red.withOpacity(0.1) : Colors.black.withOpacity(0.04)),
+                    boxShadow: AppTheme.premiumShadow,
                   ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: (isLow ? Colors.red : AppTheme.primary).withOpacity(0.1),
-                          shape: BoxShape.circle,
+                          color: (isLow ? Colors.red : AppTheme.primary).withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(16),
                         ),
                         child: Icon(
                           isLow ? LucideIcons.alertTriangle : LucideIcons.box,
@@ -91,8 +101,8 @@ class InventoryScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            Text('Unit: ${item['unit']}', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                            Text(item['name'], style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                            Text('Unit: ${item['unit']}', style: TextStyle(color: Colors.grey.shade400, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                           ],
                         ),
                       ),
@@ -121,7 +131,7 @@ class InventoryScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-              ).animate().fadeIn(delay: (index * 50).ms).slideX(begin: 0.1, end: 0);
+              ).animate().fadeIn(delay: (index * 50).ms).scale(begin: const Offset(0.95, 0.95));
             },
           );
         },
@@ -135,7 +145,7 @@ class InventoryScreen extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       builder: (context) => _UpdateStockSheet(item: item, ref: ref),
     );
   }

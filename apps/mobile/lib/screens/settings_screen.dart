@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../services/audio_service.dart';
+import '../core/theme.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -8,10 +11,13 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('SETTINGS'),
+        title: Text('SYSTEM CONFIG', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16)),
         leading: IconButton(
           icon: const Icon(LucideIcons.chevronLeft),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            AudioService.instance.playClick();
+            Navigator.pop(context);
+          },
         ),
       ),
       body: ListView(
@@ -43,36 +49,40 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildSettingItem({required IconData icon, required String title, required String subtitle}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              shape: BoxShape.circle,
+    return GestureDetector(
+      onTap: () => AudioService.instance.playClick(),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: Colors.grey.shade50),
+          boxShadow: AppTheme.premiumShadow,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, size: 20, color: AppTheme.secondary),
             ),
-            child: Icon(icon, size: 20, color: const Color(0xFF0F172A)),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                Text(subtitle, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
-              ],
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 15)),
+                  Text(subtitle, style: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 11, fontWeight: FontWeight.bold)),
+                ],
+              ),
             ),
-          ),
-          Icon(LucideIcons.chevronRight, size: 16, color: Colors.grey.shade400),
-        ],
+            Icon(LucideIcons.chevronRight, size: 16, color: Colors.grey.shade300),
+          ],
+        ),
       ),
     );
   }

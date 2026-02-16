@@ -104,7 +104,7 @@ export default function SettingsPage() {
               </nav>
             </div>
 
-            <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-none text-white p-5 overflow-hidden relative">
+            <Card className="bg-slate-900 border-none text-white p-5 overflow-hidden relative">
               <div className="absolute -right-4 -bottom-4 opacity-10">
                 <Info size={100} />
               </div>

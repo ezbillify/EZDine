@@ -11,13 +11,14 @@ import 'core/supabase_config.dart';
 import 'services/auth_service.dart';
 import 'services/dashboard_service.dart';
 import 'widgets/stat_card.dart';
+import 'screens/settings_screen.dart';
+import 'screens/reservation_screen.dart';
 import 'screens/pos_screen.dart';
 import 'screens/kds_screen.dart';
 import 'screens/inventory_screen.dart';
-import 'screens/staff_roster_screen.dart';
 import 'screens/purchase_screen.dart';
-import 'screens/settings_screen.dart';
-import 'screens/reservation_screen.dart';
+import 'screens/staff_roster_screen.dart';
+import 'services/audio_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -122,7 +123,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                     ],
                   ),
                   child: const Icon(LucideIcons.sparkles, color: Colors.white, size: 56),
-                ).animate().scale(delay: 200.ms, duration: 600.ms, curve: Curves.easeOutBack).shimmer(delay: 1.seconds, duration: 1500.ms),
+                ).animate().scale(delay: 200.ms, duration: 600.ms, curve: Curves.easeOutBack),
                 const SizedBox(height: 40),
                 Text(
                   'EZDine Pro',
@@ -487,9 +488,9 @@ class DashboardScreen extends ConsumerWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildServicePulse(activeRole).animate().fadeIn().slideY(begin: 0.1, end: 0),
+                          _BranchStatusHeader().animate().fadeIn(delay: 200.ms),
                           const SizedBox(height: 32),
-                          Text('OPERATIONAL INTELLIGENCE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 2)).animate().fadeIn(delay: 200.ms),
+                          Text('OPERATIONAL INTELLIGENCE', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 2)).animate().fadeIn(delay: 250.ms),
                           const SizedBox(height: 20),
                           
                           if (ctx.branchId != null)
@@ -505,6 +506,8 @@ class DashboardScreen extends ConsumerWidget {
                             ).animate().fadeIn(delay: 300.ms)
                           else
                             _buildStatGrid(isTablet, DashboardStats.empty()).animate().fadeIn(delay: 300.ms),
+
+
 
                           const SizedBox(height: 40),
                           Text('CONTROL MODULES', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 2)).animate().fadeIn(delay: 400.ms),
@@ -561,80 +564,26 @@ class DashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildServicePulse(String role) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppTheme.secondary,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [BoxShadow(color: AppTheme.secondary.withOpacity(0.2), blurRadius: 30, offset: const Offset(0, 15))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('SYSTEM INTEGRITY', style: GoogleFonts.outfit(color: Colors.white.withOpacity(0.5), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
-                    const SizedBox(height: 4),
-                    Text('Operational Level: High', style: GoogleFonts.outfit(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900), overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(color: const Color(0xFF10B981).withOpacity(0.2), borderRadius: BorderRadius.circular(100), border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3))),
-                child: Row(
-                  children: [
-                    Container(width: 8, height: 8, decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF10B981))),
-                    const SizedBox(width: 8),
-                    Text(role.toUpperCase(), style: GoogleFonts.outfit(color: const Color(0xFF10B981), fontSize: 10, fontWeight: FontWeight.w900)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: List.generate(20, (i) {
-              final h = 10 + (20 * (i % 3 == 0 ? 0.8 : (i % 2 == 0 ? 1.2 : 0.5)));
-              return Expanded(
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  height: h,
-                  decoration: BoxDecoration(color: i > 12 ? Colors.white.withOpacity(0.1) : const Color(0xFF10B981).withOpacity(0.8), borderRadius: BorderRadius.circular(2)),
-                ).animate(onPlay: (c) => c.repeat(reverse: true)).scaleY(begin: 0.5, end: 1.5, duration: (500 + (i * 50)).ms),
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildStatGrid(bool isTablet, DashboardStats stats) {
     if (isTablet) {
       return Row(
         children: [
-          Expanded(child: AppStatCard(label: 'Gross Volume', value: '₹${stats.grossVolume.toStringAsFixed(0)}', icon: LucideIcons.trendingUp, color: AppTheme.primary, trend: 'LIVE', isUp: true)),
+          Expanded(child: AppStatCard(label: 'Gross Revenue', value: '₹${stats.grossVolume.toStringAsFixed(0)}', icon: LucideIcons.circleDollarSign, color: AppTheme.primary, trend: 'LIVE', isUp: true)),
           const SizedBox(width: 20),
-          Expanded(child: AppStatCard(label: 'Pending Orders', value: stats.pendingOrders.toString(), icon: LucideIcons.timer, color: Colors.amber, trend: 'LIVE', isUp: false)),
+          Expanded(child: AppStatCard(label: 'Kitchen Load', value: '${stats.pendingOrders} tickets', icon: LucideIcons.chefHat, color: Colors.amber, trend: 'ACTIVE', isUp: false)),
           const SizedBox(width: 20),
-          Expanded(child: AppStatCard(label: 'Active Tables', value: stats.activeTables.toString(), icon: LucideIcons.users, color: Colors.indigo, trend: 'LIVE', isUp: true)),
+          Expanded(child: AppStatCard(label: 'Stock Health', value: stats.lowStockCount.toString(), icon: LucideIcons.warehouse, color: const Color(0xFFF43F5E), trend: stats.lowStockCount > 0 ? 'ALERT' : 'GOOD', isUp: false)),
         ],
       );
     }
     return Column(
       children: [
-        AppStatCard(label: 'Gross Volume', value: '₹${stats.grossVolume.toStringAsFixed(0)}', icon: LucideIcons.trendingUp, color: AppTheme.primary, trend: 'LIVE', isUp: true),
+        AppStatCard(label: 'Gross Revenue', value: '₹${stats.grossVolume.toStringAsFixed(0)}', icon: LucideIcons.circleDollarSign, color: AppTheme.primary, trend: 'LIVE', isUp: true),
         const SizedBox(height: 16),
-        AppStatCard(label: 'Pending Orders', value: stats.pendingOrders.toString(), icon: LucideIcons.timer, color: Colors.amber, trend: 'LIVE', isUp: false),
+        AppStatCard(label: 'Kitchen Load', value: '${stats.pendingOrders} tickets', icon: LucideIcons.chefHat, color: Colors.amber, trend: 'ACTIVE', isUp: false),
+        const SizedBox(height: 16),
+        AppStatCard(label: 'Stock Health', value: stats.lowStockCount.toString(), icon: LucideIcons.warehouse, color: const Color(0xFFF43F5E), trend: stats.lowStockCount > 0 ? 'ALERT' : 'GOOD', isUp: false),
       ],
     );
   }
@@ -644,51 +593,58 @@ class DashboardScreen extends ConsumerWidget {
       {
         'label': 'POS TERMINAL',
         'icon': LucideIcons.monitorCheck,
+        'description': 'Ordering & Billing',
         'color': Colors.indigo,
         'roles': ['owner', 'manager', 'cashier', 'waiter'],
-        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const PosScreen())),
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => PosScreen())),
       },
       {
         'label': 'KITCHEN KDS',
         'icon': LucideIcons.chefHat,
+        'description': 'Order Production',
         'color': const Color(0xFF10B981),
         'roles': ['owner', 'manager', 'kitchen'],
-        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const KdsScreen())),
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => KdsScreen())),
       },
       {
         'label': 'RESERVATIONS',
         'icon': LucideIcons.calendarCheck,
+        'description': 'Tables & Waitlist',
         'color': Colors.deepPurple,
         'roles': ['owner', 'manager', 'host', 'waiter', 'cashier'],
-        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const ReservationScreen())),
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => ReservationScreen())),
       },
       {
-        'label': 'INVENTORY',
+        'label': 'STORAGE (INV)',
         'icon': LucideIcons.warehouse,
+        'description': 'Stock Control',
         'color': Colors.amber,
         'roles': ['owner', 'manager'],
-        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const InventoryScreen())),
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => InventoryScreen())),
       },
       {
-        'label': 'PURCHASE',
-        'icon': LucideIcons.shoppingBag,
+        'label': 'DAILY REPORTS',
+        'icon': LucideIcons.trendingUp,
+        'description': 'Financial Analytics',
         'color': Colors.blueGrey,
         'roles': ['owner', 'manager'],
-        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const PurchaseScreen())),
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => PurchaseScreen())), // Using purchase for report placeholder if needed or actual report screen
       },
       {
         'label': 'STAFF ROSTER',
         'icon': LucideIcons.users,
+        'description': 'Attendance Control',
         'color': const Color(0xFFF43F5E),
         'roles': ['owner'],
-        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const StaffRosterScreen())),
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => StaffRosterScreen())),
       },
       {
-        'label': 'SETTINGS',
+        'label': 'SYSTEM CONFIG',
         'icon': LucideIcons.settings,
+        'description': 'Global Settings',
         'color': Colors.grey,
         'roles': ['owner', 'manager'],
-        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const SettingsScreen())),
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => SettingsScreen())),
       },
     ];
 
@@ -697,27 +653,67 @@ class DashboardScreen extends ConsumerWidget {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: isTablet ? 4 : 2, mainAxisSpacing: 20, crossAxisSpacing: 20, childAspectRatio: 1.1),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: isTablet ? 4 : 2, 
+        mainAxisSpacing: 16, 
+        crossAxisSpacing: 16, 
+        childAspectRatio: 1.0,
+      ),
       itemCount: filtered.length,
       itemBuilder: (context, index) {
         final mod = filtered[index];
-        return _buildActionCard(mod['icon'], mod['label'], mod['color'], mod['onTap']).animate().fadeIn(delay: (500 + index * 100).ms).scale(curve: Curves.easeOutBack);
+        return _buildModuleCard(mod['icon'], mod['label'], mod['description'], mod['color'], mod['onTap'])
+            .animate().fadeIn(delay: (500 + index * 100).ms).scale(curve: Curves.easeOutBack);
       },
+    );
+  }
+
+  Widget _buildModuleCard(IconData icon, String label, String description, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: const Color(0xFFF8FAFC)),
+          boxShadow: [
+            BoxShadow(color: color.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 8)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, size: 24, color: color),
+            ),
+            const Spacer(),
+            Text(label, style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: const Color(0xFF0F172A), letterSpacing: -0.5)),
+            const SizedBox(height: 4),
+            Text(description, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 9, color: const Color(0xFF94A3B8), letterSpacing: 0.2)),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildActionCard(IconData icon, String label, Color color, VoidCallback onTap) {
     return GestureDetector(
       onTap: () {
-        HapticFeedback.lightImpact();
+        AudioService.instance.playClick();
         onTap();
       },
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(32),
-          border: Border.all(color: Colors.grey.shade100),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 20, offset: const Offset(0, 10))],
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.black.withOpacity(0.03)),
+          boxShadow: AppTheme.premiumShadow,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -728,6 +724,57 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _BranchStatusHeader extends StatelessWidget {
+  const _BranchStatusHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: const Color(0xFFECFDF5),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(color: const Color(0xFF10B981).withOpacity(0.2)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF10B981)),
+              ).animate(onPlay: (c) => c.repeat()).scale(begin: const Offset(0.8, 0.8), end: const Offset(1.5, 1.5), duration: 1.seconds).fadeOut(),
+              const SizedBox(width: 8),
+              Text('BRANCH LIVE', style: GoogleFonts.outfit(color: const Color(0xFF059669), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+            ],
+          ),
+        ),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFF1F5F9)),
+          ),
+          child: Row(
+            children: [
+              Icon(LucideIcons.calendar, size: 12, color: const Color(0xFF94A3B8)),
+              const SizedBox(width: 8),
+              Text(
+                '${DateTime.now().day} ${['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][DateTime.now().month - 1]}',
+                style: GoogleFonts.outfit(color: const Color(0xFF475569), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

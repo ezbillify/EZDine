@@ -15,6 +15,8 @@ type OrderItem = {
   item_id: string;
   quantity: number;
   notes?: string;
+  batch_id?: string;
+  status: string;
   menu_item?: {
     name: string;
   };
@@ -27,6 +29,7 @@ type Order = {
   status: "pending" | "preparing" | "ready" | "served";
   created_at: string;
   source: string;
+  order_type?: "dine_in" | "takeaway";
   table?: {
     name: string;
   };
@@ -50,6 +53,7 @@ export function KdsBoard() {
           token_number,
           status,
           source,
+          order_type,
           created_at,
           table:tables(name),
           payment_status,
@@ -59,6 +63,8 @@ export function KdsBoard() {
             quantity,
             notes,
             item_id,
+            batch_id,
+            status,
             menu_item:menu_items(name)
           )
         `)
@@ -155,22 +161,41 @@ export function KdsBoard() {
     };
   }, []);
 
-  const advance = async (id: string, currentStatus: string, nextStatus: string) => {
-    // Optimistic update
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status: nextStatus as any } : o));
-
+  const advance = async (orderId: string, currentStatus: string, nextStatus: string, batchId?: string) => {
     try {
       if (nextStatus === "served") {
-        await updateOrderItemsStatus(id, "served");
-        await supabase.from("orders").update({ status: "served" }).eq("id", id);
+        const { error: itemsError } = await supabase
+          .from("order_items")
+          .update({ status: "served" })
+          .eq("order_id", orderId)
+          .eq("batch_id", batchId as any);
+
+        if (itemsError) throw itemsError;
+
+        const { data: remainingItems } = await supabase
+          .from("order_items")
+          .select("id")
+          .eq("order_id", orderId)
+          .neq("status", "served");
+
+        if (!remainingItems || remainingItems.length === 0) {
+          await supabase.from("orders").update({ status: "served" }).eq("id", orderId);
+        }
       } else {
-        await supabase.from("orders").update({ status: nextStatus }).eq("id", id);
+        await supabase
+          .from("order_items")
+          .update({ status: nextStatus })
+          .eq("order_id", orderId)
+          .eq("batch_id", batchId as any);
+
+        await supabase.from("orders").update({ status: nextStatus }).eq("id", orderId);
       }
-      toast.success(`Order marked ${nextStatus}`);
+      toast.success(`Batch marked ${nextStatus}`);
       load();
     } catch (err) {
+      console.error("Status update failed", err);
       toast.error("Failed to update status");
-      load(); // Revert
+      load();
     }
   };
 
@@ -186,18 +211,34 @@ export function KdsBoard() {
   }
 
   const validOrders = orders.filter(o => {
-    // Strict Filter: Hide ALL non-POS orders until they are PAID.
-    // This covers 'online' (Razorpay) and 'cash' (Pay at Counter) from QR flow.
-    // Ideally, for 'cash', the cashier marks it as Paid in POS, then it appears in KDS.
     if ((o as any).source !== 'pos' && (o as any).payment_status !== 'paid') {
       return false;
     }
     return true;
   });
 
-  const pendingOrders = validOrders.filter(o => o.status === "pending");
-  const preparingOrders = validOrders.filter(o => o.status === "preparing");
-  const readyOrders = validOrders.filter(o => o.status === "ready");
+  const batchTickets: (Order & { batch_id: string })[] = [];
+  validOrders.forEach(order => {
+    const batches = Array.from(new Set(order.order_items.map(i => i.batch_id).filter(Boolean)));
+    if (batches.length === 0) {
+      batchTickets.push({ ...order, batch_id: 'legacy' });
+    } else {
+      batches.forEach(bid => {
+        const batchItems = order.order_items.filter(i => i.batch_id === bid);
+        if (batchItems.some(i => i.status !== 'served')) {
+          batchTickets.push({
+            ...order,
+            batch_id: bid!,
+            order_items: batchItems
+          });
+        }
+      });
+    }
+  });
+
+  const pendingOrders = batchTickets.filter(o => o.order_items.some(i => i.status === 'pending'));
+  const preparingOrders = batchTickets.filter(o => o.order_items.some(i => i.status === 'preparing'));
+  const readyOrders = batchTickets.filter(o => o.order_items.some(i => i.status === 'ready'));
 
   return (
     <>
@@ -230,7 +271,7 @@ export function KdsBoard() {
 
           <div className="flex-1 overflow-y-auto space-y-4 pr-1">
             {pendingOrders.map(order => (
-              <KdsCard key={order.id} order={order} onAdvance={() => advance(order.id, "pending", "preparing")} actionLabel="Start Cooking" actionIcon={<Flame size={16} />} />
+              <KdsCard key={`${order.id}-${order.batch_id}`} order={order} onAdvance={() => advance(order.id, "pending", "preparing", order.batch_id)} actionLabel="Start Cooking" actionIcon={<Flame size={16} />} />
             ))}
             {pendingOrders.length === 0 && <EmptyState label="No pending orders" />}
           </div>
@@ -255,7 +296,7 @@ export function KdsBoard() {
 
           <div className="flex-1 overflow-y-auto space-y-4 pr-1">
             {preparingOrders.map(order => (
-              <KdsCard key={order.id} order={order} onAdvance={() => advance(order.id, "preparing", "ready")} actionLabel="Mark Ready" actionIcon={<CheckCircle2 size={16} />} variant="blue" />
+              <KdsCard key={`${order.id}-${order.batch_id}`} order={order} onAdvance={() => advance(order.id, "preparing", "ready", order.batch_id)} actionLabel="Mark Ready" actionIcon={<CheckCircle2 size={16} />} variant="blue" />
             ))}
             {preparingOrders.length === 0 && <EmptyState label="No active cooking" />}
           </div>
@@ -280,7 +321,7 @@ export function KdsBoard() {
 
           <div className="flex-1 overflow-y-auto space-y-4 pr-1">
             {readyOrders.map(order => (
-              <KdsCard key={order.id} order={order} onAdvance={() => advance(order.id, "ready", "served")} actionLabel="Serve Items" actionIcon={<CheckCircle2 size={16} />} variant="emerald" />
+              <KdsCard key={`${order.id}-${order.batch_id}`} order={order} onAdvance={() => advance(order.id, "ready", "served", order.batch_id)} actionLabel="Serve Items" actionIcon={<CheckCircle2 size={16} />} variant="emerald" />
             ))}
             {readyOrders.length === 0 && <EmptyState label="No ready orders" />}
           </div>
@@ -312,11 +353,21 @@ function KdsCard({ order, onAdvance, actionLabel, actionIcon, variant = "default
           <h3 className="text-lg font-bold text-slate-900 mt-0.5">{order.table?.name || (order.source === 'pos' ? "POS Direct" : "Online Ordering")}</h3>
         </div>
 
-        {order.token_number && (
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-white shadow-lg ring-4 ring-white">
-            <span className="text-xl font-black">{order.token_number}</span>
-          </div>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          {order.order_type && (
+            <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${order.order_type === 'dine_in'
+              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+              : 'bg-amber-100 text-amber-700 border border-amber-200'
+              }`}>
+              {order.order_type === 'dine_in' ? 'Dine In' : 'Takeaway'}
+            </span>
+          )}
+          {order.token_number && (
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-white shadow-lg ring-4 ring-white">
+              <span className="text-xl font-black">{order.token_number}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Items */}
@@ -327,7 +378,7 @@ function KdsCard({ order, onAdvance, actionLabel, actionIcon, variant = "default
               <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-slate-100 text-[10px] font-bold text-slate-700">
                 {item.quantity}
               </div>
-              <span className={`font-medium ${variant === "emerald" ? "text-slate-400 line-through" : "text-slate-700"}`}>
+              <span className={`font-medium ${variant === "emerald" || item.status === 'served' ? "text-slate-400 line-through" : "text-slate-700"}`}>
                 {item.menu_item?.name || "Unknown Item"}
               </span>
             </div>

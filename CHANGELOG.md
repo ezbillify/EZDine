@@ -1,4 +1,18 @@
 
+## v1.1.8 (2026-02-16)
+
+✨ **New Features** 🚀
+- Release v1.1.7, v1.1.6, v0.1.5, v0.1.4, v0.1.3, v0.1.2, and v0.1.1.
+
+🐛 **Bug Fixes** 🚫
+- Fixed a zero payable bug and added a smart payment modal with auto-fill and shortcuts.
+- Strictly hide all unpaid QR orders.
+- Use Service Role Key for payment verification to bypass RLS and resolve a function-related issue.
+
+⚡️ **Improvements** ⚡️
+- Releases of various version (v1.1.7, v1.1.6, v0.1.5, v0.1.4, v0.1.3, v0.1.2, and v0.1.1)
+
+
 ## v1.1.7 (2026-02-13)
 
 ### 🚀 Release Notes v1.1.6

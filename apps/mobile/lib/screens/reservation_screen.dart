@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 import '../services/auth_service.dart';
+import '../services/audio_service.dart';
 import '../core/theme.dart';
 
 
@@ -69,14 +70,20 @@ class _ReservationScreenState extends ConsumerState<ReservationScreen> {
                   label: 'RESERVATIONS',
                   icon: LucideIcons.calendar,
                   isSelected: _activeTab == 0,
-                  onTap: () => setState(() => _activeTab = 0),
+                  onTap: () {
+                    AudioService.instance.playClick();
+                    setState(() => _activeTab = 0);
+                  },
                 ),
                 const SizedBox(width: 12),
                 _TabButton(
                   label: 'WAITLIST TOKEN',
                   icon: LucideIcons.ticket,
                   isSelected: _activeTab == 1,
-                  onTap: () => setState(() => _activeTab = 1),
+                  onTap: () {
+                    AudioService.instance.playClick();
+                    setState(() => _activeTab = 1);
+                  },
                 ),
               ],
             ),
@@ -95,6 +102,7 @@ class _ReservationScreenState extends ConsumerState<ReservationScreen> {
         icon: const Icon(LucideIcons.plus, color: Colors.white),
         label: Text(_activeTab == 0 ? 'NEW BOOKING' : 'ISSUE TOKEN', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         onPressed: () {
+            AudioService.instance.playClick();
             if (_activeTab == 0) {
               _showAddReservationSheet();
             } else {
@@ -124,19 +132,25 @@ class _ReservationScreenState extends ConsumerState<ReservationScreen> {
             return Opacity(
               opacity: isCancelled ? 0.6 : 1.0, 
               child: Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.grey.shade100),
+                  border: Border.all(color: Colors.black.withOpacity(0.03)),
+                  boxShadow: AppTheme.premiumShadow,
                 ),
                 child: Row(
                   children: [
                     Column(
                       children: [
-                        Text(DateFormat('MMM').format(time).toUpperCase(), style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w900, fontSize: 10)),
-                        Text(DateFormat('dd').format(time), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
-                        Text(DateFormat('HH:mm').format(time), style: TextStyle(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text(DateFormat('MMM').format(time).toUpperCase(), style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1)),
+                        Text(DateFormat('dd').format(time), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -1)),
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(6)),
+                          child: Text(DateFormat('HH:mm').format(time), style: TextStyle(color: Colors.grey.shade600, fontSize: 10, fontWeight: FontWeight.w900)),
+                        ),
                       ],
                     ),
                     const SizedBox(width: 24),
@@ -144,28 +158,35 @@ class _ReservationScreenState extends ConsumerState<ReservationScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(res['customer_name'], style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, decoration: isCancelled ? TextDecoration.lineThrough : null)),
-                          const SizedBox(height: 4),
+                          Text(res['customer_name'], style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, height: 1.1, decoration: isCancelled ? TextDecoration.lineThrough : null)),
+                          const SizedBox(height: 12),
                           Row(
                             children: [
-                               Icon(LucideIcons.users, size: 12, color: Colors.grey.shade400),
-                               const SizedBox(width: 4),
-                               Text('${res['party_size']} Guests', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                               Container(
+                                 padding: const EdgeInsets.all(4),
+                                 decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(6)),
+                                 child: Icon(LucideIcons.users, size: 10, color: Colors.grey.shade400),
+                               ),
+                               const SizedBox(width: 8),
+                               Text('${res['party_size']} Guests', style: TextStyle(color: Colors.grey.shade500, fontSize: 11, fontWeight: FontWeight.bold)),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           _statusBadge(status, _getResStatusColor(res['status'])),
                         ],
                       ),
                     ),
                     if (!isCancelled)
                       IconButton(
-                        icon: const Icon(LucideIcons.moreVertical, size: 18),
-                        onPressed: () => _showResActionSheet(res), // Show actions
+                        icon: const Icon(LucideIcons.moreVertical, size: 18, color: Colors.grey),
+                        onPressed: () {
+                          AudioService.instance.playClick();
+                          _showResActionSheet(res);
+                        },
                       ),
                   ],
                 ),
-              ).animate().fadeIn(delay: (index * 50).ms).slideX(begin: 0.1, end: 0),
+              ).animate().fadeIn(delay: (index * 50).ms).scale(begin: const Offset(0.95, 0.95)),
             );
           },
         );
@@ -188,45 +209,51 @@ class _ReservationScreenState extends ConsumerState<ReservationScreen> {
             final status = entry['status'].toString().toUpperCase();
 
             return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.grey.shade100),
+                border: Border.all(color: Colors.black.withOpacity(0.03)),
+                boxShadow: AppTheme.premiumShadow,
               ),
               child: Row(
                 children: [
                    Container(
-                     height: 50, width: 50,
-                     decoration: BoxDecoration(color: AppTheme.secondary.withOpacity(0.1), borderRadius: BorderRadius.circular(16)),
+                     height: 60, width: 60,
+                     decoration: BoxDecoration(color: AppTheme.secondary.withOpacity(0.08), borderRadius: BorderRadius.circular(20)),
                      child: Center(
                        child: Column(
                          mainAxisAlignment: MainAxisAlignment.center,
                          children: [
-                           Text('TOKEN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: AppTheme.secondary)),
-                           Text('${entry['token_number']}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppTheme.secondary)),
+                           Text('TOKEN', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: AppTheme.secondary, letterSpacing: 1)),
+                           Text('${entry['token_number']}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppTheme.secondary, height: 1)),
                          ],
                        ),
                      ),
                    ),
-                   const SizedBox(width: 16),
+                   const SizedBox(width: 20),
                    Expanded(
                      child: Column(
                        crossAxisAlignment: CrossAxisAlignment.start,
                        children: [
-                         Text(entry['customer_name'], style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                         Text('Party of ${entry['party_size']} • ${entry['phone']}', style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                         Text(entry['customer_name'], style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, height: 1.1)),
+                         const SizedBox(height: 4),
+                         Text('Party of ${entry['party_size']} • ${entry['phone']}', style: TextStyle(color: Colors.grey.shade400, fontSize: 11, fontWeight: FontWeight.bold)),
                        ],
                      ),
                    ),
                    _statusBadge(status, Colors.orange),
+                   const SizedBox(width: 12),
                    IconButton(
-                     icon: const Icon(LucideIcons.moreVertical, size: 18),
-                     onPressed: () => _showWaitActionSheet(entry),
+                     icon: const Icon(LucideIcons.moreVertical, size: 18, color: Colors.grey),
+                     onPressed: () {
+                       AudioService.instance.playClick();
+                       _showWaitActionSheet(entry);
+                     },
                    ),
                 ],
               ),
-            ).animate().fadeIn(delay: (index * 50).ms).slideX(begin: 0.1, end: 0);
+            ).animate().fadeIn(delay: (index * 50).ms).scale(begin: const Offset(0.95, 0.95));
           },
         );
       },
