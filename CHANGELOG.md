@@ -1,4 +1,11 @@
 
+## v1.4.0 (2026-02-18)
+
+### Features
+* Introduced a new `BrandingFooter` component to standardize the branding across the application
+* Replaced the existing global branding with the new `BrandingFooter` component
+
+
 ## v1.3.0 (2026-02-18)
 
 ### Features
