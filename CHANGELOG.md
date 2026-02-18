@@ -1,4 +1,9 @@
 
+## v1.2.1 (2026-02-18)
+
+- **Fixes**: conditionally render online payment button based on razorpay_enabled flag
+
+
 ## v1.2.0 (2026-02-18)
 
 ### Features

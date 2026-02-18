@@ -760,19 +760,21 @@ export default function QrOrderPage() {
 
                         <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 px-2 mt-6 mb-2">Payment Method</p>
 
-                        <button
-                            onClick={() => setPaymentMethod('online')}
-                            className={`w-full p-5 rounded-3xl flex items-center gap-4 transition-all border-2 ${paymentMethod === 'online' ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-100'}`}
-                        >
-                            <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${paymentMethod === 'online' ? 'bg-emerald-500 text-white' : 'bg-slate-50 text-slate-400'}`}>
-                                <Zap size={24} />
-                            </div>
-                            <div className="text-left flex-1">
-                                <h3 className={`font-black text-sm uppercase tracking-tight ${paymentMethod === 'online' ? 'text-emerald-900' : 'text-slate-900'}`}>Pay Online</h3>
-                                <p className="text-[10px] font-bold text-slate-400">UPI, Cards, Netbanking</p>
-                            </div>
-                            {paymentMethod === 'online' && <CheckCircle2 className="text-emerald-500" size={24} />}
-                        </button>
+                        {branchInfo?.razorpay_enabled && (
+                            <button
+                                onClick={() => setPaymentMethod('online')}
+                                className={`w-full p-5 rounded-3xl flex items-center gap-4 transition-all border-2 ${paymentMethod === 'online' ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-100'}`}
+                            >
+                                <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${paymentMethod === 'online' ? 'bg-emerald-500 text-white' : 'bg-slate-50 text-slate-400'}`}>
+                                    <Zap size={24} />
+                                </div>
+                                <div className="text-left flex-1">
+                                    <h3 className={`font-black text-sm uppercase tracking-tight ${paymentMethod === 'online' ? 'text-emerald-900' : 'text-slate-900'}`}>Pay Online</h3>
+                                    <p className="text-[10px] font-bold text-slate-400">UPI, Cards, Netbanking</p>
+                                </div>
+                                {paymentMethod === 'online' && <CheckCircle2 className="text-emerald-500" size={24} />}
+                            </button>
+                        )}
 
                         <button
                             onClick={() => setPaymentMethod('cash')}
