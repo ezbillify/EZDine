@@ -19,6 +19,7 @@ class PosService {
     required String? orderId,
     required String restaurantId,
     required String branchId,
+    required String? orderType,
     String? notes,
   }) async {
     if (orderId == null) {
@@ -49,7 +50,7 @@ class PosService {
             'notes': notes,
             'payment_status': 'pending',
             'payment_method': 'cash',
-            'order_type': tableId == null ? 'takeaway' : 'dine_in',
+            'order_type': orderType ?? (tableId == null ? 'takeaway' : 'dine_in'),
           })
           .select()
           .single();
@@ -81,6 +82,11 @@ class PosService {
 
         await _client.from('order_items').insert(items);
       }
+
+      // Update order type if changed
+      if (orderType != null) {
+        await _client.from('orders').update({'order_type': orderType}).eq('id', orderId);
+      }
       
       // Fetch updated order
       final order = await _client.from('orders').select().eq('id', orderId).single();
@@ -95,6 +101,7 @@ class PosService {
     required String? customerId,
     required String restaurantId,
     required String branchId,
+    required String? orderType,
     required List<Map<String, dynamic>> payments,
     double? totalAmount,
   }) async {
@@ -106,6 +113,7 @@ class PosService {
       orderId: orderId,
       restaurantId: restaurantId,
       branchId: branchId,
+      orderType: orderType,
     );
 
     // 2. Create Bill

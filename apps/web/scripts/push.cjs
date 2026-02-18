@@ -4,12 +4,10 @@ const { execSync } = require('child_process');
 const https = require('https');
 
 // --- Config ---
-// --- Config ---
 const PACKAGE_JSON_PATH = path.join(__dirname, '../package.json');
 const VERSION_TS_PATH = path.join(__dirname, '../src/version.ts');
 const ENV_PATH = path.join(__dirname, '../.env.local');
-// Correct: 3 levels up from apps/web/scripts -> apps/web -> apps -> ROOT
-const PROJECT_ROOT = path.resolve(__dirname, '../../../');
+const PROJECT_ROOT = path.resolve(__dirname, '../../../'); // Root of monorepo
 const CHANGELOG_PATH = path.join(PROJECT_ROOT, 'CHANGELOG.md');
 
 // Load .env.local manually
@@ -31,31 +29,37 @@ if (!GROQ_API_KEY) {
 }
 
 // --- Helpers ---
-// The 'run' helper function is no longer used as execSync calls are now direct with cwd option.
 
-async function generateChangelog(commits) {
-    console.log("🤖 Asking Llama 3 (via Groq) to write changelog...");
-
-    // Fallback if no commits
-    if (!commits) return "No significant changes.";
+async function getAIAnalysis(diff) {
+    console.log("🤖 Asking Llama 3.3 (via Groq) to analyze changes...");
 
     const prompt = `
-You are a cool tech lead for a startup. Summarize these git commits into a concise, readable changelog entry.
-Use emojis. Group by Features (✨), Fixes (🐛), and Improvements (⚡️).
-Ignore 'wip', 'chore', or 'merge' commits unless important.
-Keep it punchy and exciting for users.
+You are a senior tech lead. Analyze the following git diff and generate three things:
+1. A detailed commit message (conventional commits format).
+2. A semantic version bump recommendation (patch, minor, or major).
+3. A changelog entry (markdown format).
 
-Commits:
-${commits}
+Rules:
+- Commit Message: Type(scope): subject, followed by a detailed body. Emojis encouraged.
+- Bump: "patch" (fixes/tweaks), "minor" (features), "major" (breaking).
+- Changelog: Concise, bullet points, grouped by Features/Fixes.
 
-Format output as markdown (just the content, no title or markdown block ticks).
+Return ONLY valid JSON:
+{
+  "commitMessage": "...",
+  "bumpType": "patch",
+  "changelogEntry": "..."
+}
+
+Git Diff (truncated):
+${diff.slice(0, 25000)}
 `;
 
     const data = JSON.stringify({
-        model: "llama-3.1-8b-instant",
+        model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.7,
-        max_tokens: 500
+        temperature: 0.2, // Low temp for structured output
+        response_format: { type: "json_object" }
     });
 
     return new Promise((resolve, reject) => {
@@ -73,17 +77,19 @@ Format output as markdown (just the content, no title or markdown block ticks).
             res.on('end', () => {
                 try {
                     const json = JSON.parse(body);
-                    resolve(json.choices[0]?.message?.content || "Auto-generated changelog failed.");
+                    const content = json.choices?.[0]?.message?.content;
+                    if (!content) throw new Error("No content from AI");
+                    resolve(JSON.parse(content));
                 } catch (e) {
                     console.error("Groq Parse Error:", body);
-                    resolve("Failed to generate changelog via AI.");
+                    reject(new Error("Failed to parse AI response"));
                 }
             });
         });
 
         req.on('error', (e) => {
             console.error("Groq Request Error:", e);
-            resolve("Failed to reach Groq API.");
+            reject(new Error("Failed to reach Groq API"));
         });
 
         req.write(data);
@@ -94,70 +100,96 @@ Format output as markdown (just the content, no title or markdown block ticks).
 // --- Main ---
 (async () => {
     try {
-        console.log("🚀 Starting Release Process (Root: " + PROJECT_ROOT + ")...");
+        console.log("🚀 Starting Smart Push Process...");
 
-        // 1. Read Package.json
+        // 1. Stage all changes to get full diff
+        try {
+            execSync('git add .', { cwd: PROJECT_ROOT, stdio: 'inherit' });
+        } catch (e) {
+            console.warn("⚠️ git add . failed, assumes manual staging.");
+        }
+
+        // 2. Get Diff
+        let diff = '';
+        try {
+            diff = execSync('git diff --cached', { cwd: PROJECT_ROOT, encoding: 'utf8' });
+        } catch (e) {
+            console.warn("⚠️ Could not read diff.");
+        }
+
+        if (!diff || diff.trim().length === 0) {
+            console.log("🤷‍♂️ No changes detected to commit.");
+            // Check for unpushed commits?
+            try {
+                const unpushed = execSync('git log origin/main..HEAD --oneline', { cwd: PROJECT_ROOT, encoding: 'utf8' }).trim();
+                if (unpushed) {
+                    console.log("📦 Found unpushed commits. Pushing...");
+                    execSync('git push origin main', { cwd: PROJECT_ROOT, stdio: 'inherit' });
+                    process.exit(0);
+                }
+            } catch (e) { }
+            return;
+        }
+
+        // 3. AI Analysis
+        const analysis = await getAIAnalysis(diff);
+        const { commitMessage, bumpType, changelogEntry } = analysis;
+
+        console.log(`\n📋 Commit Message:\n${commitMessage}`);
+        console.log(`\n📈 Bump: ${bumpType.toUpperCase()}`);
+
+        if (!['major', 'minor', 'patch'].includes(bumpType)) {
+            console.warn(`⚠️ Invalid bump type '${bumpType}'. Defaulting to 'patch'.`);
+            analysis.bumpType = 'patch';
+        }
+
+        // 4. Update Version
         const pkg = require(PACKAGE_JSON_PATH);
         const currentVersion = pkg.version;
-        const [major, minor, patch] = currentVersion.split('.').map(Number);
+        let [major, minor, patch] = currentVersion.split('.').map(Number);
 
-        // 2. Bump Version
-        const newVersion = `${major}.${minor}.${patch + 1}`;
-        console.log(`🆙 Bumping version: ${currentVersion} -> ${newVersion}`);
+        if (bumpType === 'major') { major++; minor = 0; patch = 0; }
+        else if (bumpType === 'minor') { minor++; patch = 0; }
+        else { patch++; }
 
-        // 3. Get Commits (Run git from ROOT)
-        let commits = '';
-        try {
-            commits = execSync(`git log $(git describe --tags --abbrev=0 2>/dev/null)..HEAD --oneline`, { cwd: PROJECT_ROOT, encoding: 'utf8' }).trim();
-        } catch (e) {
-            commits = '';
-        }
+        const newVersion = `${major}.${minor}.${patch}`;
+        console.log(`🆙 Updating version: ${currentVersion} -> ${newVersion}`);
 
-        if (!commits) {
-            console.log("⚠️ No tags found, using last 10 commits.");
-            commits = execSync('git log -n 10 --oneline', { cwd: PROJECT_ROOT, encoding: 'utf8' }).trim();
-        }
-
-        // 4. Generate AI Changelog
-        const aiChangelog = await generateChangelog(commits);
-        console.log("\n📝 Generated Changelog to Prepend:\n");
-        console.log("------------------------------------------------");
-        console.log(aiChangelog);
-        console.log("------------------------------------------------\n");
-
-        // 5. Update Files (File writes are absolute paths so they work fine)
-
-        // package.json
+        // Write package.json
         pkg.version = newVersion;
         fs.writeFileSync(PACKAGE_JSON_PATH, JSON.stringify(pkg, null, 2) + '\n');
 
-        // version.ts
-        const versionTsContent = `// This file is auto-generated by the push script. Do not edit manually.\nexport const APP_VERSION = "${newVersion}";\n`;
+        // Write version.ts
+        const versionTsContent = `// This file is auto-generated. Do not edit manually.\nexport const APP_VERSION = "${newVersion}";\n`;
         fs.writeFileSync(VERSION_TS_PATH, versionTsContent);
 
-        // CHANGELOG.md (Prepend)
+        // Update CHANGELOG.md (Prepend)
         const date = new Date().toISOString().split('T')[0];
-        const newEntry = `\n## v${newVersion} (${date})\n\n${aiChangelog}\n\n`;
-
-        // Correct path handling if one level up or root
-        let changelogContent = '';
+        const newChangelog = `\n## v${newVersion} (${date})\n\n${changelogEntry}\n\n`;
+        let existingChangelog = '';
         if (fs.existsSync(CHANGELOG_PATH)) {
-            changelogContent = fs.readFileSync(CHANGELOG_PATH, 'utf8');
+            existingChangelog = fs.readFileSync(CHANGELOG_PATH, 'utf8');
         }
-        fs.writeFileSync(CHANGELOG_PATH, newEntry + changelogContent);
+        fs.writeFileSync(CHANGELOG_PATH, newChangelog + existingChangelog);
 
-        // 6. Git Operations (Run from ROOT to include CHANGELOG.md)
-        console.log("📦 Committing and Pushing...");
+        // 5. Commit & Push
         execSync('git add .', { cwd: PROJECT_ROOT, stdio: 'inherit' });
-        execSync(`git commit -m "chore: release v${newVersion} 🚀"`, { cwd: PROJECT_ROOT, stdio: 'inherit' });
+
+        // Escape quotes
+        const safeMessage = commitMessage.replace(/"/g, '\\"');
+        execSync(`git commit -m "${safeMessage}"`, { cwd: PROJECT_ROOT, stdio: 'inherit' });
+
+        console.log("🚀 Pushing to origin...");
         execSync('git push origin main', { cwd: PROJECT_ROOT, stdio: 'inherit' });
+        console.log(`\n✅ Released v${newVersion}!`);
 
-        console.log(`\n✅ Successfully released v${newVersion}!`);
-
-        // 7. Deploy Supabase Functions (Run from ROOT)
-        console.log("⚡️ Deploying Supabase Edge Functions...");
+        // 6. Deploy Supabase
+        console.log("⚡️ Deploying Supabase Functions...");
         try {
-            execSync('npx supabase functions deploy --no-verify-jwt', { cwd: PROJECT_ROOT, stdio: 'inherit' });
+            // Using npx for local supabase, ensuring non-interactive/no-verify-jwt if needed
+            // The user had issues with 'supabase link' earlier but resolved it.
+            // Using 'npx -y supabase' is safer
+            execSync('npx -y supabase functions deploy --no-verify-jwt', { cwd: PROJECT_ROOT, stdio: 'inherit' });
             console.log("✅ Supabase Functions Deployed!");
         } catch (err) {
             console.error("⚠️ Supabase deployment failed (but git push succeeded). Check logs.");

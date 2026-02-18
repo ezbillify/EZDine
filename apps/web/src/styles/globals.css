@@ -64,6 +64,24 @@
   .animate-slide-up {
     animation: slide-up 0.4s ease-out forwards;
   }
+
+  @keyframes breathing {
+
+    0%,
+    100% {
+      opacity: 0.6;
+      transform: scale(0.8);
+    }
+
+    50% {
+      opacity: 1;
+      transform: scale(1.2);
+    }
+  }
+
+  .animate-breathing {
+    animation: breathing 2s ease-in-out infinite;
+  }
 }
 
 /* Scrollbar styling */

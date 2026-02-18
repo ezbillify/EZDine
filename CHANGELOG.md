@@ -1,4 +1,15 @@
 
+## v1.2.0 (2026-02-18)
+
+### Features
+* Introduced dine-in and takeaway order types with a toggle button
+* Added a live orders sidebar for easy tracking
+* Enhanced printing functionality for kitchen and billing
+
+### Fixes
+* Improved error handling for printing and order processing
+
+
 ## v1.1.8 (2026-02-16)
 
 ✨ **New Features** 🚀

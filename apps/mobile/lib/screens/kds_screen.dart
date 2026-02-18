@@ -193,8 +193,25 @@ class _KdsBatchCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(ticket['tables']?['name'] ?? 'QUICK BILL', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20, letterSpacing: -0.5)),
-                          Text('ROUND: ${ticket['batch_id'].toString().substring(0, 4).toUpperCase()}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey.shade500, letterSpacing: 0.2)),
+                          Row(
+                            children: [
+                              Text(ticket['tables']?['name'] ?? 'QUICK BILL', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, letterSpacing: -0.5)),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0F172A),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  'T${ticket['token_number']}', 
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12)
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text('ROUND: ${ticket['batch_id'].toString().substring(0, 4).toUpperCase()}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey.shade500, letterSpacing: 0.2)),
                         ],
                       ),
                     ),

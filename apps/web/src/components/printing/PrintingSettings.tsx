@@ -23,6 +23,7 @@ export function PrintingSettings() {
   const [widthKot, setWidthKot] = useState<number>(DEFAULT_SETTINGS.widthKot);
   const [widthInvoice, setWidthInvoice] = useState<number>(DEFAULT_SETTINGS.widthInvoice);
   const [status, setStatus] = useState<"idle" | "loading" | "saving" | "error">("idle");
+  const [consolidatePrinting, setConsolidatePrinting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -34,6 +35,7 @@ export function PrintingSettings() {
           setPrinterIdInvoice(settings.printerIdInvoice ?? DEFAULT_SETTINGS.printerIdInvoice);
           setWidthKot(settings.widthKot ?? DEFAULT_SETTINGS.widthKot);
           setWidthInvoice(settings.widthInvoice ?? DEFAULT_SETTINGS.widthInvoice);
+          setConsolidatePrinting(settings.consolidatePrinting ?? false);
         }
         setStatus("idle");
       } catch (err) {
@@ -48,7 +50,7 @@ export function PrintingSettings() {
   const handleSave = async () => {
     setStatus("saving");
     try {
-      await savePrintingSettings({ printerIdKot, printerIdInvoice, widthKot, widthInvoice });
+      await savePrintingSettings({ printerIdKot, printerIdInvoice, widthKot, widthInvoice, consolidatePrinting });
       toast.success("Printing preferences saved");
       setStatus("idle");
     } catch (err) {
@@ -56,6 +58,7 @@ export function PrintingSettings() {
       toast.error("Process failed");
     }
   };
+
 
   return (
     <Card className="border-slate-100 shadow-xl shadow-slate-200/40 p-0 overflow-hidden">
@@ -108,7 +111,7 @@ export function PrintingSettings() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-lg w-fit">
               <Share2 size={12} className="text-amber-600" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Invoice (Counter)</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">Invoice & Tokens (Counter)</span>
             </div>
 
             <div className="space-y-3">
@@ -136,6 +139,27 @@ export function PrintingSettings() {
           </div>
         </div>
 
+        {/* Consolidated Toggle */}
+        <div className="md:col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-100 flex items-center justify-between">
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Monitor size={16} className="text-purple-600" />
+              Consolidated 58mm Mode
+            </h4>
+            <p className="text-[10px] text-slate-500 mt-1 max-w-md">
+              Combines KOT, Invoice, and Token into a single long slip. Ideal for food trucks and small counters using a single 58mm printer.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-black uppercase tracking-widest ${consolidatePrinting ? 'text-purple-600' : 'text-slate-400'}`}>{consolidatePrinting ? "Enabled" : "Disabled"}</span>
+            <button
+              onClick={() => setConsolidatePrinting(!consolidatePrinting)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${consolidatePrinting ? 'bg-purple-600' : 'bg-slate-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${consolidatePrinting ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+        </div>
         <div className="pt-6 border-t border-slate-50 flex justify-end">
           <Button
             className="h-12 px-10 gap-2 text-xs font-black uppercase tracking-widest shadow-lg shadow-brand-500/20 transition-all hover:scale-[1.02]"
@@ -146,6 +170,6 @@ export function PrintingSettings() {
           </Button>
         </div>
       </div>
-    </Card>
+    </Card >
   );
 }

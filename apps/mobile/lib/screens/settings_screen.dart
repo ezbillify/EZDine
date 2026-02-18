@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../services/audio_service.dart';
 import '../core/theme.dart';
+import 'print_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -24,21 +25,32 @@ class SettingsScreen extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         children: [
           _buildSettingItem(
+            context: context,
+            icon: LucideIcons.printer,
+            title: 'Printer Setup',
+            subtitle: 'Configure Network or Bluetooth printers',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrintSettingsScreen())),
+          ),
+          _buildSettingItem(
+            context: context,
             icon: LucideIcons.user,
             title: 'Profile Settings',
             subtitle: 'Manage your personal information',
           ),
           _buildSettingItem(
+            context: context,
             icon: LucideIcons.bell,
             title: 'Notifications',
             subtitle: 'Configure alerts and sounds',
           ),
           _buildSettingItem(
+            context: context,
             icon: LucideIcons.lock,
             title: 'Security',
             subtitle: 'Password and session management',
           ),
           _buildSettingItem(
+            context: context,
             icon: LucideIcons.helpCircle,
             title: 'Help & Support',
             subtitle: 'Contact HQ or view documentation',
@@ -48,9 +60,18 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSettingItem({required IconData icon, required String title, required String subtitle}) {
+  Widget _buildSettingItem({
+    required BuildContext context,
+    required IconData icon, 
+    required String title, 
+    required String subtitle,
+    VoidCallback? onTap,
+  }) {
     return GestureDetector(
-      onTap: () => AudioService.instance.playClick(),
+      onTap: () {
+        AudioService.instance.playClick();
+        if (onTap != null) onTap();
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 20),
         padding: const EdgeInsets.all(20),

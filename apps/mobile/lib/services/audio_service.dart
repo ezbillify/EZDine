@@ -1,11 +1,33 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
+
 
 class AudioService {
   static final AudioService instance = AudioService._internal();
   AudioService._internal();
 
   final AudioPlayer _player = AudioPlayer();
+
+  Future<void> init() async {
+    // Configure for high importance playback (overrides silent switch on iOS)
+    final AudioContext audioContext = AudioContext(
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.playback,
+        options: {
+          AVAudioSessionOptions.mixWithOthers,
+        },
+      ),
+      android: AudioContextAndroid(
+        isSpeakerphoneOn: true,
+        stayAwake: true,
+        contentType: AndroidContentType.sonification,
+        usageType: AndroidUsageType.notificationEvent,
+        audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+      ),
+    );
+    await AudioPlayer.global.setAudioContext(audioContext);
+  }
 
   Future<void> playClick() async {
     HapticFeedback.lightImpact();
@@ -24,7 +46,20 @@ class AudioService {
 
   Future<void> playOrderAlert() async {
     HapticFeedback.vibrate();
-    // play a more prominent sound for kitchen alerts
-    // await _player.play(AssetSource('sounds/order_alert.mp3'));
+    try {
+      // Use standard audio player with bundled asset
+      await _player.stop(); // Stop any previous sound
+      
+      // Force reload source to avoid stale state
+      await _player.setReleaseMode(ReleaseMode.stop);
+
+      // Ensure volume is max
+      await _player.setVolume(1.0);
+      
+      await _player.play(AssetSource('sounds/order_alert.wav'));
+    } catch (e) {
+      // Fallback
+      SystemSound.play(SystemSoundType.click);
+    }
   }
 }

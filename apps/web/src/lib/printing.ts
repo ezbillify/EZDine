@@ -10,7 +10,7 @@ export type PrintLine = {
 export type PrintJob = {
   printerId: string;
   width: 58 | 80;
-  type: "kot" | "invoice";
+  type: "kot" | "invoice" | "token";
   lines: PrintLine[];
 };
 
@@ -109,30 +109,61 @@ export function buildKotLines(input: {
   tableName?: string | null;
   orderId: string;
   tokenNumber?: string | null;
-  items: { name: string; qty: number; note?: string | null }[];
+  items: { name: string; qty: number; notes?: string | null }[];
 }) {
+  // Determine separator length based on generic width assumption (will be refined by printer driver usually, but good for preview)
+  const separator = "--------------------------------"; // 32 chars for 58mm usually, 48 for 80mm
+
   const lines: PrintLine[] = [
     { text: input.restaurantName, align: "center", bold: true },
     { text: `Branch: ${input.branchName}`, align: "center" },
-    ...(input.tokenNumber ? [
-      { text: "----------------------------", align: "center" as const },
-      { text: `TOKEN: ${input.tokenNumber}`, align: "center" as const, bold: true },
-      { text: "----------------------------", align: "center" as const },
-    ] : []),
-    { text: `Order: ${input.orderId}`, align: "left" as const, bold: true },
-    { text: `Table: ${input.tableName ?? "--"}`, align: "left" as const },
-    { text: "----------------------------", align: "center" as const }
+    { text: separator, align: "center" as const },
   ];
 
+  if (input.tokenNumber) {
+    lines.push({ text: `TOKEN: ${input.tokenNumber}`, align: "center" as const, bold: true });
+    lines.push({ text: separator, align: "center" as const });
+  }
+
+  lines.push({ text: "KITCHEN ORDER TICKET", align: "center" as const, bold: true });
+  lines.push({ text: `Order: ${input.orderId.slice(0, 8)}...`, align: "left" as const });
+  lines.push({ text: `Date: ${new Date().toLocaleString()}`, align: "left" as const });
+  if (input.tableName) lines.push({ text: `Table: ${input.tableName}`, align: "left" as const, bold: true });
+  lines.push({ text: separator, align: "center" as const });
+
   input.items.forEach((item) => {
-    lines.push({ text: `${item.name} x${item.qty}`, align: "left" });
-    if (item.note) {
-      lines.push({ text: `  Note: ${item.note}`, align: "left" });
+    lines.push({ text: `${item.name}`, align: "left", bold: true });
+    lines.push({ text: `Qty: ${item.qty}`, align: "left" });
+    if (item.notes) {
+      lines.push({ text: `Note: ${item.notes}`, align: "left" });
     }
+    lines.push({ text: " ", align: "left" });
   });
 
-  lines.push({ text: "----------------------------", align: "center" });
-  lines.push({ text: "KOT", align: "center", bold: true });
+  lines.push({ text: separator, align: "center" });
+  return lines;
+}
+
+export function buildTokenSlipLines(input: {
+  restaurantName: string;
+  tokenNumber: string | number;
+  orderType: string;
+  itemsCount: number;
+}) {
+  const separator = "--------------------------------";
+
+  const lines: PrintLine[] = [
+    { text: input.restaurantName, align: "center", bold: true },
+    { text: separator, align: "center" },
+    { text: "TOKEN NUMBER", align: "center" },
+    { text: `${input.tokenNumber}`, align: "center", bold: true }, // Printer driver often scales this up if configured
+    { text: separator, align: "center" },
+    { text: `Type: ${input.orderType}`, align: "center" },
+    { text: `Items: ${input.itemsCount}`, align: "center" },
+    { text: new Date().toLocaleTimeString(), align: "center" },
+    { text: separator, align: "center" },
+  ];
+
   return lines;
 }
 
@@ -146,26 +177,97 @@ export function buildInvoiceLines(input: {
   tax: number;
   total: number;
 }) {
+  const separator = "--------------------------------";
+
   const lines: PrintLine[] = [
     { text: input.restaurantName, align: "center", bold: true },
     { text: input.branchName, align: "center" },
-    ...(input.tokenNumber ? [
-      { text: "----------------------------", align: "center" as const },
-      { text: `TOKEN: ${input.tokenNumber}`, align: "center" as const, bold: true },
-      { text: "----------------------------", align: "center" as const },
-    ] : []),
-    { text: `Bill: ${input.billId}`, align: "left" },
-    { text: "----------------------------", align: "center" }
+    { text: separator, align: "center" },
   ];
 
+  if (input.tokenNumber) {
+    lines.push({ text: `TOKEN: ${input.tokenNumber}`, align: "center" as const, bold: true });
+    lines.push({ text: separator, align: "center" as const });
+  }
+
+  lines.push({ text: `Bill No: ${input.billId}`, align: "left" });
+  lines.push({ text: `Date: ${new Date().toLocaleString()}`, align: "left" });
+  lines.push({ text: separator, align: "center" });
+
   input.items.forEach((item) => {
-    lines.push({ text: `${item.name} x${item.qty}  ${item.price.toFixed(2)}`, align: "left" });
+    // 2-line layout for better cleaner look on small paper
+    lines.push({ text: `${item.name}`, align: "left" });
+    lines.push({ text: `${item.qty} x ${item.price.toFixed(2)} = ${(item.qty * item.price).toFixed(2)}`, align: "right" });
   });
 
-  lines.push({ text: "----------------------------", align: "center" });
+  lines.push({ text: separator, align: "center" });
   lines.push({ text: `Subtotal: ${input.subtotal.toFixed(2)}`, align: "right" });
-  lines.push({ text: `Tax: ${input.tax.toFixed(2)}`, align: "right" });
+  if (input.tax > 0) lines.push({ text: `Tax: ${input.tax.toFixed(2)}`, align: "right" });
+  lines.push({ text: separator, align: "center" });
+  lines.push({ text: `TOTAL: ${input.total.toFixed(2)}`, align: "center", bold: true });
+  lines.push({ text: separator, align: "center" });
+  lines.push({ text: "Thank you for dining with us!", align: "center" });
+
+  return lines;
+}
+
+export function buildConsolidatedReceiptLines(input: {
+  restaurantName: string;
+  branchName: string;
+  tableName?: string | null;
+  orderId: string;
+  tokenNumber?: string | null;
+  orderType: string;
+  items: { name: string; qty: number; price: number; notes?: string | null }[];
+  subtotal: number;
+  tax: number;
+  total: number;
+}) {
+  const separator = "--------------------------------";
+  const sectionBreak = "================================";
+
+  const lines: PrintLine[] = [];
+
+  // 1. KOT Section
+  lines.push({ text: "KITCHEN ORDER (COPY)", align: "center", bold: true });
+  lines.push({ text: `Order: ${input.orderId.substring(0, 8)}`, align: "left" });
+  if (input.tableName) lines.push({ text: `Table: ${input.tableName}`, align: "left", bold: true });
+  if (input.tokenNumber) lines.push({ text: `TOKEN: ${input.tokenNumber}`, align: "center", bold: true });
+  lines.push({ text: separator, align: "center" });
+
+  input.items.forEach((item) => {
+    lines.push({ text: `${item.name}`, align: "left", bold: true });
+    lines.push({ text: `Qty: ${item.qty} ${item.notes ? '(' + item.notes + ')' : ''}`, align: "left" });
+  });
+
+  lines.push({ text: sectionBreak, align: "center" });
+  lines.push({ text: " ", align: "center" }); // Space between sections
+
+  // 2. Bill Section
+  lines.push({ text: input.restaurantName, align: "center", bold: true });
+  lines.push({ text: "CUSTOMER INVOICE", align: "center", bold: true });
+  lines.push({ text: `Date: ${new Date().toLocaleString()}`, align: "left" });
+  lines.push({ text: separator, align: "center" });
+
+  input.items.forEach((item) => {
+    lines.push({ text: `${item.name}`, align: "left" });
+    lines.push({ text: `${item.qty} x ${item.price.toFixed(2)} = ${(item.qty * item.price).toFixed(2)}`, align: "right" });
+  });
+
+  lines.push({ text: separator, align: "center" });
   lines.push({ text: `Total: ${input.total.toFixed(2)}`, align: "right", bold: true });
+
+  lines.push({ text: sectionBreak, align: "center" });
+  lines.push({ text: " ", align: "center" });
+
+  // 3. Token Slip Section
+  if (input.tokenNumber) {
+    lines.push({ text: "TOKEN SLIP", align: "center", bold: true });
+    lines.push({ text: `${input.tokenNumber}`, align: "center", bold: true }); // Large font implied by driver if configured
+    lines.push({ text: `Type: ${input.orderType}`, align: "center" });
+    lines.push({ text: separator, align: "center" });
+  }
+
   lines.push({ text: "Thank you!", align: "center" });
 
   return lines;

@@ -23,6 +23,8 @@ import 'services/audio_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  await AudioService.instance.init();
+  
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
@@ -641,7 +643,7 @@ class DashboardScreen extends ConsumerWidget {
       {
         'label': 'SYSTEM CONFIG',
         'icon': LucideIcons.settings,
-        'description': 'Global Settings',
+        'description': 'Printers & System',
         'color': Colors.grey,
         'roles': ['owner', 'manager'],
         'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => SettingsScreen())),

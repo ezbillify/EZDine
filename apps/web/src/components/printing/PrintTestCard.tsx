@@ -1,16 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { Terminal, FileText, Send, Zap, Info, Eye, Printer } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Terminal, FileText, Send, Zap, Info, Eye, Printer, Layers } from "lucide-react";
 import { toast } from "sonner";
 
-import { buildInvoiceLines, buildKotLines, sendPrintJob, PrintLine } from "../../lib/printing";
+import { buildInvoiceLines, buildKotLines, buildConsolidatedReceiptLines, sendPrintJob, PrintLine, getPrintingSettings } from "../../lib/printing";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { PrintPreviewModal } from "./PrintPreviewModal";
 
 export function PrintTestCard() {
   const [status, setStatus] = useState<"idle" | "sending" | "error">("idle");
+  const [consolidated, setConsolidated] = useState(false);
   const [previewData, setPreviewData] = useState<{
     isOpen: boolean;
     title: string;
@@ -25,6 +26,51 @@ export function PrintTestCard() {
     type: "invoice"
   });
 
+  useEffect(() => {
+    getPrintingSettings().then(s => {
+      if (s?.consolidatePrinting) setConsolidated(true);
+    });
+  }, []);
+
+  const handleConsolidated = async (previewOnly = false) => {
+    const lines = buildConsolidatedReceiptLines({
+      restaurantName: "EZDine Demo",
+      branchName: "Main",
+      tableName: "T3",
+      orderId: "#1001",
+      tokenNumber: "42",
+      orderType: "Dine In",
+      items: [
+        { name: "Paneer Butter Masala", qty: 1, price: 240 },
+        { name: "Butter Naan", qty: 2, price: 40, notes: "Less oil" }
+      ],
+      subtotal: 320,
+      tax: 16,
+      total: 336
+    });
+
+    if (previewOnly) {
+      setPreviewData({
+        isOpen: true,
+        title: "Consolidated (58mm)",
+        lines,
+        width: 58,
+        type: "invoice"
+      });
+      return;
+    }
+
+    setStatus("sending");
+    try {
+      await sendPrintJob({ printerId: "billing-1", width: 58, type: "invoice", lines });
+      toast.success("Test Consolidated Slip dispatched");
+    } catch (err) {
+      toast.error("Network printer unreachable");
+    } finally {
+      setStatus("idle");
+    }
+  };
+
   const handleKot = async (previewOnly = false) => {
     const lines = buildKotLines({
       restaurantName: "EZDine Demo",
@@ -33,7 +79,7 @@ export function PrintTestCard() {
       orderId: "#1001",
       items: [
         { name: "Paneer Butter Masala", qty: 1 },
-        { name: "Butter Naan", qty: 2, note: "Less oil" }
+        { name: "Butter Naan", qty: 2, notes: "Less oil" }
       ]
     });
 
@@ -152,36 +198,70 @@ export function PrintTestCard() {
             </div>
 
             {/* Invoice Diagnostic Card */}
-            <div className="rounded-[2rem] border-2 border-slate-100 p-5 space-y-4 hover:border-amber-500/20 hover:bg-amber-50/10 transition-all group">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-amber-600 group-hover:bg-amber-50 transition-all">
-                    <FileText size={20} />
-                  </div>
-                  <div>
-                    <p className="text-xs font-black uppercase text-slate-900 leading-none">Tax Invoice</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-tighter">Standard (80mm)</p>
+            {/* Invoice or Consolidated Diagnostic Card */}
+            {consolidated ? (
+              <div className="rounded-[2rem] border-2 border-slate-100 p-5 space-y-4 hover:border-purple-500/20 hover:bg-purple-50/10 transition-all group">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-purple-600 group-hover:bg-purple-50 transition-all">
+                      <Layers size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase text-slate-900 leading-none">Consolidated</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-tighter">Small (58mm)</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  className="flex-1 h-10 bg-white border border-slate-200 text-slate-600 hover:text-amber-600 rounded-xl text-[10px] font-black uppercase gap-2"
-                  onClick={() => handleInvoice(true)}
-                >
-                  <Eye size={14} /> Preview
-                </Button>
-                <Button
-                  className="flex-1 h-10 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase gap-2 border-none hover:bg-amber-600"
-                  onClick={() => handleInvoice(false)}
-                  disabled={status === "sending"}
-                >
-                  <Printer size={14} /> Print
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    className="flex-1 h-10 bg-white border border-slate-200 text-slate-600 hover:text-purple-600 rounded-xl text-[10px] font-black uppercase gap-2"
+                    onClick={() => handleConsolidated(true)}
+                  >
+                    <Eye size={14} /> Preview
+                  </Button>
+                  <Button
+                    className="flex-1 h-10 bg-purple-600 text-white rounded-xl text-[10px] font-black uppercase gap-2 border-none hover:bg-purple-700"
+                    onClick={() => handleConsolidated(false)}
+                    disabled={status === "sending"}
+                  >
+                    <Printer size={14} /> Print
+                  </Button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="rounded-[2rem] border-2 border-slate-100 p-5 space-y-4 hover:border-amber-500/20 hover:bg-amber-50/10 transition-all group">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-amber-600 group-hover:bg-amber-50 transition-all">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black uppercase text-slate-900 leading-none">Tax Invoice</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 tracking-tighter">Standard (80mm)</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    className="flex-1 h-10 bg-white border border-slate-200 text-slate-600 hover:text-amber-600 rounded-xl text-[10px] font-black uppercase gap-2"
+                    onClick={() => handleInvoice(true)}
+                  >
+                    <Eye size={14} /> Preview
+                  </Button>
+                  <Button
+                    className="flex-1 h-10 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase gap-2 border-none hover:bg-amber-600"
+                    onClick={() => handleInvoice(false)}
+                    disabled={status === "sending"}
+                  >
+                    <Printer size={14} /> Print
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           {status === "sending" && (

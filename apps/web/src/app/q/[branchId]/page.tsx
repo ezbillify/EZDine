@@ -16,6 +16,7 @@ import {
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { verifyPayment } from "../../../lib/pos";
+import { supabase } from "../../../lib/supabaseClient";
 
 declare global {
     interface Window {
@@ -83,6 +84,34 @@ export default function QrOrderPage() {
             }
         };
         load();
+
+        const channel = supabase
+            .channel(`menu-realtime-${branchId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "menu_items",
+                    filter: `branch_id=eq.${branchId}`
+                },
+                (payload) => {
+                    if (payload.eventType === 'UPDATE') {
+                        const updated = payload.new as any;
+                        setMenuItems(prev => prev.map(item =>
+                            item.id === updated.id ? { ...item, ...updated } : item
+                        ));
+                    } else {
+                        // For INSERT/DELETE, just reload the list
+                        getPublicBranchMenu(branchId).then(setMenuItems);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [branchId]);
 
     const filteredItems = useMemo(() => {
