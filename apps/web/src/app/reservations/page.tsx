@@ -25,6 +25,7 @@ import { format } from "date-fns";
 import { AuthGate } from "../../components/auth/AuthGate";
 import { AppShell } from "../../components/layout/AppShell";
 import { Button } from "../../components/ui/Button";
+import { DatePicker } from "../../components/ui/DatePicker";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
 import { supabase } from "../../lib/supabaseClient";
@@ -463,8 +464,11 @@ export default function GuestManagementPage() {
 
                                         {activeTab === 'reservations' && (
                                             <div className="space-y-1">
-                                                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Date</label>
-                                                <Input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+                                                <DatePicker
+                                                    label="Date"
+                                                    value={date}
+                                                    onChange={(d) => setDate(d)}
+                                                />
                                             </div>
                                         )}
 

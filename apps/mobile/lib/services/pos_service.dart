@@ -122,19 +122,28 @@ class PosService {
       'p_doc_type': 'bill'
     });
 
-    // Calculate subtotal from all items in this order
-    final orderItemsRes = await _client.from('order_items').select('price, quantity').eq('order_id', order['id']);
+    // Calculate accurate tax breakdown from all items in this order
+    final orderItemsRes = await _client.from('order_items').select('price, quantity, menu_items(gst_rate)').eq('order_id', order['id']);
     final orderItems = List<Map<String, dynamic>>.from(orderItemsRes);
-    final total = orderItems.fold(0.0, (sum, i) => sum + (i['price'] * i['quantity']));
+    
+    double total = 0;
+    double tax = 0;
+    for (var i in orderItems) {
+      double lineTotal = (i['price'] as num).toDouble() * (i['quantity'] as num).toDouble();
+      double rate = (i['menu_items']?['gst_rate'] as num?)?.toDouble() ?? 0.0;
+      total += lineTotal;
+      tax += lineTotal - (lineTotal / (1 + (rate / 100)));
+    }
+    double subtotal = total - tax;
 
     final billRes = await _client.from('bills').insert({
       'restaurant_id': restaurantId,
       'branch_id': branchId,
       'order_id': order['id'],
       'bill_number': billNumber,
-      'subtotal': total,
+      'subtotal': subtotal,
       'discount': 0,
-      'tax': 0,
+      'tax': tax,
       'total': total,
       'status': 'paid',
     }).select().single();

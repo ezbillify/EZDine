@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, CheckCircle2, ChefHat, Flame } from "lucide-react";
+import { Clock, CheckCircle2, ChefHat, Flame, Leaf, Egg } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
@@ -19,6 +19,8 @@ type OrderItem = {
   status: string;
   menu_item?: {
     name: string;
+    is_veg: boolean;
+    is_egg: boolean;
   };
 };
 
@@ -65,7 +67,7 @@ export function KdsBoard() {
             item_id,
             batch_id,
             status,
-            menu_item:menu_items(name)
+            menu_item:menu_items(name, is_veg, is_egg)
           )
         `)
         .eq("branch_id", profile.active_branch_id)
@@ -163,12 +165,16 @@ export function KdsBoard() {
 
   const advance = async (orderId: string, currentStatus: string, nextStatus: string, batchId?: string) => {
     try {
+      const isLegacy = batchId === "legacy";
+      const queryFilter = (q: any) => isLegacy ? q.is("batch_id", null) : q.eq("batch_id", batchId as any);
+
       if (nextStatus === "served") {
-        const { error: itemsError } = await supabase
-          .from("order_items")
-          .update({ status: "served" })
-          .eq("order_id", orderId)
-          .eq("batch_id", batchId as any);
+        const { error: itemsError } = await queryFilter(
+          supabase
+            .from("order_items")
+            .update({ status: "served" })
+            .eq("order_id", orderId)
+        );
 
         if (itemsError) throw itemsError;
 
@@ -182,11 +188,12 @@ export function KdsBoard() {
           await supabase.from("orders").update({ status: "served" }).eq("id", orderId);
         }
       } else {
-        await supabase
-          .from("order_items")
-          .update({ status: nextStatus })
-          .eq("order_id", orderId)
-          .eq("batch_id", batchId as any);
+        await queryFilter(
+          supabase
+            .from("order_items")
+            .update({ status: nextStatus })
+            .eq("order_id", orderId)
+        );
 
         await supabase.from("orders").update({ status: nextStatus }).eq("id", orderId);
       }
@@ -381,6 +388,9 @@ function KdsCard({ order, onAdvance, actionLabel, actionIcon, variant = "default
               <span className={`font-medium ${variant === "emerald" || item.status === 'served' ? "text-slate-400 line-through" : "text-slate-700"}`}>
                 {item.menu_item?.name || "Unknown Item"}
               </span>
+              <div className={`ml-1 flex-none h-3 w-3 rounded-full flex items-center justify-center ${item.menu_item?.is_veg ? "bg-green-100 text-green-600" : item.menu_item?.is_egg ? "bg-amber-100 text-amber-600" : "bg-red-100 text-red-600"}`}>
+                {item.menu_item?.is_veg ? <Leaf size={8} /> : item.menu_item?.is_egg ? <Egg size={8} /> : <Flame size={8} />}
+              </div>
             </div>
             {item.notes && (
               <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded ml-2">

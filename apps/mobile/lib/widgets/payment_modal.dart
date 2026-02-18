@@ -30,7 +30,14 @@ class _PaymentModalState extends State<PaymentModal> {
   void initState() {
     super.initState();
     // Default to full cash
-    _controllers['cash']?.text = widget.totalAmount.toStringAsFixed(2);
+    _controllers['cash']?.text = _formatAmount(widget.totalAmount);
+  }
+
+  String _formatAmount(double amount) {
+    if (amount == amount.truncateToDouble()) {
+      return amount.toInt().toString();
+    }
+    return amount.toStringAsFixed(2);
   }
 
   @override
@@ -56,7 +63,7 @@ class _PaymentModalState extends State<PaymentModal> {
       for (var key in _controllers.keys) {
         if (key != method) _controllers[key]?.text = '';
       }
-      _controllers[method]?.text = widget.totalAmount.toStringAsFixed(2);
+      _controllers[method]?.text = _formatAmount(widget.totalAmount);
       _activeField = method;
     });
   }
@@ -147,7 +154,7 @@ class _PaymentModalState extends State<PaymentModal> {
                     ),
                   ),
                   Text(
-                    '₹${widget.totalAmount.toStringAsFixed(2)}',
+                    '₹${_formatAmount(widget.totalAmount)}',
                     style: const TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.w900,
@@ -183,11 +190,11 @@ class _PaymentModalState extends State<PaymentModal> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'PAID: ₹${_currentTotal.toStringAsFixed(2)}',
+                        'PAID: ₹${_formatAmount(_currentTotal)}',
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                       ),
                       Text(
-                        _remaining <= 0.01 ? 'FULLY PAID' : 'REMAINING: ₹${_remaining.toStringAsFixed(2)}',
+                        _remaining <= 0.01 ? 'FULLY PAID' : 'REMAINING: ₹${_formatAmount(_remaining)}',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w900,
@@ -275,7 +282,7 @@ class _PaymentModalState extends State<PaymentModal> {
                     ),
                   ),
                   Text(
-                    _controllers[key]!.text.isEmpty ? '0.00' : _controllers[key]!.text,
+                    _controllers[key]!.text.isEmpty ? '0' : _controllers[key]!.text,
                     style: TextStyle(
                       fontWeight: FontWeight.w900, 
                       fontSize: 18,

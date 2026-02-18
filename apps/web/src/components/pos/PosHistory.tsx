@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Search, Printer, Eye, Calendar, Receipt, ChevronRight, FileText } from "lucide-react";
+import { DatePicker } from "../ui/DatePicker";
 import { toast } from "sonner";
 
 import { buildInvoiceLines, getPrintingSettings, sendPrintJob, PrintLine } from "../../lib/printing";
@@ -139,14 +140,12 @@ export function PosHistory() {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-10 pl-9 bg-white border-slate-200 rounded-xl text-xs font-bold" />
+            <div className="w-40">
+              <DatePicker value={from} onChange={setFrom} />
             </div>
-            <div className="text-slate-300">to</div>
-            <div className="relative flex-1">
-              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-10 pl-9 bg-white border-slate-200 rounded-xl text-xs font-bold" />
+            <div className="text-[10px] font-black uppercase text-slate-300">to</div>
+            <div className="w-40">
+              <DatePicker value={to} onChange={setTo} />
             </div>
           </div>
         </div>

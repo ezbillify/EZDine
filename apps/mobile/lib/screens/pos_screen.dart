@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -11,6 +12,7 @@ import '../services/pos_service.dart';
 import '../services/print_service.dart';
 import '../core/theme.dart';
 import '../core/responsive.dart';
+import '../widgets/numeric_keypad.dart';
 
 final menuCategoriesProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, branchId) async {
   final res = await Supabase.instance.client
@@ -57,6 +59,15 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   String? _activeOrderId;
   String? _activeOrderNumber;
   String? _activeTokenNumber;
+
+  // Search State
+  final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
+  bool _isSearchActive = false;
+  String _searchQuery = "";
+  String _sortBy = "name";
+
+  // Business Logic State
   String? _activeBillNumber;
   double _existingOrderTotal = 0;
   bool _isSaving = false;
@@ -71,12 +82,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   @override
   void initState() {
     super.initState();
+    _searchFocusNode.addListener(() {
+      setState(() => _isSearchActive = _searchFocusNode.hasFocus);
+    });
     _setupOrderSubscription();
     _setupMenuRealtime();
   }
 
   @override
   void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     _ordersSubscription?.cancel();
     _menuChannel?.unsubscribe();
     super.dispose();
@@ -337,8 +353,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                  tokenNumber: res['order']['token_number']?.toString() ?? "00",
                  orderType: _orderType == 'dine_in' ? "Dine In" : "Takeaway",
                  items: [..._existingOrderItems, ..._cart],
-                 subtotal: (res['total'] as num?)?.toDouble() ?? 0.0,
-                 tax: 0,
+                 subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
+                 tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
                  total: (res['total'] as num?)?.toDouble() ?? 0.0
                );
                
@@ -357,8 +373,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                  billId: (res['bill']?['bill_number']?.toString()) ?? "0000",
                  tokenNumber: res['order']['token_number']?.toString() ?? "00",
                  items: [..._existingOrderItems, ..._cart], // merge for full bill
-                 subtotal: (res['total'] as num?)?.toDouble() ?? 0.0,
-                 tax: 0,
+                 subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
+                 tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
                  total: (res['total'] as num?)?.toDouble() ?? 0.0
                );
                
@@ -472,9 +488,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
     return Column(
       children: [
-        // Context Header
+        // Compact Context Header
         Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
           child: Row(
             children: [
               Expanded(
@@ -520,9 +536,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           ),
         ),
 
-        // Dine-in / Takeaway Toggle
+        // Dine-in / Takeaway Toggle (Compact)
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
           child: Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
@@ -555,7 +571,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
 
         // Categories
         categoriesAsync.when(
@@ -587,22 +603,118 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           loading: () => const SizedBox(height: 48),
           error: (e, s) => const SizedBox(height: 48),
         ),
+        const SizedBox(height: 16),
+
+        // Search and Sort
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Row(
+            children: [
+              Expanded(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: _isSearchActive ? Colors.white : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _isSearchActive ? AppTheme.primary : Colors.grey.shade100,
+                      width: _isSearchActive ? 2.5 : 1,
+                    ),
+                    boxShadow: _isSearchActive 
+                      ? [BoxShadow(color: AppTheme.primary.withValues(alpha: 0.15), blurRadius: 15, offset: const Offset(0, 8), spreadRadius: 2)]
+                      : [],
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    keyboardType: TextInputType.none, // Prevent system keyboard
+                    showCursor: true,
+                    onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+                    decoration: InputDecoration(
+                      hintText: 'Search items...',
+                      hintStyle: TextStyle(fontSize: 15, color: Colors.grey.shade400, fontWeight: FontWeight.w600),
+                      border: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      prefixIcon: Icon(
+                        LucideIcons.search, 
+                        size: 20, 
+                        color: _isSearchActive ? AppTheme.primary : Colors.grey
+                      ),
+                      suffixIcon: _searchQuery.isNotEmpty 
+                        ? IconButton(
+                            icon: const Icon(LucideIcons.xCircle, size: 18, color: Colors.grey),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = "");
+                            },
+                          )
+                        : null,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: _showSortModal,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.grey.shade100),
+                    boxShadow: AppTheme.premiumShadow,
+                  ),
+                  child: const Icon(LucideIcons.listFilter, size: 24, color: AppTheme.secondary),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
 
         // Items
         Expanded(
           child: itemsAsync.when(
             data: (items) {
-              final filtered = _selectedCategoryId == null 
-                ? items 
-                : items.where((i) => i['category_id'] == _selectedCategoryId).toList();
+              final filtered = items.where((i) {
+                final matchesCategory = _selectedCategoryId == null || i['category_id'] == _selectedCategoryId;
+                final matchesSearch = i['name'].toString().toLowerCase().contains(_searchQuery);
+                return matchesCategory && matchesSearch;
+              }).toList();
+
+              // Apply Sorting
+              if (_sortBy == 'name') {
+                filtered.sort((a, b) => a['name'].toString().compareTo(b['name'].toString()));
+              } else if (_sortBy == 'price_asc') {
+                filtered.sort((a, b) => (a['base_price'] as num).compareTo(b['base_price'] as num));
+              } else if (_sortBy == 'price_desc') {
+                filtered.sort((a, b) => (b['base_price'] as num).compareTo(a['base_price'] as num));
+              }
+
+              if (filtered.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(LucideIcons.searchX, size: 64, color: Colors.grey.shade200),
+                      const SizedBox(height: 16),
+                      Text('NO ITEMS FOUND', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.grey.shade300, fontSize: 14, letterSpacing: 2)),
+                    ],
+                  ),
+                );
+              }
 
               return GridView.builder(
                 padding: const EdgeInsets.all(24),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: Responsive.isMobile(context) ? 2 : 3,
+                  crossAxisCount: Responsive.isMobile(context) ? 2 : (Responsive.isTablet(context) ? 3 : 4),
                   mainAxisSpacing: 20,
                   crossAxisSpacing: 20,
-                  childAspectRatio: 0.85,
+                  childAspectRatio: 0.8,
                 ),
                 itemCount: filtered.length,
                 itemBuilder: (context, index) => _ProductCard(
@@ -616,6 +728,26 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             error: (e, s) => Center(child: Text('POS Error: $e')),
           ),
         ),
+
+        // Keyboard shows up below items when search is active
+        if (_isSearchActive) 
+          _SearchKeyboard(
+            onKeyPress: (key) {
+              setState(() {
+                _searchController.text += key;
+                _searchQuery = _searchController.text.toLowerCase();
+              });
+            },
+            onDelete: () {
+              if (_searchController.text.isNotEmpty) {
+                setState(() {
+                  _searchController.text = _searchController.text.substring(0, _searchController.text.length - 1);
+                  _searchQuery = _searchController.text.toLowerCase();
+                });
+              }
+            },
+            onClose: () => _searchFocusNode.unfocus(),
+          ),
       ],
     );
   }
@@ -1004,6 +1136,36 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   },
                 ),
               ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 20),
+                child: RotatedBox(
+                  quarterTurns: 3,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'POWERED BY ',
+                        style: TextStyle(
+                          fontSize: 6,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.grey.shade300,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      Text(
+                        'EZBILLIFY',
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.grey.shade400,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         );
@@ -1133,6 +1295,124 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     );
   }
 
+  void _showSortModal() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('SORT BY', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 2, color: Colors.grey)),
+            const SizedBox(height: 24),
+            _buildSortOption('name', 'Alphabetical (A-Z)', LucideIcons.filter),
+            _buildSortOption('price_asc', 'Price: Low to High', LucideIcons.arrowUp),
+            _buildSortOption('price_desc', 'Price: High to Low', LucideIcons.arrowDown),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSortOption(String value, String label, IconData icon) {
+    final isSelected = _sortBy == value;
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, size: 20, color: isSelected ? AppTheme.primary : Colors.grey),
+      title: Text(label, style: GoogleFonts.outfit(fontWeight: isSelected ? FontWeight.w900 : FontWeight.w600, color: isSelected ? AppTheme.primary : Colors.black)),
+      trailing: isSelected ? const Icon(LucideIcons.checkCircle2, color: AppTheme.primary) : null,
+      onTap: () {
+        setState(() => _sortBy = value);
+        Navigator.pop(context);
+      },
+    );
+  }
+}
+
+class _SearchKeyboard extends StatelessWidget {
+  final Function(String) onKeyPress;
+  final VoidCallback onDelete;
+  final VoidCallback onClose;
+
+  const _SearchKeyboard({required this.onKeyPress, required this.onDelete, required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Colors.grey.shade200)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -4))],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('QUICK SEARCH KEYBOARD', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.grey.shade400, fontSize: 10, letterSpacing: 1.5)),
+              IconButton(onPressed: onClose, icon: const Icon(LucideIcons.chevronDown, size: 20)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _buildKeyRow(['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P']),
+          _buildKeyRow(['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ';']),
+          _buildKeyRow(['Z', 'X', 'C', 'V', 'B', 'N', 'M', ',', '.', 'DEL']),
+          _buildKeyRow([' ']),
+        ],
+      ),
+    ).animate().slideY(begin: 1.0, end: 0.0, duration: 300.ms, curve: Curves.easeOut);
+  }
+
+  Widget _buildKeyRow(List<String> keys) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: keys.map((k) => _buildKey(k)).toList(),
+      ),
+    );
+  }
+
+  Widget _buildKey(String key) {
+    final bool isDel = key == 'DEL';
+    final bool isSpace = key == ' ';
+
+    return Expanded(
+      flex: isSpace ? 5 : 1,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: InkWell(
+          onTap: () {
+            if (isDel) {
+              onDelete();
+            } else {
+              onKeyPress(key);
+            }
+          },
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            height: 58,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isDel ? Colors.red.shade50 : (isSpace ? Colors.grey.shade100 : Colors.white),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey.shade300, width: 1),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 2, offset: const Offset(0, 1))
+              ],
+            ),
+            child: isDel 
+              ? Icon(LucideIcons.delete, size: 20, color: Colors.red.shade400)
+              : (isSpace ? const Icon(LucideIcons.space, size: 22, color: Colors.grey) : Text(key, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: Color(0xFF1E293B)))),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SelectorButton extends StatelessWidget {
@@ -1146,12 +1426,13 @@ class _SelectorButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isTablet = Responsive.isTablet(context);
     return GestureDetector(
       onTapDown: (_) => AudioService.instance.playClick(),
       onTap: onTap,
       child: Container(
-        height: 64,
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        height: isTablet ? 54 : 64,
+        padding: EdgeInsets.symmetric(horizontal: isTablet ? 16 : 24),
         decoration: BoxDecoration(
           color: isSelected ? color.withValues(alpha: 0.08) : Colors.white,
           borderRadius: BorderRadius.circular(24),
@@ -1215,6 +1496,11 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isAvailable = item['is_available'] ?? true;
+    final isVeg = (item['is_veg'] == true);
+    final isEgg = (item['is_egg'] == true);
+    final dietaryColor = isVeg ? Colors.green : (isEgg ? Colors.orange : Colors.red);
+    final dietaryIcon = isVeg ? LucideIcons.leaf : (isEgg ? LucideIcons.egg : LucideIcons.flame);
+    final dietaryLabel = isVeg ? "VEG" : (isEgg ? "EGG" : "NON-VEG");
 
     return GestureDetector(
       onTap: isAvailable ? onAdd : () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item out of stock!'))),
@@ -1234,18 +1520,22 @@ class _ProductCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                   Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: (item['is_veg'] ?? true ? Colors.green : Colors.red).withOpacity(0.08), 
-                      borderRadius: BorderRadius.circular(10)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: dietaryColor.withOpacity(0.12), 
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: dietaryColor.withOpacity(0.3), width: 1)
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(dietaryIcon, size: 12, color: dietaryColor),
+                          const SizedBox(width: 4),
+                          Text(dietaryLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: dietaryColor)),
+                        ],
+                      ),
                     ),
-                    child: Icon(
-                      item['is_veg'] ?? true ? LucideIcons.leaf : LucideIcons.flame, 
-                      size: 14, 
-                      color: item['is_veg'] ?? true ? Colors.green : Colors.red
-                    ),
-                  ),
                   // Stock Toggle
                   GestureDetector(
                     onTap: onToggle,
@@ -1563,6 +1853,7 @@ class _CustomerSearchSheetState extends ConsumerState<_CustomerSearchSheet> {
   final _controller = TextEditingController();
   List<Map<String, dynamic>> _results = [];
   bool _isLoading = false;
+  bool _activePhoneField = true;
   Timer? _debounce;
 
   void _onSearchChanged(String query) {
@@ -1594,16 +1885,61 @@ class _CustomerSearchSheetState extends ConsumerState<_CustomerSearchSheet> {
           children: [
             const Text('CUSTOMER IDENTITY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Colors.grey, letterSpacing: 2)),
             const SizedBox(height: 24),
-            TextField(
-              controller: _controller,
-              keyboardType: TextInputType.phone,
-              onChanged: _onSearchChanged,
-              decoration: InputDecoration(
-                labelText: 'Mobile Number',
-                prefixIcon: const Icon(LucideIcons.phone, size: 20),
-                suffixIcon: _isLoading ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2)) : null,
+            GestureDetector(
+              onTap: () => setState(() => _activePhoneField = true),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _activePhoneField ? AppTheme.primary : Colors.grey.shade300, width: _activePhoneField ? 2 : 1),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.phone, size: 20, color: _activePhoneField ? AppTheme.primary : Colors.grey),
+                    const SizedBox(width: 12),
+                    Text(
+                      _controller.text.isEmpty ? 'Enter Phone Number' : _controller.text,
+                      style: TextStyle(
+                        color: _controller.text.isEmpty ? Colors.grey.shade400 : Colors.black,
+                        fontSize: 16,
+                        fontWeight: _controller.text.isEmpty ? FontWeight.normal : FontWeight.bold,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (_isLoading) const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                    if (!_isLoading && _activePhoneField) const Icon(LucideIcons.edit3, size: 16, color: AppTheme.primary),
+                  ],
+                ),
               ),
             ),
+            if (_activePhoneField) ...[
+              const SizedBox(height: 16),
+              NumericKeypad(
+                onKeyPress: (key) {
+                  setState(() {
+                    if (key != '.') { // Phone numbers don't have dots
+                      _controller.text += key;
+                      _onSearchChanged(_controller.text);
+                    }
+                  });
+                },
+                onDelete: () {
+                  if (_controller.text.isNotEmpty) {
+                    setState(() {
+                      _controller.text = _controller.text.substring(0, _controller.text.length - 1);
+                      _onSearchChanged(_controller.text);
+                    });
+                  }
+                },
+                onClear: () {
+                  setState(() {
+                    _controller.clear();
+                    _onSearchChanged('');
+                  });
+                },
+              ),
+            ],
             const SizedBox(height: 24),
             Expanded(
               child: _results.isEmpty 

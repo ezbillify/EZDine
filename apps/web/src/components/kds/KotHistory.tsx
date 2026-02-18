@@ -8,6 +8,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
+import { DatePicker } from "../ui/DatePicker";
 
 export function KotHistory() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -70,8 +71,8 @@ export function KotHistory() {
   return (
     <Card title="KOT History">
       <div className="mb-3 grid gap-2 md:grid-cols-2">
-        <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        <DatePicker value={from} onChange={setFrom} />
+        <DatePicker value={to} onChange={setTo} />
       </div>
       {orders.length === 0 ? (
         <p className="text-sm text-slate-600">No orders yet.</p>

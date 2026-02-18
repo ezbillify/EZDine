@@ -1,4 +1,13 @@
 
+## v1.5.0 (2026-02-18)
+
+### Features
+* Added customer management screen
+* Added menu management screen
+### Fixes
+* Updated order item status query in KDS screen
+
+
 ## v1.4.0 (2026-02-18)
 
 ### Features

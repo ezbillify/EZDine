@@ -275,11 +275,19 @@ class _KdsBatchCard extends StatelessWidget {
                   else if (ticket['status'] == 'preparing') nextStatus = 'ready';
                   else if (ticket['status'] == 'ready') nextStatus = 'served';
 
-                  await Supabase.instance.client
+                  final isLegacy = ticket['batch_id'] == 'legacy';
+                  var query = Supabase.instance.client
                       .from('order_items')
                       .update({'status': nextStatus})
-                      .eq('order_id', ticket['id'])
-                      .eq('batch_id', ticket['batch_id']);
+                      .eq('order_id', ticket['id']);
+                  
+                  if (isLegacy) {
+                    query = query.filter('batch_id', 'is', null);
+                  } else {
+                    query = query.eq('batch_id', ticket['batch_id']);
+                  }
+                  
+                  await query;
 
                   if (nextStatus == 'served') {
                     // Check if all items in this order are now served

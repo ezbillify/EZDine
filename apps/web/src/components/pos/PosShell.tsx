@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, Save, Trash2, User, Search, Plus, Phone, X, UserPlus, ArrowRight, Check, Eye, Zap, History, Utensils, ShoppingBag, Printer } from "lucide-react";
+import { AlertCircle, CheckCircle2, Save, Trash2, User, Search, Plus, Phone, X, UserPlus, ArrowRight, Check, Eye, Zap, History, Utensils, ShoppingBag, Printer, Leaf, Flame, Egg } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast, Toaster } from "sonner";
 
@@ -32,7 +32,11 @@ type MenuItem = {
   id: string;
   name: string;
   base_price: number;
+  gst_rate?: number;
   is_available: boolean;
+  is_veg: boolean;
+  is_egg: boolean;
+  category_id?: string;
 };
 
 type OrderItem = {
@@ -41,6 +45,7 @@ type OrderItem = {
   name: string;
   quantity: number;
   price: number;
+  gst_rate?: number;
   status: string;
 };
 
@@ -58,6 +63,10 @@ export function PosShell() {
   const [activeTab, setActiveTab] = useState<"live" | "history">("live");
   const [history, setHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"name" | "price_asc" | "price_desc">("name");
 
   // Customer State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -134,6 +143,16 @@ export function PosShell() {
         const [items, tableData] = await Promise.all([getMenuItems(), getTables()]);
         setMenuItems(items as MenuItem[]);
         setTables(tableData as any);
+
+        // Also load categories for the current branch
+        const profile = await getCurrentUserProfile();
+        if (profile?.active_branch_id) {
+          const { data: branch } = await supabase.from("branches").select("restaurant_id").eq("id", profile.active_branch_id).single();
+          if (branch) {
+            const { data: cats } = await supabase.from("menu_categories").select("id, name").eq("restaurant_id", branch.restaurant_id).order("name");
+            setCategories(cats ?? []);
+          }
+        }
       } catch (err) {
         toast.error("Failed to load menu or tables");
       }
@@ -271,6 +290,7 @@ export function PosShell() {
         name: menuItems.find((m) => m.id === i.item_id)?.name ?? "Unknown Item",
         quantity: i.quantity,
         price: i.price,
+        gst_rate: menuItems.find((m) => m.id === i.item_id)?.gst_rate ?? 0,
         status: i.status
       }));
       setExistingItems(mappedItems);
@@ -302,6 +322,7 @@ export function PosShell() {
         name: menuItems.find((m) => m.id === i.item_id)?.name ?? "Unknown Item",
         quantity: i.quantity,
         price: i.price,
+        gst_rate: menuItems.find((m) => m.id === i.item_id)?.gst_rate ?? 0,
         status: i.status
       }));
 
@@ -397,6 +418,7 @@ export function PosShell() {
             name: menuItems.find((m) => m.id === i.item_id)?.name ?? "Unknown Item",
             quantity: i.quantity,
             price: i.price,
+            gst_rate: menuItems.find((m) => m.id === i.item_id)?.gst_rate ?? 0,
             status: i.status
           }));
           setExistingItems(mappedItems);
@@ -507,7 +529,7 @@ export function PosShell() {
       if (existing) {
         return prev.map((c) => (c.item_id === item.id ? { ...c, qty: c.qty + 1 } : c));
       }
-      return [...prev, { item_id: item.id, name: item.name, qty: 1, price: item.base_price }];
+      return [...prev, { item_id: item.id, name: item.name, qty: 1, price: item.base_price, gst_rate: item.gst_rate }];
     });
   };
 
@@ -801,20 +823,30 @@ export function PosShell() {
     if (!activeOrderId && cart.length === 0) return;
 
     // Combine existing and cart items for preview
-    const billable = [...existingItems.map(i => ({ name: i.name, qty: i.quantity, price: i.price }))];
-    cart.forEach(c => billable.push({ name: c.name, qty: c.qty, price: c.price }));
+    const billable = [
+      ...existingItems.map(i => ({ name: i.name, qty: i.quantity, price: i.price, gst_rate: i.gst_rate ?? 0 })),
+      ...cart.map(c => ({ name: c.name, qty: c.qty, price: c.price, gst_rate: c.gst_rate ?? 0 }))
+    ];
 
     if (billable.length === 0) return;
 
     const total = billable.reduce((sum, i) => sum + i.qty * i.price, 0);
+    // Calculate tax breakdown (assuming inclusive prices)
+    const tax = billable.reduce((sum, i) => {
+      const lineTotal = i.qty * i.price;
+      const t = lineTotal - (lineTotal / (1 + (i.gst_rate / 100)));
+      return sum + t;
+    }, 0);
+    const subtotal = total - tax;
+
     const lines = buildInvoiceLines({
       restaurantName: "EZDine",
       branchName: isQuickBill ? "Walk-in" : (tables.find(t => t.id === activeTableId)?.name ?? "Branch"),
       billId: "PREVIEW",
       tokenNumber: activeTokenNumber,
       items: billable,
-      subtotal: total,
-      tax: 0,
+      subtotal: subtotal,
+      tax: tax,
       total: total
     });
 
@@ -1161,59 +1193,115 @@ export function PosShell() {
 
       {/* 2. Menu Column */}
       <section className="flex flex-1 flex-col gap-4 overflow-hidden">
-        <div className="relative flex-none">
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-            <Search size={16} />
+        <div className="flex flex-none items-center gap-2">
+          <div className="relative flex-1">
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+              <Search size={16} />
+            </div>
+            <input
+              placeholder="Search items..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none ring-brand-500 transition-all focus:border-brand-500 focus:ring-2"
+            />
           </div>
-          <input
-            placeholder="Search menu..."
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none ring-brand-500 transition-all focus:border-brand-500 focus:ring-2"
-          />
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1">
+            {[
+              { id: "name", icon: <ArrowRight className="rotate-[-45deg]" size={14} />, label: "A-Z" },
+              { id: "price_asc", icon: <Check size={14} />, label: "₹↑" },
+              { id: "price_desc", icon: <Check size={14} className="rotate-180" />, label: "₹↓" }
+            ].map(s => (
+              <button
+                key={s.id}
+                onClick={() => setSortBy(s.id as any)}
+                className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-black uppercase transition-all ${sortBy === s.id ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"}`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-none gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <button
+            onClick={() => setSelectedCategoryId(null)}
+            className={`flex-none rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${selectedCategoryId === null ? "bg-brand-600 text-white shadow-lg shadow-brand-200" : "bg-white border border-slate-100 text-slate-500 hover:border-brand-200"
+              }`}
+          >
+            All Items
+          </button>
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setSelectedCategoryId(c.id)}
+              className={`flex-none rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${selectedCategoryId === c.id ? "bg-brand-600 text-white shadow-lg shadow-brand-200" : "bg-white border border-slate-100 text-slate-500 hover:border-brand-200"
+                }`}
+            >
+              {c.name}
+            </button>
+          ))}
         </div>
 
         <div className="flex-1 overflow-y-auto pr-1">
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
-            {menuItems.map((item) => (
-              <div key={item.id} className="relative group">
-                <button
-                  onClick={() => addItem(item)}
-                  disabled={!item.is_available}
-                  className={`flex h-full w-full flex-col justify-between rounded-xl border p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 active:scale-95 ${item.is_available
-                    ? "border-white bg-white hover:border-brand-300 hover:shadow-md"
-                    : "border-slate-100 bg-slate-50 opacity-60 grayscale cursor-not-allowed"
-                    }`}
-                >
-                  <div className="mb-2 w-full">
-                    <span className="font-semibold text-slate-900 line-clamp-2">{item.name}</span>
+            {menuItems
+              .filter(i => {
+                const matchesSearch = i.name.toLowerCase().includes(searchQuery.toLowerCase());
+                const matchesCategory = !selectedCategoryId || i.category_id === selectedCategoryId;
+                return matchesSearch && matchesCategory;
+              })
+              .sort((a, b) => {
+                if (sortBy === "name") return a.name.localeCompare(b.name);
+                if (sortBy === "price_asc") return a.base_price - b.base_price;
+                if (sortBy === "price_desc") return b.base_price - a.base_price;
+                return 0;
+              })
+              .map((item) => (
+                <div key={item.id} className="relative group">
+                  <button
+                    onClick={() => addItem(item)}
+                    disabled={!item.is_available}
+                    className={`flex h-full w-full flex-col justify-between rounded-xl border p-3 text-left shadow-sm transition-all hover:-translate-y-0.5 active:scale-95 ${item.is_available
+                      ? "border-white bg-white hover:border-brand-300 hover:shadow-md"
+                      : "border-slate-100 bg-slate-50 opacity-60 grayscale cursor-not-allowed"
+                      }`}
+                  >
+                    <div className="mb-2 w-full flex justify-between items-start gap-2">
+                      <span className="font-semibold text-sm text-slate-900 line-clamp-2 leading-tight flex-1">{item.name}</span>
+                    </div>
                     {!item.is_available && (
-                      <span className="mt-1 block text-[10px] font-black uppercase tracking-widest text-rose-600">
+                      <span className="mb-2 block text-[10px] font-black uppercase tracking-widest text-rose-600">
                         Sold Out
                       </span>
                     )}
-                  </div>
-                  <div className="mt-auto flex items-center justify-between w-full">
-                    <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 group-hover:bg-brand-50 group-hover:text-brand-700">
-                      ₹{item.base_price}
-                    </span>
-                    {item.is_available && (
-                      <div className="h-6 w-6 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Plus size={14} />
+                    <div className="mt-auto flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 group-hover:bg-brand-50 group-hover:text-brand-700">
+                          ₹{item.base_price}
+                        </span>
+                        <div className={`h-5 w-5 rounded-full flex items-center justify-center ${item.is_veg ? "bg-green-100 text-green-600" : item.is_egg ? "bg-amber-100 text-amber-600" : "bg-red-100 text-red-600"}`}>
+                          {item.is_veg ? <Leaf size={12} /> : item.is_egg ? <Egg size={12} /> : <Flame size={12} />}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </button>
+                      {item.is_available && (
+                        <div className="h-6 w-6 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Plus size={14} />
+                        </div>
+                      )}
+                    </div>
+                  </button>
 
-                {/* Stock Toggle */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleToggleStock(item); }}
-                  className={`absolute -top-1 -right-1 z-10 px-2.5 py-1 rounded-full border transition-all text-[9px] font-black uppercase tracking-wider ${item.is_available
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-                    : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'}`}
-                >
-                  {item.is_available ? "In Stock" : "Out Stock"}
-                </button>
-              </div>
-            ))}
+                  {/* Stock Toggle */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleToggleStock(item); }}
+                    className={`absolute -top-1 -right-1 z-10 px-2.5 py-1 rounded-full border transition-all text-[9px] font-black uppercase tracking-wider ${item.is_available
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+                      : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'}`}
+                  >
+                    {item.is_available ? "In Stock" : "Out Stock"}
+                  </button>
+                </div>
+              ))}
           </div>
         </div>
       </section>

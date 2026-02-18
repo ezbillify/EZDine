@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar } from "lucide-react";
+import { DatePicker } from "../../components/ui/DatePicker";
 import { AuthGate } from "../../components/auth/AuthGate";
 import { AppShell } from "../../components/layout/AppShell";
 import { OrderBoard } from "../../components/pos/OrderBoard";
 
 export default function OrdersPage() {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().slice(0, 10));
 
   return (
     <AuthGate>
@@ -16,14 +16,8 @@ export default function OrdersPage() {
         subtitle="Real-time kitchen & dining feed"
         actions={
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-3 py-1 shadow-sm">
-              <Calendar size={14} className="text-slate-400" />
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="text-xs font-bold text-slate-700 focus:outline-none"
-              />
+            <div className="w-48">
+              <DatePicker value={selectedDate} onChange={setSelectedDate} />
             </div>
             <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-emerald-600 ring-1 ring-inset ring-emerald-200">
               <span className="relative flex h-2 w-2">

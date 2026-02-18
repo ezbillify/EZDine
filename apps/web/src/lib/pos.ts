@@ -6,6 +6,7 @@ export type CartItem = {
   name: string;
   qty: number;
   price: number;
+  gst_rate?: number;
   notes?: string;
 };
 
@@ -28,7 +29,7 @@ export async function getMenuItems() {
 export async function getPublicBranchMenu(branchId: string) {
   const { data, error } = await supabase
     .from("menu_items")
-    .select("id,name,description,base_price,gst_rate,is_veg,category_id,is_available, menu_categories(name)")
+    .select("id,name,description,base_price,gst_rate,is_veg,is_egg,category_id,is_available, menu_categories(name)")
     .eq("branch_id", branchId)
     .eq("is_active", true)
     .order("name");
@@ -225,9 +226,14 @@ export async function createBill(orderId: string, items: CartItem[]) {
     { p_branch_id: branchId, p_doc_type: "bill" }
   );
   if (billNumberError) throw billNumberError;
-  const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
-  const tax = 0;
-  const total = subtotal + tax;
+  const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const tax = items.reduce((sum, item) => {
+    const lineTotal = item.qty * item.price;
+    const rate = item.gst_rate ?? 0;
+    const t = lineTotal - (lineTotal / (1 + (rate / 100)));
+    return sum + t;
+  }, 0);
+  const subtotal = total - tax;
 
   const { data: bill, error } = await supabase
     .from("bills")

@@ -18,6 +18,9 @@ import 'screens/kds_screen.dart';
 import 'screens/inventory_screen.dart';
 import 'screens/purchase_screen.dart';
 import 'screens/staff_roster_screen.dart';
+import 'screens/menu_screen.dart';
+import 'screens/reports_screen.dart';
+import 'screens/customer_screen.dart';
 import 'services/audio_service.dart';
 
 void main() async {
@@ -322,6 +325,19 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 60),
+                      Center(
+                        child: Text(
+                          'POWERED BY EZBILLIFY',
+                          style: GoogleFonts.outfit(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.grey.shade300,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -515,6 +531,33 @@ class DashboardScreen extends ConsumerWidget {
                           Text('CONTROL MODULES', style: GoogleFonts.outfit(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 2)).animate().fadeIn(delay: 400.ms),
                           const SizedBox(height: 20),
                           _buildFilteredModuleGrid(context, activeRole, isTablet),
+                          const SizedBox(height: 60),
+                          Center(
+                            child: Column(
+                              children: [
+                                Text(
+                                  'POWERED BY',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.grey.shade400,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'EZBILLIFY',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppTheme.primary,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
                         ],
                       ),
                     ),
@@ -630,7 +673,23 @@ class DashboardScreen extends ConsumerWidget {
         'description': 'Financial Analytics',
         'color': Colors.blueGrey,
         'roles': ['owner', 'manager'],
-        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => PurchaseScreen())), // Using purchase for report placeholder if needed or actual report screen
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const ReportsScreen())),
+      },
+      {
+        'label': 'MENU MANAGER',
+        'icon': LucideIcons.menu,
+        'description': 'Catalogs & Pricing',
+        'color': Colors.orange,
+        'roles': ['owner', 'manager'],
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const MenuScreen())),
+      },
+      {
+        'label': 'CUSTOMER MASTER',
+        'icon': LucideIcons.users,
+        'description': 'Guest Registry',
+        'color': Colors.teal,
+        'roles': ['owner', 'manager', 'cashier'],
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const CustomerScreen())),
       },
       {
         'label': 'STAFF ROSTER',
