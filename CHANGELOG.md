@@ -1,4 +1,10 @@
 
+## v1.5.1 (2026-02-18)
+
+### Fixes
+* Refactored metadata and viewport settings in the layout component for improved organization and readability
+
+
 ## v1.5.0 (2026-02-18)
 
 ### Features
