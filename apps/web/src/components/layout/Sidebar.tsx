@@ -145,8 +145,16 @@ export function Sidebar({ className = "" }: { className?: string }) {
                     </div>
                 </div>
 
-                <div className="px-2 text-center">
-                    <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest">v{APP_VERSION}</p>
+                <div className="px-2 text-center space-y-1">
+                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">v{APP_VERSION}</p>
+                    <a
+                        href="https://ezbillify.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-[8px] font-black text-slate-200 uppercase tracking-[0.2em] hover:text-brand-600 transition-colors"
+                    >
+                        Powered by <span className="text-slate-300 group-hover:text-brand-600">EZBillify</span>
+                    </a>
                 </div>
 
                 <button

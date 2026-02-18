@@ -68,6 +68,17 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+
+      <div className="mt-12 text-center pb-8">
+        <a
+          href="https://ezbillify.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-300 hover:text-brand-600 transition-colors"
+        >
+          Powered by <span className="text-slate-400">EZBillify</span>
+        </a>
+      </div>
     </AppShell>
   );
 }

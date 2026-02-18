@@ -875,6 +875,23 @@ export default function QrOrderPage() {
 
             {/* SDKs */}
             <Script src="https://checkout.razorpay.com/v1/checkout.js" />
+
+            {/* Global Branding */}
+            <footer className="py-12 flex flex-col items-center justify-center opacity-40">
+                <a
+                    href="https://ezbillify.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col items-center gap-1 group"
+                >
+                    <span className="text-[8px] font-black uppercase tracking-[0.4em] text-slate-400 group-hover:text-slate-600 transition-colors">
+                        Powered by
+                    </span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 group-hover:text-slate-900 transition-colors">
+                        EZBillify
+                    </span>
+                </a>
+            </footer>
         </div>
     );
 }

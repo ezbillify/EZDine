@@ -1,4 +1,12 @@
 
+## v1.3.0 (2026-02-18)
+
+### Features
+   * Added global branding to the login and qr order pages
+   * Introduced a consistent 'Powered by EZBillify' footer across the application
+   * Updated the sidebar to include the EZBillify branding and improve version display
+
+
 ## v1.2.1 (2026-02-18)
 
 - **Fixes**: conditionally render online payment button based on razorpay_enabled flag
