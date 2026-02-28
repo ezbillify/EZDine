@@ -22,6 +22,7 @@ export function PrintingSettings() {
   const [printerIdInvoice, setPrinterIdInvoice] = useState(DEFAULT_SETTINGS.printerIdInvoice);
   const [widthKot, setWidthKot] = useState<number>(DEFAULT_SETTINGS.widthKot);
   const [widthInvoice, setWidthInvoice] = useState<number>(DEFAULT_SETTINGS.widthInvoice);
+  const [bridgeUrl, setBridgeUrl] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "saving" | "error">("idle");
   const [consolidatePrinting, setConsolidatePrinting] = useState(false);
 
@@ -36,6 +37,7 @@ export function PrintingSettings() {
           setWidthKot(settings.widthKot ?? DEFAULT_SETTINGS.widthKot);
           setWidthInvoice(settings.widthInvoice ?? DEFAULT_SETTINGS.widthInvoice);
           setConsolidatePrinting(settings.consolidatePrinting ?? false);
+          setBridgeUrl(settings.bridgeUrl ?? "");
         }
         setStatus("idle");
       } catch (err) {
@@ -50,7 +52,14 @@ export function PrintingSettings() {
   const handleSave = async () => {
     setStatus("saving");
     try {
-      await savePrintingSettings({ printerIdKot, printerIdInvoice, widthKot, widthInvoice, consolidatePrinting });
+      await savePrintingSettings({
+        printerIdKot,
+        printerIdInvoice,
+        widthKot,
+        widthInvoice,
+        consolidatePrinting,
+        bridgeUrl
+      });
       toast.success("Printing preferences saved");
       setStatus("idle");
     } catch (err) {
@@ -136,6 +145,25 @@ export function PrintingSettings() {
                 />
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Bridge Configuration */}
+        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
+          <div className="flex items-center gap-2">
+            <Monitor size={16} className="text-slate-600" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Hardware Bridge</span>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black uppercase text-slate-400 ml-1">PC Bridge URL (Local IP)</label>
+            <Input
+              value={bridgeUrl}
+              onChange={(e) => setBridgeUrl(e.target.value)}
+              placeholder="http://192.168.1.100:4000"
+              className="h-11 border-slate-100 focus:border-brand-500 font-bold"
+            />
+            <p className="text-[9px] text-slate-400 ml-1 mt-1 italic">Enter the local address of the computer running the print server.</p>
           </div>
         </div>
 

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            width: 58mm;
+            padding: 3mm;
+            font-size: 13px;
+            color: #000;
+            line-height: 1.1;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2mm;
+            border-bottom: 2px solid #000;
+            padding-bottom: 1mm;
+        }
+
+        .kot-title {
+            font-size: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .token-box {
+            background: #000;
+            color: #fff;
+            padding: 3mm;
+            text-align: center;
+            margin: 2mm 0;
+        }
+
+        .token-label {
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 0.5mm;
+        }
+
+        .token-num {
+            font-size: 38px;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .meta-data {
+            font-size: 13px;
+            font-weight: bold;
+            margin-bottom: 2mm;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 2mm;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.2mm;
+        }
+
+        .items-list {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .item-row td {
+            padding: 2mm 0;
+            vertical-align: top;
+            border-bottom: 1px solid #eee;
+        }
+
+        .qty-cell {
+            font-size: 24px;
+            font-weight: bold;
+            padding-right: 3mm;
+            line-height: 1;
+        }
+
+        .name-cell {
+            font-size: 15px;
+            font-weight: bold;
+            text-transform: uppercase;
+            line-height: 1.1;
+        }
+
+        .note-text {
+            font-size: 11px;
+            font-weight: bold;
+            font-style: italic;
+            margin-top: 1mm;
+            padding: 1mm;
+            background: #f0f0f0;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 4mm;
+            font-weight: bold;
+            font-size: 11px;
+            border-top: 1px solid #000;
+            padding-top: 2mm;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="kot-title">KITCHEN TICKET</div>
+    </div>
+
+    <div class="token-box">
+        <div class="token-label">ORDER TOKEN</div>
+        <div class="token-num">#{{tokenNumber}}</div>
+    </div>
+
+    <div class="meta-data">
+        <div class="meta-row">
+            <span>TABLE: {{tableName}}</span>
+            <span>{{orderType}}</span>
+        </div>
+        <div class="meta-row" style="font-weight: normal; font-size: 10px;">
+            <span>{{date}} {{time}}</span>
+        </div>
+    </div>
+
+    <table class="items-list">
+        <tbody>
+            {{#each items}}
+            <tr class="item-row">
+                <td style="width: 25%;" class="qty-cell">{{qty}}</td>
+                <td style="width: 75%;">
+                    <div class="name-cell">{{name}}</div>
+                    {{#if notes}}<div class="note-text">✱ {{notes}}</div>{{/if}}
+                </td>
+            </tr>
+            {{/each}}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        REF: {{orderIdShort}}
+    </div>
+</body>
+
+</html>

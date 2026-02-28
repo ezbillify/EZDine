@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'core/theme.dart';
 import 'core/responsive.dart';
 import 'core/supabase_config.dart';
+import 'core/performance_config.dart';
 import 'services/auth_service.dart';
 import 'services/dashboard_service.dart';
 import 'widgets/stat_card.dart';
+import 'widgets/performance_overlay.dart' as perf_overlay;
 import 'screens/settings_screen.dart';
 import 'screens/reservation_screen.dart';
 import 'screens/pos_screen.dart';
@@ -21,17 +25,31 @@ import 'screens/staff_roster_screen.dart';
 import 'screens/menu_screen.dart';
 import 'screens/reports_screen.dart';
 import 'screens/customer_screen.dart';
+import 'screens/order_history_screen.dart';
+import 'screens/table_management_screen.dart';
+import 'screens/new_login_screen.dart';
 import 'services/audio_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  await AudioService.instance.init();
-  
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
-  );
+  try {
+    await Future.wait([
+      AudioService.instance.init(),
+      PerformanceConfig().initialize(),
+      Supabase.initialize(
+        url: SupabaseConfig.url,
+        anonKey: SupabaseConfig.anonKey,
+      ),
+    ]);
+    
+    // Start performance monitoring in debug mode
+    if (kDebugMode) {
+      PerformanceMonitor().startMonitoring();
+    }
+  } catch (e) {
+    debugPrint('Initialization error: $e');
+  }
 
   runApp(const ProviderScope(child: EZDineApp()));
 }
@@ -41,11 +59,13 @@ class EZDineApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'EZDine Pro',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      home: const SplashScreen(),
+    return perf_overlay.PerformanceOverlay(
+      child: MaterialApp(
+        title: 'EZDine Pro',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        home: const SplashScreen(),
+      ),
     );
   }
 }
@@ -61,14 +81,52 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _checkAuth();
+    _initializeFlow();
+  }
+
+  Future<void> _initializeFlow() async {
+    // 1. Request all critical permissions
+    await _requestPermissions();
+    
+    // 2. Proceed with auth check
+    if (mounted) _checkAuth();
+  }
+
+  Future<void> _requestPermissions() async {
+    await Future.delayed(const Duration(milliseconds: 1000));
+    try {
+      final List<Permission> permissions = [
+        Permission.bluetooth,
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+        Permission.bluetoothAdvertise,
+        Permission.location,
+        Permission.notification,
+        Permission.camera,
+        Permission.storage,
+      ];
+      
+      final statuses = await permissions.request();
+      statuses.forEach((p, s) => debugPrint('Permission $p status: $s'));
+    } catch (e) {
+      debugPrint('Permission Global Error: $e');
+    }
   }
 
   Future<void> _checkAuth() async {
-    await Future.delayed(const Duration(milliseconds: 2500));
+    await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
 
+    try {
+      // getUser() often triggers a session refresh if needed
+      await Supabase.instance.client.auth.getUser();
+    } catch (e) {
+      debugPrint('Auth Check Error: $e');
+    }
+
+    if (!mounted) return;
     final session = Supabase.instance.client.auth.currentSession;
+    
     if (session != null) {
       Navigator.pushReplacement(
         context, 
@@ -82,7 +140,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       Navigator.pushReplacement(
         context, 
         PageRouteBuilder(
-          pageBuilder: (c, a, sa) => const LoginScreen(),
+          pageBuilder: (c, a, sa) => const NewLoginScreen(),
           transitionsBuilder: (c, a, sa, child) => FadeTransition(opacity: a, child: child),
           transitionDuration: 800.ms,
         ),
@@ -114,21 +172,26 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  height: 120,
-                  width: 120,
+                  height: 140,
+                  width: 140,
                   decoration: BoxDecoration(
-                    color: AppTheme.primary,
+                    color: Colors.white,
                     borderRadius: BorderRadius.circular(40),
                     boxShadow: [
                       BoxShadow(
-                        color: AppTheme.primary.withOpacity(0.4),
+                        color: AppTheme.primary.withOpacity(0.2),
                         blurRadius: 40,
                         offset: const Offset(0, 20),
                       ),
                     ],
                   ),
-                  child: const Icon(LucideIcons.sparkles, color: Colors.white, size: 56),
-                ).animate().scale(delay: 200.ms, duration: 600.ms, curve: Curves.easeOutBack),
+                  padding: const EdgeInsets.all(20),
+                  child: Image.asset(
+                    'assets/images/EZDineLOGO.png',
+                    fit: BoxFit.contain,
+                  ),
+                ).animate(onPlay: (c) => c.repeat(reverse: true))
+                 .scale(delay: 200.ms, duration: 800.ms, curve: Curves.easeInOut),
                 const SizedBox(height: 40),
                 Text(
                   'EZDine Pro',
@@ -140,22 +203,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   ),
                 ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
                 const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(100),
+                Text(
+                  'INITIALIZING SYSTEM...',
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    color: AppTheme.primary.withOpacity(0.6),
+                    letterSpacing: 2,
                   ),
-                  child: Text(
-                    'RESTAURANT OS',
-                    style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                      color: AppTheme.primary,
-                      letterSpacing: 3,
-                    ),
-                  ),
-                ).animate().fadeIn(delay: 600.ms).scale(),
+                ).animate(onPlay: (c) => c.repeat(reverse: true)).fadeIn(duration: 1.seconds),
               ],
             ),
           ),
@@ -172,11 +228,17 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+enum LoginMode { password, otp }
+
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _otpController = TextEditingController();
+  
+  LoginMode _loginMode = LoginMode.password;
   bool _otpSent = false;
   bool _loading = false;
+  bool _obscurePassword = true;
 
   @override
   Widget build(BuildContext context) {
@@ -311,21 +373,69 @@ class _LoginScreenState extends State<LoginScreen> {
                       
                       const SizedBox(height: 24),
                       Center(
-                        child: TextButton(
-                          onPressed: () {
-                             if(_otpSent) setState(() => _otpSent = false);
-                          },
-                          child: Text(
-                            _otpSent ? 'Use a different email address' : 'Enterprise login troubleshooting',
-                            style: GoogleFonts.outfit(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade400,
+                        child: Column(
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                if(_otpSent) setState(() => _otpSent = false);
+                              },
+                              child: Text(
+                                _otpSent ? 'Use a different email address' : 'Enterprise login troubleshooting',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey.shade400,
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 16),
+                            // Legal Links (App Store Requirement)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                TextButton(
+                                  onPressed: () {
+                                    // TODO: Open privacy policy URL
+                                    // Example: launch('https://yourdomain.com/privacy');
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Privacy Policy: Add your URL in code')),
+                                    );
+                                  },
+                                  child: Text(
+                                    'Privacy Policy',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade500,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ),
+                                Text(' • ', style: TextStyle(color: Colors.grey.shade400)),
+                                TextButton(
+                                  onPressed: () {
+                                    // TODO: Open terms of service URL
+                                    // Example: launch('https://yourdomain.com/terms');
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Terms of Service: Add your URL in code')),
+                                    );
+                                  },
+                                  child: Text(
+                                    'Terms of Service',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade500,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 60),
+                      const SizedBox(height: 24),
                       Center(
                         child: Text(
                           'POWERED BY EZBILLIFY',
@@ -468,6 +578,20 @@ class DashboardScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.all(4),
+            child: Image.asset(
+              'assets/images/EZDineLOGO.png',
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -614,7 +738,7 @@ class DashboardScreen extends ConsumerWidget {
     if (isTablet) {
       return Row(
         children: [
-          Expanded(child: AppStatCard(label: 'Gross Revenue', value: '₹${stats.grossVolume.toStringAsFixed(0)}', icon: LucideIcons.circleDollarSign, color: AppTheme.primary, trend: 'LIVE', isUp: true)),
+          Expanded(child: AppStatCard(label: 'Gross Revenue', value: '₹${stats.grossVolume.toStringAsFixed(0)}', icon: LucideIcons.indianRupee, color: AppTheme.primary, trend: 'LIVE', isUp: true)),
           const SizedBox(width: 20),
           Expanded(child: AppStatCard(label: 'Kitchen Load', value: '${stats.pendingOrders} tickets', icon: LucideIcons.chefHat, color: Colors.amber, trend: 'ACTIVE', isUp: false)),
           const SizedBox(width: 20),
@@ -622,13 +746,17 @@ class DashboardScreen extends ConsumerWidget {
         ],
       );
     }
-    return Column(
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.1,
       children: [
-        AppStatCard(label: 'Gross Revenue', value: '₹${stats.grossVolume.toStringAsFixed(0)}', icon: LucideIcons.circleDollarSign, color: AppTheme.primary, trend: 'LIVE', isUp: true),
-        const SizedBox(height: 16),
-        AppStatCard(label: 'Kitchen Load', value: '${stats.pendingOrders} tickets', icon: LucideIcons.chefHat, color: Colors.amber, trend: 'ACTIVE', isUp: false),
-        const SizedBox(height: 16),
-        AppStatCard(label: 'Stock Health', value: stats.lowStockCount.toString(), icon: LucideIcons.warehouse, color: const Color(0xFFF43F5E), trend: stats.lowStockCount > 0 ? 'ALERT' : 'GOOD', isUp: false),
+        AppStatCard(label: 'Revenue', value: '₹${stats.grossVolume.toStringAsFixed(0)}', icon: LucideIcons.indianRupee, color: AppTheme.primary, trend: 'LIVE', isUp: true),
+        AppStatCard(label: 'Tickets', value: '${stats.pendingOrders}', icon: LucideIcons.chefHat, color: Colors.amber, trend: 'ACTIVE', isUp: false),
+        AppStatCard(label: 'Inventory', value: stats.lowStockCount.toString(), icon: LucideIcons.warehouse, color: const Color(0xFFF43F5E), trend: stats.lowStockCount > 0 ? 'ALERT' : 'GOOD', isUp: false),
       ],
     );
   }
@@ -706,6 +834,22 @@ class DashboardScreen extends ConsumerWidget {
         'color': Colors.grey,
         'roles': ['owner', 'manager'],
         'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => SettingsScreen())),
+      },
+      {
+        'label': 'ORDER HISTORY',
+        'icon': LucideIcons.history,
+        'description': 'Past Orders',
+        'color': Colors.blue,
+        'roles': ['owner', 'manager', 'cashier'],
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const OrderHistoryScreen())),
+      },
+      {
+        'label': 'TABLE MANAGER',
+        'icon': LucideIcons.layoutGrid,
+        'description': 'Floor Management',
+        'color': Colors.purple,
+        'roles': ['owner', 'manager'],
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const TableManagementScreen())),
       },
     ];
 

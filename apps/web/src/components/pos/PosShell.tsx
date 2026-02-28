@@ -697,7 +697,7 @@ export function PosShell() {
       // 4. Print Bill & Token
       try {
         if (settings) {
-          const consolidate = (settings as any).consolidatePrinting === true;
+          const consolidate = (settings as any).consolidatedPrinting === true;
 
           if (consolidate) {
             const consolidatedLines = buildConsolidatedReceiptLines({

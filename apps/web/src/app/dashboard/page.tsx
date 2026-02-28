@@ -20,6 +20,7 @@ import {
   Zap,
   Layers,
   Sparkles,
+  IndianRupee,
   ArrowRightCircle
 } from "lucide-react";
 
@@ -85,7 +86,7 @@ export default function DashboardPage() {
     {
       label: "Gross Revenue",
       value: `₹${salesTotal.toLocaleString("en-IN")}`,
-      icon: CircleDollarSign,
+      icon: IndianRupee,
       color: "brand",
       description: `From ${salesCount} successful bills today`,
       trend: { value: 12, type: "up" as const }

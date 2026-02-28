@@ -3,10 +3,9 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import { OtpLoginForm } from "../../components/auth/OtpLoginForm";
+import { NewLoginForm } from "../../components/auth/NewLoginForm";
 import { AppShell } from "../../components/layout/AppShell";
 import { supabase } from "../../lib/supabaseClient";
-import { Card } from "../../components/ui/Card";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,22 +23,32 @@ export default function LoginPage() {
   return (
     <AppShell
       title="Welcome back"
-      subtitle="Sign in securely with your email OTP"
+      subtitle="Sign in to your restaurant operating system"
       showNav={false}
       showUserMenu={false}
     >
       <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-3xl bg-white p-10 shadow-sm">
           <div className="max-w-md space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-600">
-              EZDine Staff Access
-            </p>
-            <h2 className="text-2xl font-semibold text-slate-900">Login to start service</h2>
+            <div className="flex items-center gap-4 mb-6">
+              <div className="h-16 w-16 rounded-2xl bg-white shadow-md p-2 flex items-center justify-center">
+                <img 
+                  src="/images/EZDineLOGO.png" 
+                  alt="EZDine Logo" 
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand-600">
+                  EZDine Staff Access
+                </p>
+                <h2 className="text-2xl font-semibold text-slate-900">Login to start service</h2>
+              </div>
+            </div>
             <p className="text-sm text-slate-600">
-              Use your work email to receive a one-time OTP code. This keeps accounts
-              secure and verified.
+              Choose your preferred login method: password or one-time code via email.
             </p>
-            <OtpLoginForm />
+            <NewLoginForm />
             <p className="text-xs text-slate-500">
               New account? After login, complete onboarding to create your restaurant.
             </p>

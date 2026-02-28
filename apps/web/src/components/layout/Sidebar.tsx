@@ -85,8 +85,12 @@ export function Sidebar({ className = "" }: { className?: string }) {
         <aside className={`flex w-72 flex-col border-r border-slate-100 bg-white/80 backdrop-blur-xl ${className}`}>
             <div className="flex h-20 items-center px-8 border-b border-slate-50">
                 <div className="flex items-center gap-3 group cursor-pointer">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-[1.25rem] bg-slate-900 text-white font-black shadow-2xl transition-all group-hover:scale-110 group-hover:rotate-6">
-                        <Sparkles size={20} fill="currentColor" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-[1.25rem] bg-white shadow-md transition-all group-hover:scale-110 group-hover:rotate-6 p-1">
+                        <img 
+                            src="/images/EZDineLOGO.png" 
+                            alt="EZDine Logo" 
+                            className="h-full w-full object-contain"
+                        />
                     </div>
                     <div className="flex flex-col">
                         <span className="font-black text-lg text-slate-900 leading-none">EZDine <span className="text-brand-600">Pro</span></span>

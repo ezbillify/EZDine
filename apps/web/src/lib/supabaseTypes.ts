@@ -21,6 +21,8 @@ export type Branch = {
   state: string | null;
   pincode: string | null;
   phone: string | null;
+  gstin: string | null;
+  fssai_no: string | null;
   is_active: boolean;
   razorpay_key: string | null;
   razorpay_secret: string | null;

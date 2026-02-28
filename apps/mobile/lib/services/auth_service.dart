@@ -123,22 +123,23 @@ class AuthService {
   }
 
   Future<List<Map<String, dynamic>>> getAccessibleBranches(String restaurantId) async {
-    final branches = await getBranches(restaurantId);
+    if (currentUser == null) return [];
     
-    // Check ownership
+    // Check ownership first
     final isOwner = await isOwnerOf(restaurantId);
-    if (isOwner) return branches;
+    if (isOwner) return await getBranches(restaurantId);
 
-    // Filter for assigned branches
-    final accessible = <Map<String, dynamic>>[];
-    for (var b in branches) {
-       // Check if user has a row in user_branches for this branch
-       final role = await getActiveRoleForBranch(restaurantId, b['id']);
-       if (role != null) {
-         accessible.add(b);
-       }
-    }
-    return accessible;
+    // Get branches user has explicit access to
+    final response = await _client
+        .from('user_branches')
+        .select('branches(*)')
+        .eq('user_id', currentUser!.id)
+        .eq('branches.restaurant_id', restaurantId);
+    
+    return (response as List)
+        .where((e) => e['branches'] != null)
+        .map((e) => e['branches'] as Map<String, dynamic>)
+        .toList();
   }
 }
 
@@ -160,6 +161,10 @@ class ContextState {
   final String? restaurantName;
   final String? branchId;
   final String? branchName;
+  final String? branchAddress;
+  final String? branchPhone;
+  final String? gstin;
+  final String? fssai;
   final bool isLoading;
 
   ContextState({
@@ -167,6 +172,10 @@ class ContextState {
     this.restaurantName,
     this.branchId,
     this.branchName,
+    this.branchAddress,
+    this.branchPhone,
+    this.gstin,
+    this.fssai,
     this.isLoading = false,
   });
 
@@ -175,12 +184,20 @@ class ContextState {
     String? restaurantName,
     String? branchId,
     String? branchName,
+    String? branchAddress,
+    String? branchPhone,
+    String? gstin,
+    String? fssai,
     bool? isLoading,
   }) => ContextState(
     restaurantId: restaurantId ?? this.restaurantId,
     restaurantName: restaurantName ?? this.restaurantName,
     branchId: branchId ?? this.branchId,
     branchName: branchName ?? this.branchName,
+    branchAddress: branchAddress ?? this.branchAddress,
+    branchPhone: branchPhone ?? this.branchPhone,
+    gstin: gstin ?? this.gstin,
+    fssai: fssai ?? this.fssai,
     isLoading: isLoading ?? this.isLoading,
   );
 }
@@ -204,6 +221,10 @@ class ContextNotifier extends StateNotifier<ContextState> {
       
       String? bId;
       String? bName;
+      String? bAddr;
+      String? bPhone;
+      String? bGstin;
+      String? bFssai;
       
       if (validBranches.isNotEmpty) {
         var activeBranch = validBranches.first;
@@ -219,6 +240,10 @@ class ContextNotifier extends StateNotifier<ContextState> {
 
         bId = activeBranch['id'];
         bName = activeBranch['name'];
+        bAddr = activeBranch['address'];
+        bPhone = activeBranch['phone']?.toString();
+        bGstin = activeBranch['gstin'];
+        bFssai = activeBranch['fssai_no'] ?? activeBranch['fssai'];
         
         // If the preference was invalid (e.g. removed access), sync the new default
         if (profile?['active_branch_id'] != bId && bId != null) {
@@ -231,6 +256,10 @@ class ContextNotifier extends StateNotifier<ContextState> {
         restaurantName: activeRest['name'],
         branchId: bId,
         branchName: bName,
+        branchAddress: bAddr,
+        branchPhone: bPhone,
+        gstin: bGstin,
+        fssai: bFssai,
         isLoading: false,
       );
     } else {
@@ -242,15 +271,39 @@ class ContextNotifier extends StateNotifier<ContextState> {
     state = state.copyWith(restaurantId: id, restaurantName: name, branchId: null, branchName: null, isLoading: true);
     final branches = await _auth.getAccessibleBranches(id);
     if (branches.isNotEmpty) {
-      state = state.copyWith(branchId: branches.first['id'], branchName: branches.first['name'], isLoading: false);
-      _auth.updateActiveBranch(branches.first['id']);
+      final b = branches.first;
+      state = state.copyWith(
+        branchId: b['id'], 
+        branchName: b['name'], 
+        branchAddress: b['address'],
+        branchPhone: b['phone']?.toString(),
+        gstin: b['gstin'],
+        fssai: b['fssai_no'] ?? b['fssai'],
+        isLoading: false
+      );
+      _auth.updateActiveBranch(b['id']);
     } else {
       state = state.copyWith(isLoading: false);
     }
   }
 
-  void switchBranch(String id, String name) {
-    state = state.copyWith(branchId: id, branchName: name);
+  void switchBranch(String id, String name) async {
+    state = state.copyWith(branchId: id, branchName: name, isLoading: true);
+    final profile = await _auth.getUserProfile();
+    final restaurantId = state.restaurantId;
+    if (restaurantId != null) {
+      final branches = await _auth.getAccessibleBranches(restaurantId);
+      final b = branches.firstWhere((element) => element['id'] == id, orElse: () => branches.first);
+      state = state.copyWith(
+        branchAddress: b['address'],
+        branchPhone: b['phone']?.toString(),
+        gstin: b['gstin'],
+        fssai: b['fssai_no'] ?? b['fssai'],
+        isLoading: false
+      );
+    } else {
+      state = state.copyWith(isLoading: false);
+    }
     _auth.updateActiveBranch(id);
   }
 }

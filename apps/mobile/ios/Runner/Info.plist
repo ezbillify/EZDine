@@ -42,9 +42,11 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
     <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>We need Bluetooth access to connect to thermal printers.</string>
+    <string>EZDine Pro requires Bluetooth access to connect to thermal printers for bill and KOT printing.</string>
     <key>NSBluetoothPeripheralUsageDescription</key>
-    <string>We need Bluetooth access to connect to thermal printers.</string>
+    <string>EZDine Pro requires Bluetooth access to connect to thermal printers for bill and KOT printing.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>EZDine Pro requires location access to discover nearby Bluetooth thermal printers.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

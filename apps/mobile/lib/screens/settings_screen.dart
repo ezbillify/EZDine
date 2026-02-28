@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../services/audio_service.dart';
 import '../core/theme.dart';
 import 'print_settings_screen.dart';
+import 'branch_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -30,6 +31,13 @@ class SettingsScreen extends StatelessWidget {
             title: 'Printer Setup',
             subtitle: 'Configure Network or Bluetooth printers',
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrintSettingsScreen())),
+          ),
+          _buildSettingItem(
+            context: context,
+            icon: LucideIcons.building,
+            title: 'Branch Details',
+            subtitle: 'Manage Address, GST, FSSAI & Phone',
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BranchSettingsScreen())),
           ),
           _buildSettingItem(
             context: context,

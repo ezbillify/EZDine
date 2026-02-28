@@ -8,11 +8,15 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:ezdine_pro/widgets/payment_modal.dart';
 import '../services/auth_service.dart';
 import '../services/audio_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/pos_service.dart';
 import '../services/print_service.dart';
+import '../services/pos_cache_service.dart';
 import '../core/theme.dart';
 import '../core/responsive.dart';
 import '../widgets/numeric_keypad.dart';
+import '../widgets/lazy_tab_view.dart';
+import '../widgets/optimized_menu_grid.dart';
 
 final menuCategoriesProvider = FutureProvider.family<List<Map<String, dynamic>>, String>((ref, branchId) async {
   final res = await Supabase.instance.client
@@ -60,17 +64,19 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   String? _activeOrderNumber;
   String? _activeTokenNumber;
 
-  // Search State
+  // Search State with debouncing
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
   bool _isSearchActive = false;
   String _searchQuery = "";
   String _sortBy = "name";
+  late final Debouncer _searchDebouncer;
 
   // Business Logic State
   String? _activeBillNumber;
   double _existingOrderTotal = 0;
   bool _isSaving = false;
+  bool _isLoadingItems = false;
   bool _isQuickBill = true;
   String _orderType = 'dine_in';
   String? _activeOrderPaymentStatus;
@@ -78,10 +84,19 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   StreamSubscription? _ordersSubscription;
   RealtimeChannel? _menuChannel;
   final Set<String> _notifiedOrderIds = {};
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _showSuccessOverlay = false;
+  String _successMessage = "";
+  bool get isMobile => Responsive.isMobile(context);
+  
+  // Performance optimizations
+  final _cacheService = PosCacheService();
+  final _addToCartThrottler = Throttler(); // Uses adaptive duration
 
   @override
   void initState() {
     super.initState();
+    _searchDebouncer = Debouncer(); // Uses adaptive delay
     _searchFocusNode.addListener(() {
       setState(() => _isSearchActive = _searchFocusNode.hasFocus);
     });
@@ -93,6 +108,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   void dispose() {
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _searchDebouncer.dispose();
     _ordersSubscription?.cancel();
     _menuChannel?.unsubscribe();
     super.dispose();
@@ -138,30 +154,99 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           }
           if (hasNew) {
             AudioService.instance.playOrderAlert();
+            if (mounted && Responsive.isMobile(context)) {
+               _scaffoldKey.currentState?.openDrawer();
+            }
           }
         });
   }
 
   Future<void> _loadOrderItems(String orderId) async {
+    // 1. Check Cache for "Instant" feel
+    final cachedItems = _cacheService.getOrderItems(orderId);
+    if (cachedItems != null) {
+      setState(() {
+        _existingOrderItems = cachedItems;
+        _existingOrderTotal = _existingOrderItems.fold(0.0, (sum, i) => sum + ((i['price'] ?? 0.0) * (i['quantity'] ?? 0)));
+        _isLoadingItems = false;
+      });
+      return;
+    }
+
+    setState(() => _isLoadingItems = true);
+
+    try {
+      final results = await Future.wait<dynamic>([
+        Supabase.instance.client
+            .from('order_items')
+            .select('*, menu_items(name)')
+            .eq('order_id', orderId),
+        Supabase.instance.client
+            .from('orders')
+            .select('*, bills(*), tables(*), customers(*)')
+            .eq('id', orderId)
+            .single()
+      ]);
+
+      final List<Map<String, dynamic>> res = List<Map<String, dynamic>>.from(results[0] as List);
+      final Map<String, dynamic> orderRes = results[1] as Map<String, dynamic>;
+
+      if (mounted) {
+        // Cache the results
+        _cacheService.cacheOrderItems(orderId, res);
+        _cacheService.cacheOrderDetails(orderId, orderRes);
+        
+        setState(() {
+          _existingOrderItems = res;
+          _existingOrderTotal = _existingOrderItems.fold(0.0, (sum, i) => sum + ((i['price'] ?? 0.0) * (i['quantity'] ?? 0)));
+          _activeTokenNumber = orderRes['token_number']?.toString();
+          _activeOrderNumber = orderRes['order_number']?.toString();
+          _activeOrderPaymentStatus = orderRes['payment_status'];
+          _selectedTable = orderRes['tables'];
+          _selectedCustomer = orderRes['customers'];
+          _orderType = orderRes['order_type'] ?? 'dine_in';
+          
+          final bills = orderRes['bills'] as List?;
+          if (bills != null && bills.isNotEmpty) {
+            _activeBillNumber = bills.first['bill_number'];
+          } else {
+            _activeBillNumber = null;
+          }
+          _isLoadingItems = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Load Order Items Error: $e');
+      if (mounted) setState(() => _isLoadingItems = false);
+    }
+  }
+
+  Future<void> _prefetchOrderItems(String orderId) async {
+    // Check if already cached
+    if (_cacheService.getOrderItems(orderId) != null) {
+      return;
+    }
+    
     try {
       final res = await Supabase.instance.client
           .from('order_items')
           .select('*, menu_items(name)')
           .eq('order_id', orderId);
-      if (mounted) {
-        setState(() {
-          _existingOrderItems = List<Map<String, dynamic>>.from(res);
-          _existingOrderTotal = _existingOrderItems.fold(0.0, (sum, i) => sum + ((i['price'] ?? 0.0) * (i['quantity'] ?? 0)));
-        });
-      }
-    } catch (e) {
-      debugPrint('Load Order Items Error: $e');
+      
+      final items = List<Map<String, dynamic>>.from(res);
+      _cacheService.cacheOrderItems(orderId, items);
+    } catch (_) {
+      // Silent fail for background prefetch
     }
   }
 
   double get _total => _cart.fold(0, (sum, item) => sum + (item['base_price'] * item['qty']));
 
   void _addToCart(Map<String, dynamic> item) {
+    if (!_addToCartThrottler.shouldExecute()) {
+      return; // Prevent rapid taps
+    }
+    
     AudioService.instance.playClick();
     setState(() {
       final existingIndex = _cart.indexWhere((i) => i['id'] == item['id']);
@@ -223,6 +308,23 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       _isQuickBill = true;
       _orderType = 'dine_in';
       _activeOrderPaymentStatus = null;
+      _searchQuery = "";
+      _searchController.clear();
+    });
+  }
+
+  void _triggerSuccess(String message) {
+    setState(() {
+      _successMessage = message;
+      _showSuccessOverlay = true;
+    });
+    
+    // Auto-reset and hide after 1.5 seconds
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        setState(() => _showSuccessOverlay = false);
+        _resetPos();
+      }
     });
   }
 
@@ -249,22 +351,20 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
       // KOT Print
       if (settings != null) {
-        final kotLines = printService.buildKotLines(
-          restaurantName: "EZDine", // TODO: Fetch from context
-          branchName: "Branch", 
-          tableName: _selectedTable?['name'] ?? (_isQuickBill ? "QUICK BILL" : "--"),
+        await printService.printPremiumKot(
           orderId: res['order_number'].toString(),
+          date: DateTime.now().toString().split(' ')[0],
+          time: TimeOfDay.now().format(context),
+          items: _cart.map((i) => {
+            'name': i['name'] ?? 'Item',
+            'qty': i['qty'] ?? 1,
+            'notes': i['notes'] ?? '',
+          }).toList(),
+          tableName: _selectedTable?['name'] ?? (_isQuickBill ? "QUICK BILL" : "--"),
           tokenNumber: res['token_number'].toString(),
-          items: _cart,
+          orderType: _orderType == 'dine_in' ? "DINE IN" : "TAKEAWAY",
+          printerId: settings['printerIdKot'],
         );
-        
-        // Fire and forget print job
-        printService.sendPrintJob(PrintJob(
-          printerId: settings['printerIdKot'] ?? "kitchen-1",
-          width: settings['widthKot'] ?? 58,
-          type: "kot",
-          lines: kotLines
-        ));
       } else {
         debugPrint('No print settings found or network error');
       }
@@ -272,10 +372,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       AudioService.instance.playSuccess();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_activeOrderId == null ? 'Order Created!' : 'Order Updated!'))
-        );
-        _resetPos();
+        if (Responsive.isMobile(context)) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+        _triggerSuccess(_activeOrderId == null ? 'ORDER CREATED!' : 'ORDER UPDATED!');
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
@@ -288,14 +388,47 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final totalPayable = _total + _existingOrderTotal;
     if (totalPayable <= 0) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => PaymentModal(
-        totalAmount: totalPayable,
-        onConfirm: (payments) => _processSettlement(payments, printReceipt),
-      ),
-    );
+    if (isMobile) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: 0.5),
+        elevation: 0,
+        builder: (context) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: PaymentModal(
+            totalAmount: totalPayable,
+            isLoading: _isSaving,
+            isSheet: true,
+            onConfirm: (payments) async {
+              await _processSettlement(payments, printReceipt);
+              if (mounted) Navigator.pop(context);
+            },
+          ),
+        ),
+      );
+    } else {
+      showDialog(
+        context: context,
+        barrierDismissible: !_isSaving,
+        barrierColor: Colors.black.withValues(alpha: 0.5),
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: PaymentModal(
+            totalAmount: totalPayable,
+            isLoading: _isSaving,
+            onConfirm: (payments) async {
+              await _processSettlement(payments, printReceipt);
+              if (mounted) Navigator.pop(context);
+            },
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _processSettlement(List<Map<String, dynamic>> payments, bool printReceipt) async {
@@ -321,92 +454,76 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       final settings = await printService.getPrintingSettings(ctx.branchId!);
 
       if (settings != null) {
-        // 1. KOT Print (if new items)
-        if (hasNewItems) {
-            final kotLines = printService.buildKotLines(
-              restaurantName: "EZDine",
-              branchName: "Branch",
-              tableName: _selectedTable?['name'] ?? (_isQuickBill ? "QUICK BILL" : "--"),
-              orderId: res['order']['order_number']?.toString() ?? "0000",
-              tokenNumber: res['order']['token_number']?.toString() ?? "00",
-              items: _cart,
-            );
-            await printService.sendPrintJob(PrintJob(
-              printerId: settings['printerIdKot'] ?? "kitchen-1",
-              width: settings['widthKot'] ?? 58,
-              type: "kot",
-              lines: kotLines
-            ));
-        }
+        final bool isConsolidated = settings['consolidatedPrinting'] ?? false;
 
-        // 2. Bill & Token Print
-        if (printReceipt) {
-           final bool consolidate = settings['consolidatePrinting'] == true;
-           
-           if (consolidate) {
-               // Consolidated Print
-               final consolidatedLines = printService.buildConsolidatedReceiptLines(
-                 restaurantName: "EZDine",
-                 branchName: "Branch",
-                 tableName: _selectedTable?['name'] ?? (_isQuickBill ? "QUICK BILL" : "--"),
-                 orderId: res['order']['order_number']?.toString() ?? "0000",
-                 tokenNumber: res['order']['token_number']?.toString() ?? "00",
-                 orderType: _orderType == 'dine_in' ? "Dine In" : "Takeaway",
-                 items: [..._existingOrderItems, ..._cart],
-                 subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
-                 tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
-                 total: (res['total'] as num?)?.toDouble() ?? 0.0
-               );
-               
-               await printService.sendPrintJob(PrintJob(
-                  printerId: settings['printerIdInvoice'] ?? "billing-1",
-                  width: settings['widthInvoice'] ?? 80,
-                  type: "invoice",
-                  lines: consolidatedLines
-               ));
-           } else {
-               // Separate Prints (Default)
-               // Bill
-               final billLines = printService.buildInvoiceLines(
-                 restaurantName: "EZDine",
-                 branchName: "Branch",
-                 billId: (res['bill']?['bill_number']?.toString()) ?? "0000",
-                 tokenNumber: res['order']['token_number']?.toString() ?? "00",
-                 items: [..._existingOrderItems, ..._cart], // merge for full bill
-                 subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
-                 tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
-                 total: (res['total'] as num?)?.toDouble() ?? 0.0
-               );
-               
-               await printService.sendPrintJob(PrintJob(
-                  printerId: settings['printerIdInvoice'] ?? "billing-1", // Using Invoice/Billing printer
-                  width: settings['widthInvoice'] ?? 80,
-                  type: "invoice",
-                  lines: billLines
-               ));
+        if (isConsolidated && hasNewItems) {
+          // Consolidated mode: Print Invoice + KOT together in one document
+          final items = [..._existingOrderItems, ..._cart].map((i) => {
+            'name': i['name'] ?? i['menu_items']?['name'] ?? 'Item',
+            'qty': i['qty'] ?? i['quantity'] ?? 1,
+            'price': (i['price'] as num?)?.toDouble() ?? (i['base_price'] as num?)?.toDouble() ?? 0.0,
+            'tax_rate': i['tax_rate'] ?? i['menu_items']?['gst_rate'] ?? i['gst_rate'] ?? 0.0,
+            'hsn_code': i['hsn_code'] ?? i['menu_items']?['hsn_code'] ?? i['hsn'] ?? '',
+          }).toList();
 
-               // Token Slip
-               final tokenLines = printService.buildTokenSlipLines(
-                 restaurantName: "EZDine",
-                 tokenNumber: res['order']['token_number']?.toString() ?? "00",
-                 orderType: _orderType == 'dine_in' ? "Dine In" : "Takeaway",
-                 itemsCount: _existingOrderItems.length + _cart.length, // total items count
-               );
+          await printService.printPremiumConsolidated(
+            restaurantName: ctx.restaurantName ?? "EZDine",
+            branchName: ctx.branchName ?? "Branch",
+            branchAddress: ctx.branchAddress,
+            gstin: ctx.gstin,
+            fssai: ctx.fssai,
+            phone: ctx.branchPhone,
+            tableName: _selectedTable?['name'] ?? (_isQuickBill ? "QUICK BILL" : "--"),
+            orderId: res['order']['order_number']?.toString() ?? "0000",
+            tokenNumber: res['order']['token_number']?.toString() ?? "00",
+            customerName: _selectedCustomer?['name'] ?? 'Guest',
+            orderType: _isQuickBill ? "Takeaway" : (_orderType == 'dine_in' ? "Dine In" : "Takeaway"),
+            items: items,
+            subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
+            tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
+            total: (res['total'] as num?)?.toDouble() ?? 0.0,
+            printerId: settings['printerIdInvoice'] ?? settings['printerIdKot'],
+          );
+        } else {
+          // Non-consolidated mode: Print ONLY Invoice (no KOT)
+          final items = [..._existingOrderItems, ..._cart].map((i) => {
+            'name': i['name'] ?? i['menu_items']?['name'] ?? 'Item',
+            'qty': i['qty'] ?? i['quantity'] ?? 1,
+            'price': (i['price'] as num?)?.toDouble() ?? (i['base_price'] as num?)?.toDouble() ?? 0.0,
+            'tax_rate': i['tax_rate'] ?? i['menu_items']?['gst_rate'] ?? i['gst_rate'] ?? 0.0,
+            'hsn_code': i['hsn_code'] ?? i['menu_items']?['hsn_code'] ?? i['hsn'] ?? '',
+          }).toList();
 
-               await printService.sendPrintJob(PrintJob(
-                  printerId: settings['printerIdInvoice'] ?? "billing-1", // Same printer for token
-                  width: settings['widthInvoice'] ?? 80,
-                  type: "token",
-                  lines: tokenLines
-               ));
-           }
+          await printService.printPremiumInvoice(
+            restaurantName: ctx.restaurantName ?? "EZDine",
+            branchName: ctx.branchName ?? "Branch",
+            branchAddress: ctx.branchAddress,
+            phone: ctx.branchPhone,
+            gstin: ctx.gstin,
+            fssai: ctx.fssai,
+            orderId: res['order']['order_number']?.toString() ?? "0000",
+            date: DateTime.now().toString().split(' ')[0],
+            time: TimeOfDay.now().format(context),
+            items: items,
+            subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
+            tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
+            total: (res['total'] as num?)?.toDouble() ?? 0.0,
+            tableName: _selectedTable?['name'] ?? (_isQuickBill ? "QUICK BILL" : "--"),
+            tokenNumber: res['order']['token_number']?.toString() ?? "00",
+            customerName: _selectedCustomer?['name'] ?? 'Guest',
+            orderType: _isQuickBill ? "Takeaway" : (_orderType == 'dine_in' ? "Dine In" : "Takeaway"),
+            printerId: settings['printerIdInvoice'],
+          );
         }
       }
 
       AudioService.instance.playSuccess();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment Completed & Order Settled!')));
+        // Pop only the Payment Modal (and cart sheet if present)
+        // Do NOT pop the POS screen itself
+        Navigator.of(context).pop(); // Pop payment modal
+        
         _resetPos();
       }
     } catch (e) {
@@ -422,17 +539,31 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final ctx = ref.watch(contextProvider);
     if (ctx.branchId == null) return const Scaffold(body: Center(child: Text('Select Branch')));
 
+    final isMobile = Responsive.isMobile(context);
     final isTablet = Responsive.isTablet(context) || Responsive.isDesktop(context);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+    return Stack(
+      children: [
+        Scaffold(
+          key: _scaffoldKey,
+          backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('POS TERMINAL'),
+        title: Text('POS TERMINAL', style: TextStyle(fontSize: isMobile ? 16 : 20, fontWeight: FontWeight.w900)),
         leading: IconButton(icon: const Icon(LucideIcons.chevronLeft), onPressed: () {
            AudioService.instance.playClick();
            Navigator.pop(context);
         }),
         actions: [
+          if (isMobile)
+            Builder(
+              builder: (context) => IconButton(
+                icon: const Icon(LucideIcons.activity, color: Colors.blue),
+                onPressed: () {
+                  AudioService.instance.playClick();
+                  Scaffold.of(context).openDrawer();
+                },
+              ),
+            ),
           IconButton(
             icon: const Icon(LucideIcons.history, color: Colors.indigo),
             onPressed: () {
@@ -442,10 +573,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           ),
         ],
       ),
+      drawer: isMobile ? Drawer(
+        width: 280,
+        child: SafeArea(child: _buildLiveOrdersSidebar(isDrawer: true)),
+      ) : null,
       body: Row(
         children: [
-          // New Live Orders Sidebar
-          _buildLiveOrdersSidebar(),
+          // Hide sidebar on mobile, used in drawer instead
+          if (!isMobile) _buildLiveOrdersSidebar(),
           
           Expanded(
             flex: isTablet ? 7 : 1,
@@ -463,21 +598,60 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             ),
         ],
       ),
-      floatingActionButton: !isTablet && _cart.isNotEmpty 
-          ? FloatingActionButton.extended(
-              onPressed: () {
-                AudioService.instance.playClick();
-                _showMobileCart(context);
-              },
-              backgroundColor: AppTheme.secondary,
-              extendedPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              icon: const Icon(LucideIcons.shoppingBag, color: Colors.white, size: 22),
-              label: Text(
-                'VIEW CART (₹${_total.toStringAsFixed(0)})', 
-                style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1, fontSize: 13)
+      floatingActionButton: !isTablet && (_cart.isNotEmpty || _activeOrderId != null) 
+          ? Container(
+              height: 64,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FloatingActionButton.extended(
+                onPressed: () {
+                  AudioService.instance.playClick();
+                  _showMobileCart(context);
+                },
+                backgroundColor: Colors.black,
+                foregroundColor: Colors.white,
+                elevation: 8,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                icon: const Icon(LucideIcons.shoppingBag, size: 20),
+                label: Text(
+                  'VIEW CART • ₹${_total.toStringAsFixed(0)}', 
+                  style: GoogleFonts.outfit(fontWeight: FontWeight.w900, letterSpacing: 1, fontSize: 13)
+                ),
               ),
-            ).animate().scale()
+            )
           : null,
+    ),
+        if (_showSuccessOverlay)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.85),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: const BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(LucideIcons.check, color: Colors.white, size: 54),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      _successMessage,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -485,52 +659,45 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final ctx = ref.watch(contextProvider);
     final categoriesAsync = ref.watch(menuCategoriesProvider(ctx.branchId!));
     final itemsAsync = ref.watch(menuItemsProvider(ctx.branchId!));
+    final isMobile = Responsive.isMobile(context);
 
     return Column(
       children: [
         // Compact Context Header
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.fromLTRB(isMobile ? 12 : 24, 16, isMobile ? 12 : 24, 8),
           child: Row(
             children: [
-              Expanded(
-                flex: 3,
-                child: _SelectorButton(
-                  label: 'QUICK BILL',
-                  icon: LucideIcons.zap,
-                  isSelected: _isQuickBill,
-                  onTap: () {
-                    AudioService.instance.playClick();
-                    setState(() {
-                      _isQuickBill = true;
-                      _selectedTable = null;
-                      _activeOrderId = null;
-                      _orderType = 'dine_in';
-                    });
-                  },
-                  color: Colors.orange,
-                ),
+              _SelectorButton(
+                label: 'QUICK BILL',
+                icon: LucideIcons.zap,
+                isSelected: _isQuickBill,
+                onTap: () {
+                  AudioService.instance.playClick();
+                  setState(() {
+                    _isQuickBill = true;
+                    _selectedTable = null;
+                    _activeOrderId = null;
+                    _orderType = 'dine_in';
+                  });
+                },
+                color: Colors.orange,
               ),
               const SizedBox(width: 12),
-              Expanded(
-                flex: 4,
-                child: _SelectorButton(
-                  label: _selectedTable?['name'] ?? 'TABLE',
-                  icon: LucideIcons.armchair,
-                  isSelected: !_isQuickBill && _selectedTable != null,
-                  onTap: () => _showTableSheet(context),
-                ),
+              _SelectorButton(
+                label: _selectedTable?['name'] ?? 'TABLE',
+                icon: LucideIcons.armchair,
+                isSelected: !_isQuickBill && _selectedTable != null,
+                onTap: () => _showTableSheet(context),
               ),
               const SizedBox(width: 12),
-              Expanded(
-                flex: 4,
-                child: _SelectorButton(
-                  label: _selectedCustomer?['name'] ?? 'GUEST',
-                  icon: LucideIcons.user,
-                  isSelected: _selectedCustomer != null,
-                  onTap: () => _showCustomerSheet(context),
-                  color: Colors.green,
-                ),
+              _SelectorButton(
+                label: _selectedCustomer?['name'] ?? 'GUEST',
+                icon: LucideIcons.user,
+                isSelected: _selectedCustomer != null,
+                onTap: () => _showCustomerSheet(context),
+                color: Colors.green,
               ),
             ],
           ),
@@ -628,9 +795,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   child: TextField(
                     controller: _searchController,
                     focusNode: _searchFocusNode,
-                    keyboardType: TextInputType.none, // Prevent system keyboard
-                    showCursor: true,
-                    onChanged: (val) => setState(() => _searchQuery = val.toLowerCase()),
+                    onChanged: (val) {
+                      _searchDebouncer(() {
+                        if (mounted) {
+                          setState(() => _searchQuery = val.toLowerCase());
+                        }
+                      });
+                    },
+                    textInputAction: TextInputAction.search,
                     decoration: InputDecoration(
                       hintText: 'Search items...',
                       hintStyle: TextStyle(fontSize: 15, color: Colors.grey.shade400, fontWeight: FontWeight.w600),
@@ -708,19 +880,14 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 );
               }
 
-              return GridView.builder(
-                padding: const EdgeInsets.all(24),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: Responsive.isMobile(context) ? 2 : (Responsive.isTablet(context) ? 3 : 4),
-                  mainAxisSpacing: 20,
-                  crossAxisSpacing: 20,
-                  childAspectRatio: 0.8,
-                ),
-                itemCount: filtered.length,
-                itemBuilder: (context, index) => _ProductCard(
-                  item: filtered[index],
-                  onAdd: () => _addToCart(filtered[index]),
-                  onToggle: () => _toggleStock(filtered[index]),
+              return OptimizedMenuGrid(
+                items: filtered,
+                crossAxisCount: Responsive.isMobile(context) ? 2 : (Responsive.isTablet(context) ? 3 : 4),
+                childAspectRatio: 0.8,
+                itemBuilder: (item) => _ProductCard(
+                  item: item,
+                  onAdd: () => _addToCart(item),
+                  onToggle: () => _toggleStock(item),
                 ),
               );
             },
@@ -728,26 +895,6 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             error: (e, s) => Center(child: Text('POS Error: $e')),
           ),
         ),
-
-        // Keyboard shows up below items when search is active
-        if (_isSearchActive) 
-          _SearchKeyboard(
-            onKeyPress: (key) {
-              setState(() {
-                _searchController.text += key;
-                _searchQuery = _searchController.text.toLowerCase();
-              });
-            },
-            onDelete: () {
-              if (_searchController.text.isNotEmpty) {
-                setState(() {
-                  _searchController.text = _searchController.text.substring(0, _searchController.text.length - 1);
-                  _searchQuery = _searchController.text.toLowerCase();
-                });
-              }
-            },
-            onClose: () => _searchFocusNode.unfocus(),
-          ),
       ],
     );
   }
@@ -769,9 +916,11 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             ],
           ),
         ),
-        Expanded(
-          child: _cart.isEmpty && _existingOrderItems.isEmpty
-              ? Center(child: Column(
+         Expanded(
+           child: _isLoadingItems 
+             ? const Center(child: CircularProgressIndicator()) 
+             : _cart.isEmpty && _existingOrderItems.isEmpty
+               ? Center(child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(LucideIcons.shoppingCart, size: 48, color: Colors.grey.shade200),
@@ -898,68 +1047,106 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   children: [
                     Expanded(
                       child: SizedBox(
-                        height: 54,
-                        child: OutlinedButton(
+                        height: 60,
+                        child: ElevatedButton(
                           onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : _handleSaveAndSend,
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Colors.indigo),
-                            foregroundColor: Colors.indigo,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _activeOrderId == null ? Colors.indigo : Colors.orange.shade800,
+                            foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 0,
                           ),
-                          child: Text(_activeOrderId == null ? 'PLACE ORDER' : 'UPDATE ORDER', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
+                          child: _isSaving 
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : Text(
+                                _activeOrderId == null ? 'PLACE ORDER' : 'UPDATE ORDER', 
+                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)
+                              ),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SizedBox(
-                        height: 60,
-                        child: ElevatedButton(
-                          onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : () => _handlePayment(printReceipt: false),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF10B981),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            elevation: 0,
-                          ),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('TAKE PAYMENT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-                              Text('& SEND', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                            ],
+                if (isMobile) ...[ 
+                  SizedBox(
+                    height: 54,
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : () => _handlePayment(printReceipt: false),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      child: const Text('TAKE PAYMENT & SEND', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 54,
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : () => _handlePayment(printReceipt: true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF59E0B),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      child: const Text('TAKE PAYMENT & PRINT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                    ),
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 60,
+                          child: ElevatedButton(
+                            onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : () => _handlePayment(printReceipt: false),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              elevation: 0,
+                            ),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text('TAKE PAYMENT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                                Text('& SEND', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SizedBox(
-                        height: 60,
-                        child: ElevatedButton(
-                          onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : () => _handlePayment(printReceipt: true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFF59E0B),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            elevation: 0,
-                          ),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text('TAKE PAYMENT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
-                              Text('& PRINT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
-                            ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SizedBox(
+                          height: 60,
+                          child: ElevatedButton(
+                            onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : () => _handlePayment(printReceipt: true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF59E0B),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              elevation: 0,
+                            ),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text('TAKE PAYMENT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+                                Text('& PRINT', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ],
             ],
           ),
@@ -968,7 +1155,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     );
   }
 
-  Widget _buildLiveOrdersSidebar() {
+  Widget _buildLiveOrdersSidebar({bool isDrawer = false}) {
     final ctx = ref.watch(contextProvider);
     if (ctx.branchId == null) return const SizedBox.shrink();
 
@@ -983,6 +1170,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         if (!snapshot.hasData) return const SizedBox.shrink();
         
         final allOrders = snapshot.data as List;
+        
+        // Background Pre-fetch items for orders not in cache
+        for (var o in allOrders) {
+          final id = o['id'];
+          if (_cacheService.getOrderItems(id) == null && !_isLoadingItems) {
+             // Fetch in background, don't await
+             _prefetchOrderItems(id);
+          }
+        }
+
         final now = DateTime.now();
         final liveOrders = allOrders.where((o) {
           final isOpen = o['is_open'] == true;
@@ -1005,7 +1202,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         }).toList();
 
         return Container(
-          width: 84,
+          width: isDrawer ? double.infinity : 84,
           decoration: BoxDecoration(
             color: Colors.white,
             border: Border.all(color: Colors.grey.shade100),
@@ -1015,7 +1212,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               const SizedBox(height: 16),
               const Icon(LucideIcons.activity, size: 20, color: Colors.blue),
               const SizedBox(height: 6),
-              const Text('LIVE', style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: Colors.blue)),
+              const Text('LIVE ORDERS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.5, color: Colors.blue)),
               const SizedBox(height: 16),
               Expanded(
                 child: ListView.separated(
@@ -1114,7 +1311,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     tokenTile = tokenTile.animate().fadeIn(duration: const Duration(milliseconds: 300)).slideX(begin: -0.1, end: 0);
 
                     return GestureDetector(
-                      onTap: () {
+                      onTap: () async {
                         AudioService.instance.playClick();
                         setState(() {
                           _activeOrderId = o['id'];
@@ -1124,9 +1321,15 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                           _orderType = o['order_type'] ?? 'dine_in';
                           _activeOrderPaymentStatus = o['payment_status'];
                           _existingOrderTotal = 0;
+                          _existingOrderItems = [];
                           _cart.clear();
                         });
-                        _loadOrderItems(o['id']);
+
+                        if (isDrawer) {
+                          Navigator.pop(context);
+                          _showMobileCart(context);
+                        }
+                        await _loadOrderItems(o['id']);
                       },
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1139,26 +1342,35 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.only(bottom: 20),
-                child: RotatedBox(
-                  quarterTurns: 3,
-                  child: Row(
+                child: isDrawer 
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('POWERED BY EZBILLIFY', 
+                        style: GoogleFonts.outfit(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.blueGrey.shade200, letterSpacing: 2)),
+                      const SizedBox(height: 8),
+                    ],
+                  )
+                : RotatedBox(
+                    quarterTurns: 3,
+                    child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'POWERED BY ',
-                        style: TextStyle(
+                        'PRO-BILLING BY ',
+                        style: GoogleFonts.outfit(
                           fontSize: 6,
                           fontWeight: FontWeight.w900,
-                          color: Colors.grey.shade300,
-                          letterSpacing: 2,
+                          color: Colors.blueGrey.shade200,
+                          letterSpacing: 1,
                         ),
                       ),
                       Text(
                         'EZBILLIFY',
-                        style: TextStyle(
+                        style: GoogleFonts.outfit(
                           fontSize: 8,
                           fontWeight: FontWeight.w900,
-                          color: Colors.grey.shade400,
+                          color: Colors.blueGrey.shade300,
                           letterSpacing: 1,
                         ),
                       ),
@@ -1183,6 +1395,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (dialogContext) => OrderHistoryDialog(
         branchId: branchId,
         onSelect: (o) {
@@ -1191,6 +1404,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           }
           if (mounted) {
              _loadOrderFromHistory(o);
+             if (Responsive.isMobile(context)) _showMobileCart(context);
           }
         },
       ),
@@ -1220,10 +1434,27 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
-      builder: (c) => SizedBox(
-        height: MediaQuery.of(context).size.height * 0.8,
-        child: _buildCartArea(),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      elevation: 0,
+      builder: (c) => _MobileCartSheet(
+        cart: _cart,
+        existingOrderItems: _existingOrderItems,
+        isLoadingItems: _isLoadingItems,
+        total: _total,
+        existingOrderTotal: _existingOrderTotal,
+        activeOrderId: _activeOrderId,
+        activeOrderNumber: _activeOrderNumber,
+        activeOrderPaymentStatus: _activeOrderPaymentStatus,
+        activeTokenNumber: _activeTokenNumber,
+        activeBillNumber: _activeBillNumber,
+        isSaving: _isSaving,
+        onUpdateQty: _updateQty,
+        onClearCart: () => setState(() => _cart.clear()),
+        onSaveAndSend: _handleSaveAndSend,
+        onPayment: () => _handlePayment(printReceipt: false),
+        onReset: _resetPos,
+        isMobile: Responsive.isMobile(context),
       ),
     );
   }
@@ -1232,14 +1463,22 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   void _showTableSheet(BuildContext context) {
      showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
-      builder: (c) => Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('SELECT TABLE', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: Colors.grey, letterSpacing: 2)),
-            const SizedBox(height: 24),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      elevation: 0,
+      builder: (c) => Material(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: const BoxDecoration(color: Colors.white),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('SELECT TABLE', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.blueGrey.shade400, letterSpacing: 2)),
+              const SizedBox(height: 24),
             Expanded(
               child: ref.watch(tablesProvider(ref.read(contextProvider).branchId!)).when(
                 data: (tables) => GridView.builder(
@@ -1277,6 +1516,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           ],
         ),
       ),
+      ),
     );
   }
 
@@ -1284,13 +1524,23 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
-      builder: (c) => _CustomerSearchSheet(
-        onSelect: (customer) {
-          AudioService.instance.playClick();
-          setState(() => _selectedCustomer = customer);
-          Navigator.pop(context);
-        },
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      elevation: 0,
+      builder: (c) => Material(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          decoration: const BoxDecoration(color: Colors.white),
+          child: _CustomerSearchSheet(
+            onSelect: (customer) {
+              AudioService.instance.playClick();
+              setState(() => _selectedCustomer = customer);
+              Navigator.pop(context);
+            },
+          ),
+        ),
       ),
     );
   }
@@ -1298,9 +1548,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   void _showSortModal() {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(32),
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      elevation: 0,
+      builder: (context) => Material(
+        color: Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        clipBehavior: Clip.antiAlias,
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: const BoxDecoration(color: Colors.white),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1312,6 +1569,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             _buildSortOption('price_desc', 'Price: High to Low', LucideIcons.arrowDown),
           ],
         ),
+      ),
       ),
     );
   }
@@ -1427,24 +1685,42 @@ class _SelectorButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isTablet = Responsive.isTablet(context);
+    final isMobile = Responsive.isMobile(context);
+    
     return GestureDetector(
       onTapDown: (_) => AudioService.instance.playClick(),
       onTap: onTap,
       child: Container(
-        height: isTablet ? 54 : 64,
-        padding: EdgeInsets.symmetric(horizontal: isTablet ? 16 : 24),
+        height: isTablet ? 54 : 58,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.08) : Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: isSelected ? color : Colors.grey.shade50),
-          boxShadow: isSelected ? null : AppTheme.premiumShadow,
+          color: isSelected ? color.withValues(alpha: 0.1) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? color.withValues(alpha: 0.5) : Colors.grey.shade200,
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected ? [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))] : [],
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20, color: isSelected ? color : Colors.grey),
-            const SizedBox(width: 12),
-            Expanded(child: Text(label.toUpperCase(), style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, color: isSelected ? color : AppTheme.secondary, letterSpacing: 1), overflow: TextOverflow.ellipsis)),
-            Icon(LucideIcons.chevronDown, size: 16, color: isSelected ? color : Colors.grey.shade300),
+            Icon(icon, size: 18, color: isSelected ? color : Colors.grey.shade600),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                label.toUpperCase(), 
+                style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w900, 
+                  fontSize: 11, 
+                  color: isSelected ? color : Colors.blueGrey.shade700, 
+                  letterSpacing: 0.5
+                ), 
+                overflow: TextOverflow.ellipsis
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(LucideIcons.chevronDown, size: 14, color: isSelected ? color : Colors.grey.shade400),
           ],
         ),
       ),
@@ -1463,21 +1739,29 @@ class _CategoryChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(right: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : const Color(0xFFE3E3E8),
-          borderRadius: BorderRadius.circular(12),
+          color: isSelected ? AppTheme.primary : Colors.white,
+          borderRadius: BorderRadius.circular(100),
+          border: Border.all(
+            color: isSelected ? AppTheme.primary : Colors.grey.shade200,
+            width: 1.5,
+          ),
+          boxShadow: isSelected 
+            ? [BoxShadow(color: AppTheme.primary.withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 4))] 
+            : [],
         ),
         child: Center(
           child: Text(
             label.toUpperCase(), 
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black.withValues(alpha: 0.6), 
-              fontWeight: FontWeight.w700, 
-              fontSize: 11,
-              letterSpacing: 0.5
+            style: GoogleFonts.outfit(
+              color: isSelected ? Colors.white : Colors.blueGrey.shade600, 
+              fontWeight: FontWeight.w900, 
+              fontSize: 10,
+              letterSpacing: 1,
             )
           )
         ),
@@ -1503,108 +1787,92 @@ class _ProductCard extends StatelessWidget {
     final dietaryLabel = isVeg ? "VEG" : (isEgg ? "EGG" : "NON-VEG");
 
     return GestureDetector(
-      onTap: isAvailable ? onAdd : () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item out of stock!'))),
-      child: Opacity(
-        opacity: isAvailable ? 1.0 : 0.8,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: isAvailable ? Colors.grey.shade100 : Colors.red.withOpacity(0.2)),
-            boxShadow: isAvailable ? AppTheme.premiumShadow : [],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+      onTap: isAvailable ? onAdd : null,
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 100),
+        scale: isAvailable ? 1.0 : 0.98,
+        child: Opacity(
+          opacity: isAvailable ? 1.0 : 0.6,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.grey.shade100, width: 1.5),
+              boxShadow: isAvailable ? [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 20, offset: const Offset(0, 10)),
+              ] : [],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
-                        color: dietaryColor.withOpacity(0.12), 
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: dietaryColor.withOpacity(0.3), width: 1)
+                        color: dietaryColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(dietaryIcon, size: 12, color: dietaryColor),
-                          const SizedBox(width: 4),
-                          Text(dietaryLabel, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: dietaryColor)),
-                        ],
+                      child: Icon(dietaryIcon, size: 12, color: dietaryColor),
+                    ),
+                    GestureDetector(
+                      onTap: onToggle,
+                      child: Icon(
+                        isAvailable ? LucideIcons.toggleRight : LucideIcons.toggleLeft,
+                        size: 24,
+                        color: isAvailable ? Colors.green : Colors.grey.shade300,
                       ),
                     ),
-                  // Stock Toggle
-                  GestureDetector(
-                    onTap: onToggle,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: isAvailable ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: isAvailable ? Colors.green : Colors.red, width: 1.5),
-                      ),
-                      child: Text(
-                        isAvailable ? "IN STOCK" : "OUT STOCK",
-                        style: TextStyle(
-                          fontSize: 9, 
-                          fontWeight: FontWeight.w900, 
-                          color: isAvailable ? Colors.green : Colors.red,
-                          letterSpacing: 0.5
-                        )
-                      ),
-                    ),
-                  )
-                ],
-              ),
-              const Spacer(),
-              Text(
-                item['name'], 
-                style: TextStyle(
-                  fontWeight: FontWeight.w800, 
-                  fontSize: 13, 
-                  height: 1.2,
-                  color: isAvailable ? Colors.black : Colors.grey.shade600,
-                  decoration: isAvailable ? null : TextDecoration.lineThrough,
-                  decorationColor: Colors.red,
-                  decorationThickness: 2,
-                ), 
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                   Text(
-                    '₹${item['base_price']}', 
-                    style: TextStyle(
-                      fontWeight: FontWeight.w900, 
-                      fontSize: 16,
-                      color: isAvailable ? Colors.black : Colors.grey,
-                    )
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  (item['name'] ?? 'Item').toString().toUpperCase(),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    color: Colors.blueGrey.shade900,
+                    height: 1.2,
                   ),
-                  if (isAvailable)
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: const BoxDecoration(
-                        color: AppTheme.secondary, 
-                        shape: BoxShape.circle
+                ),
+                const Spacer(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '₹${(item['base_price'] as num).toStringAsFixed(0)}',
+                      style: GoogleFonts.outfit(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                        color: AppTheme.primary,
+                        letterSpacing: -0.5,
                       ),
-                      child: const Icon(LucideIcons.plus, color: Colors.white, size: 16),
                     ),
-                ],
-              ),
-            ],
+                    if (isAvailable)
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.secondary,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(LucideIcons.plus, size: 14, color: Colors.white),
+                      ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 }
+
 
 class _CartItemTile extends StatelessWidget {
   final Map<String, dynamic> item;
@@ -1982,6 +2250,12 @@ class _ActiveOrdersSheetState extends ConsumerState<_ActiveOrdersSheet> with Sin
     _tabController = TabController(length: 2, vsync: this);
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   Future<List<Map<String, dynamic>>> _fetchLiveOrders() async {
     final ctx = ref.read(contextProvider);
     final res = await Supabase.instance.client
@@ -2035,17 +2309,17 @@ class _ActiveOrdersSheetState extends ConsumerState<_ActiveOrdersSheet> with Sin
             unselectedLabelColor: Colors.grey,
             indicatorColor: AppTheme.primary,
             indicatorPadding: const EdgeInsets.symmetric(horizontal: 32),
-            tabs: [
+            tabs: const [
               Tab(child: Text('LIVE DINE-IN', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1))),
               Tab(child: Text('UNPAID / QR', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1))),
             ],
           ),
           Expanded(
-            child: TabBarView(
+            child: LazyTabView(
               controller: _tabController,
-              children: [
-                _OrderList(fetch: _fetchLiveOrders, onSelect: widget.onSelect),
-                _OrderList(fetch: _fetchUnpaidOrders, onSelect: widget.onSelect),
+              tabBuilders: [
+                () => _OrderList(fetch: _fetchLiveOrders, onSelect: widget.onSelect),
+                () => _OrderList(fetch: _fetchUnpaidOrders, onSelect: widget.onSelect),
               ],
             ),
           ),
@@ -2136,6 +2410,293 @@ class _OrderList extends StatelessWidget {
           },
         );
       },
+    );
+  }
+}
+
+class _MobileCartSheet extends StatefulWidget {
+  final List<Map<String, dynamic>> cart;
+  final List<Map<String, dynamic>> existingOrderItems;
+  final bool isLoadingItems;
+  final double total;
+  final double existingOrderTotal;
+  final String? activeOrderId;
+  final String? activeOrderNumber;
+  final String? activeOrderPaymentStatus;
+  final String? activeTokenNumber;
+  final String? activeBillNumber;
+  final bool isSaving;
+  final Function(String, int) onUpdateQty;
+  final VoidCallback onClearCart;
+  final VoidCallback onSaveAndSend;
+  final VoidCallback onPayment;
+  final VoidCallback onReset;
+  final bool isMobile;
+
+  const _MobileCartSheet({
+    required this.cart,
+    required this.existingOrderItems,
+    required this.isLoadingItems,
+    required this.total,
+    required this.existingOrderTotal,
+    required this.activeOrderId,
+    required this.activeOrderNumber,
+    required this.activeOrderPaymentStatus,
+    required this.activeTokenNumber,
+    required this.activeBillNumber,
+    required this.isSaving,
+    required this.onUpdateQty,
+    required this.onClearCart,
+    required this.onSaveAndSend,
+    required this.onPayment,
+    required this.onReset,
+    required this.isMobile,
+  });
+
+  @override
+  State<_MobileCartSheet> createState() => _MobileCartSheetState();
+}
+
+class _MobileCartSheetState extends State<_MobileCartSheet> {
+  late List<Map<String, dynamic>> _localCart;
+
+  @override
+  void initState() {
+    super.initState();
+    _localCart = List.from(widget.cart);
+  }
+
+  // Calculate total from local cart
+  double get _localTotal {
+    return _localCart.fold<double>(0, (sum, item) {
+      final price = (item['base_price'] ?? 0).toDouble();
+      final qty = (item['qty'] ?? 0).toInt();
+      return sum + (price * qty);
+    });
+  }
+
+  void _updateLocalQty(String id, int delta) {
+    setState(() {
+      final index = _localCart.indexWhere((i) => i['id'] == id);
+      if (index >= 0) {
+        _localCart[index]['qty'] += delta;
+        if (_localCart[index]['qty'] <= 0) {
+          _localCart.removeAt(index);
+        }
+      }
+    });
+    // Also update parent
+    widget.onUpdateQty(id, delta);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.8,
+        decoration: const BoxDecoration(color: Colors.white),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Row(
+                children: [
+                  const Icon(LucideIcons.shoppingBag, color: AppTheme.secondary),
+                  const SizedBox(width: 12),
+                  const Text('YOUR CART', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                  const Spacer(),
+                  _localCart.isNotEmpty 
+                    ? IconButton(
+                        icon: const Icon(LucideIcons.trash2, size: 18, color: Colors.grey), 
+                        onPressed: () {
+                          setState(() => _localCart.clear());
+                          widget.onClearCart();
+                        }
+                      )
+                    : const SizedBox.shrink(),
+                ],
+              ),
+            ),
+            Expanded(
+              child: widget.isLoadingItems 
+                ? const Center(child: CircularProgressIndicator()) 
+                : _localCart.isEmpty && widget.existingOrderItems.isEmpty
+                  ? Center(child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(LucideIcons.shoppingCart, size: 48, color: Colors.grey.shade200),
+                        const SizedBox(height: 16),
+                        Text('CART IS EMPTY', style: TextStyle(fontWeight: FontWeight.w900, color: Colors.grey.shade300, fontSize: 12, letterSpacing: 2)),
+                      ],
+                    ))
+                  : ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      children: [
+                        if (widget.existingOrderItems.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              const Text('ALREADY ORDERED', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: Colors.grey, letterSpacing: 1.5)),
+                              const SizedBox(width: 8),
+                              Expanded(child: Divider(color: Colors.grey.shade100)),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          ...widget.existingOrderItems.map((item) => _ExistingItemTile(item: item)),
+                          const SizedBox(height: 24),
+                        ],
+                        if (_localCart.isNotEmpty) ...[
+                          Row(
+                            children: [
+                              const Text('NEW ITEMS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: AppTheme.primary, letterSpacing: 1.5)),
+                              const SizedBox(width: 8),
+                              Expanded(child: Divider(color: AppTheme.primary.withValues(alpha: 0.1))),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          ..._localCart.asMap().entries.map((entry) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _CartItemTile(item: entry.value, onUpdate: _updateLocalQty),
+                          )),
+                        ],
+                      ],
+                    ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey.shade100))),
+              child: Column(
+                children: [
+                  if (widget.activeOrderId != null) ...[
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('ORDER #${widget.activeOrderNumber}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: widget.activeOrderPaymentStatus == 'paid' ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                widget.activeOrderPaymentStatus?.toUpperCase() ?? 'PENDING',
+                                style: TextStyle(
+                                  color: widget.activeOrderPaymentStatus == 'paid' ? Colors.green : Colors.orange,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 10
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 16,
+                          children: [
+                            if (widget.activeTokenNumber != null) 
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(6)),
+                                child: Text('TOKEN: ${widget.activeTokenNumber}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w800)),
+                              ),
+                            if (widget.activeBillNumber != null) 
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(6)),
+                                child: Text('BILL: ${widget.activeBillNumber}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w800)),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Total Amount', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                      Text('₹${(_localTotal + widget.existingOrderTotal).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  if (widget.activeOrderPaymentStatus == 'paid') ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 54,
+                            child: OutlinedButton(
+                              onPressed: widget.onReset,
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: Colors.green),
+                                foregroundColor: Colors.green,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              child: const Text('START NEW ORDER', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Center(child: Text("Order is settled. Create a new order to proceed.", style: TextStyle(color: Colors.grey, fontSize: 12))),
+                  ] else ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 60,
+                            child: ElevatedButton(
+                              onPressed: widget.isSaving || (_localCart.isEmpty && widget.activeOrderId == null) ? null : widget.onSaveAndSend,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: widget.activeOrderId == null ? Colors.indigo : Colors.orange.shade800,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                elevation: 0,
+                              ),
+                              child: widget.isSaving 
+                                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                : Text(
+                                    widget.activeOrderId == null ? 'PLACE ORDER' : 'UPDATE ORDER', 
+                                    style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (widget.isMobile) ...[ 
+                      SizedBox(
+                        height: 54,
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: widget.isSaving || (_localCart.isEmpty && widget.activeOrderId == null) ? null : widget.onPayment,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 0,
+                          ),
+                          child: widget.isSaving 
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text('SETTLE & PAY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

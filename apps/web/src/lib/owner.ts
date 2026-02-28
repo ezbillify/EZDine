@@ -36,6 +36,8 @@ export async function createBranch(input: {
   address?: string | null;
   phone?: string | null;
   code?: string | null;
+  gstin?: string | null;
+  fssai_no?: string | null;
 }) {
   const { data, error } = await supabase
     .from("branches")
@@ -44,7 +46,9 @@ export async function createBranch(input: {
       name: input.name,
       address: input.address ?? null,
       phone: input.phone ?? null,
-      code: input.code ?? null
+      code: input.code ?? null,
+      gstin: input.gstin ?? null,
+      fssai_no: input.fssai_no ?? null
     })
     .select("*")
     .single();
@@ -55,11 +59,17 @@ export async function createBranch(input: {
 
 export async function updateBranch(
   id: string,
-  input: { name: string; address?: string | null; phone?: string | null }
+  input: { name: string; address?: string | null; phone?: string | null; gstin?: string | null; fssai_no?: string | null }
 ) {
   const { data, error } = await supabase
     .from("branches")
-    .update({ name: input.name, address: input.address ?? null, phone: input.phone ?? null })
+    .update({
+      name: input.name,
+      address: input.address ?? null,
+      phone: input.phone ?? null,
+      gstin: input.gstin ?? null,
+      fssai_no: input.fssai_no ?? null
+    })
     .eq("id", id)
     .select("*")
     .single();

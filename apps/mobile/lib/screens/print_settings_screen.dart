@@ -1,11 +1,16 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/print_service.dart';
 import '../services/audio_service.dart';
+import '../services/bluetooth_manager.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../core/theme.dart';
 
 final printSettingsProvider = StateNotifierProvider<PrintSettingsNotifier, PrintSettings>((ref) {
   return PrintSettingsNotifier();
@@ -16,12 +21,14 @@ class PrintSettings {
   final String? printerIdKot;
   final String? printerIdInvoice;
   final bool isBluetooth;
+  final String bridgeUrl;
 
   PrintSettings({
     this.consolidated = false,
     this.printerIdKot,
     this.printerIdInvoice,
     this.isBluetooth = false,
+    this.bridgeUrl = 'http://192.168.1.100:4000',
   });
 
   PrintSettings copyWith({
@@ -29,12 +36,14 @@ class PrintSettings {
     String? printerIdKot,
     String? printerIdInvoice,
     bool? isBluetooth,
+    String? bridgeUrl,
   }) {
     return PrintSettings(
       consolidated: consolidated ?? this.consolidated,
       printerIdKot: printerIdKot ?? this.printerIdKot,
       printerIdInvoice: printerIdInvoice ?? this.printerIdInvoice,
       isBluetooth: isBluetooth ?? this.isBluetooth,
+      bridgeUrl: bridgeUrl ?? this.bridgeUrl,
     );
   }
 }
@@ -51,6 +60,7 @@ class PrintSettingsNotifier extends StateNotifier<PrintSettings> {
       printerIdKot: prefs.getString('printer_id_kot'),
       printerIdInvoice: prefs.getString('printer_id_invoice'),
       isBluetooth: prefs.getBool('print_is_bluetooth') ?? false,
+      bridgeUrl: prefs.getString('print_bridge_url') ?? 'http://192.168.1.100:4000',
     );
   }
 
@@ -59,18 +69,21 @@ class PrintSettingsNotifier extends StateNotifier<PrintSettings> {
     String? printerIdKot,
     String? printerIdInvoice,
     bool? isBluetooth,
+    String? bridgeUrl,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     if (consolidated != null) await prefs.setBool('print_consolidated', consolidated);
     if (printerIdKot != null) await prefs.setString('printer_id_kot', printerIdKot);
     if (printerIdInvoice != null) await prefs.setString('printer_id_invoice', printerIdInvoice);
     if (isBluetooth != null) await prefs.setBool('print_is_bluetooth', isBluetooth);
+    if (bridgeUrl != null) await prefs.setString('print_bridge_url', bridgeUrl);
 
     state = state.copyWith(
       consolidated: consolidated,
       printerIdKot: printerIdKot,
       printerIdInvoice: printerIdInvoice,
       isBluetooth: isBluetooth,
+      bridgeUrl: bridgeUrl,
     );
   }
 }
@@ -84,28 +97,110 @@ class PrintSettingsScreen extends ConsumerStatefulWidget {
 
 class _PrintSettingsScreenState extends ConsumerState<PrintSettingsScreen> {
   bool _scanning = false;
-  List<BluetoothInfo> _devices = [];
+  List<ScanResult> _devices = [];
+  final Map<String, bool> _connectionStatus = {};
 
   @override
   void initState() {
     super.initState();
+    _checkConnectedDevices();
+  }
+
+  Future<void> _checkConnectedDevices() async {
+    final settings = ref.read(printSettingsProvider);
+    if (settings.isBluetooth && settings.printerIdInvoice != null) {
+      final deviceId = settings.printerIdInvoice!.replaceFirst("bt::", "");
+      final isConnected = await BluetoothManager().isConnected(deviceId);
+      if (mounted) {
+        setState(() {
+          _connectionStatus[deviceId] = isConnected;
+        });
+      }
+    }
   }
 
   Future<void> _scanBluetooth() async {
-    setState(() => _scanning = true);
+    if (_scanning) return;
+
     try {
-      final bool result = await PrintBluetoothThermal.isPermissionBluetoothGranted;
-      if (!result) {
-         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bluetooth Permission Denied")));
-         return;
+      // 1. Check if Bluetooth is supported
+      if (await FlutterBluePlus.isSupported == false) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bluetooth not supported")));
+        return;
       }
 
-      final List<BluetoothInfo> list = await PrintBluetoothThermal.pairedBluetooths;
-      setState(() => _devices = list);
+      // 2. Request Permissions
+      final List<Permission> permissions = [];
+      if (Platform.isAndroid) {
+        permissions.addAll([
+          Permission.bluetoothScan,
+          Permission.bluetoothConnect,
+          Permission.location,
+        ]);
+      } else if (Platform.isIOS) {
+        // On iOS, this triggers the "Bluetooth" permission alert
+        permissions.add(Permission.bluetooth);
+      }
+      
+      if (permissions.isNotEmpty) {
+        await permissions.request();
+      }
+
+      // 3. Check and Turn On Bluetooth
+      BluetoothAdapterState state = await FlutterBluePlus.adapterState.first;
+      
+      if (state != BluetoothAdapterState.on) {
+        if (Platform.isAndroid) {
+          try {
+            await FlutterBluePlus.turnOn();
+            // Wait for it to settle to "on"
+            await FlutterBluePlus.adapterState.where((s) => s == BluetoothAdapterState.on).first.timeout(const Duration(seconds: 3));
+          } catch (e) {
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enable Bluetooth in settings.")));
+            return;
+          }
+        } else {
+          // iOS cannot turn on BT programmatically
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Bluetooth is OFF. Please enable it in system settings.")));
+          return;
+        }
+      }
+
+      // 4. Double check adapter state
+      if (await FlutterBluePlus.adapterState.first != BluetoothAdapterState.on) {
+        return;
+      }
+
+      setState(() {
+        _scanning = true;
+        _devices = [];
+      });
+
+      // 5. Listen to results
+      var subscription = FlutterBluePlus.onScanResults.listen((results) {
+        if (mounted) {
+          setState(() {
+            // Filter out devices without names and sort by signal strength
+            _devices = results.where((r) => r.device.name.isNotEmpty).toList();
+            _devices.sort((a, b) => b.rssi.compareTo(a.rssi));
+          });
+        }
+      });
+
+      // 6. Start Scan
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 4));
+
+      // 7. Wait for scan to finish
+      await FlutterBluePlus.isScanning.where((val) => val == false).first;
+      subscription.cancel();
+
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Scan Error: $e")));
+      debugPrint("Scan Error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Scan Error: $e")));
+      }
     } finally {
-      setState(() => _scanning = false);
+      if (mounted) setState(() => _scanning = false);
     }
   }
 
@@ -115,107 +210,171 @@ class _PrintSettingsScreenState extends ConsumerState<PrintSettingsScreen> {
     final notifier = ref.read(printSettingsProvider.notifier);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text("Printer Setup", style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
+        title: Text('PRINTER HUB', 
+          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1)),
         leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, color: Colors.black),
+          icon: const Icon(LucideIcons.chevronLeft),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      backgroundColor: const Color(0xFFF8FAFC),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionHeader("Print Mode"),
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
+             _buildSectionHeader("Print Operations"),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 8)),
+                ],
+              ),
               child: SwitchListTile(
-                title: const Text("Consolidated Receipt", style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: const Text("Print Bill, Token & KOT on one long slip"),
+                contentPadding: EdgeInsets.zero,
+                title: Text("Consolidated Receipt", style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+                subtitle: Text("All copies on one slip", style: GoogleFonts.outfit(fontSize: 12, color: Colors.grey)),
                 value: settings.consolidated,
-                activeColor: const Color(0xFF0F172A),
+                activeColor: AppTheme.primary,
                 onChanged: (val) => notifier.updateSettings(consolidated: val),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
 
-            _buildSectionHeader("Connection Type"),
+            _buildSectionHeader("Connection Method"),
             Row(
               children: [
                 Expanded(
                   child: _buildTypeCard(
-                    icon: LucideIcons.wifi,
+                    icon: LucideIcons.network,
                     title: "Network Bridge",
                     selected: !settings.isBluetooth,
                     onTap: () => notifier.updateSettings(isBluetooth: false),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 16),
                 Expanded(
                   child: _buildTypeCard(
                     icon: LucideIcons.bluetooth,
                     title: "Bluetooth Direct",
                     selected: settings.isBluetooth,
-                    onTap: () => notifier.updateSettings(isBluetooth: true),
+                    onTap: () {
+                      notifier.updateSettings(isBluetooth: true);
+                      _scanBluetooth();
+                    },
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
 
             if (settings.isBluetooth) ...[
-              _buildSectionHeader("Bluetooth Devices"),
+              _buildSectionHeader("Paired Bluetooth Devices"),
                Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 8)),
+                  ],
                 ),
                 child: Column(
                   children: [
                     ListTile(
-                      title: const Text("Scan for Printers"),
-                      trailing: _scanning ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(LucideIcons.refreshCw, size: 20),
+                      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+                      leading: Icon(LucideIcons.refreshCw, size: 18, color: _scanning ? AppTheme.primary : Colors.grey),
+                      title: Text(_scanning ? "Scanning for printers..." : "Tap to Scan Devices", 
+                        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 13)),
+                      trailing: _scanning ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : null,
                       onTap: _scanBluetooth,
                     ),
                     const Divider(height: 1),
-                    if (_devices.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(20.0),
-                        child: Text("No devices found. Ensure printer is paired in System Settings.", style: TextStyle(color: Colors.grey, fontSize: 13), textAlign: TextAlign.center),
+                    if (_devices.isEmpty && !_scanning)
+                      Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Column(
+                          children: [
+                            Icon(LucideIcons.printer, size: 40, color: Colors.grey.shade200),
+                            const SizedBox(height: 16),
+                            Text("No devices found", style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.grey)),
+                          ],
+                        ),
                       ),
-                    ..._devices.map((d) => ListTile(
-                      leading: const Icon(LucideIcons.printer),
-                      title: Text(d.name),
-                      subtitle: Text(d.macAdress),
-                      trailing: (settings.printerIdInvoice == "bt::${d.macAdress}") 
-                          ? const Icon(LucideIcons.checkCircle, color: Colors.green) 
-                          : null,
-                      onTap: () {
-                         // Set both KOT and Invoice to this BT printer for simplicity in direct mode
-                         final id = "bt::${d.macAdress}";
-                         notifier.updateSettings(printerIdKot: id, printerIdInvoice: id);
-                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Selected ${d.name}")));
-                      },
-                    )).toList(),
+                    ..._devices.map((r) {
+                      final deviceId = r.device.remoteId.toString();
+                      final isSelected = settings.printerIdInvoice == "bt::$deviceId";
+                      final isConnected = _connectionStatus[deviceId] ?? false;
+                      
+                      return ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isSelected 
+                              ? AppTheme.primary.withOpacity(0.1) 
+                              : Colors.grey.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(LucideIcons.printer, 
+                            size: 16, 
+                            color: isSelected ? AppTheme.primary : Colors.grey),
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(r.device.name, 
+                                style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14)),
+                            ),
+                            if (isSelected && isConnected)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text('CONNECTED', 
+                                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.green.shade700)),
+                              ),
+                          ],
+                        ),
+                        subtitle: Text(deviceId, style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
+                        trailing: isSelected 
+                            ? const Icon(LucideIcons.checkCircle2, color: Colors.green, size: 20) 
+                            : null,
+                        onTap: () async {
+                          final id = "bt::$deviceId";
+                          notifier.updateSettings(printerIdKot: id, printerIdInvoice: id);
+                          // Reset reconnection attempts for new device
+                          BluetoothManager().resetReconnectAttempts(deviceId);
+                          _checkConnectedDevices();
+                        },
+                      );
+                    }).toList(),
                   ],
                 ),
               ),
             ] else ...[
-              _buildSectionHeader("Network IDs (PC Bridge)"),
+              _buildSectionHeader("Bridge Configuration"),
               _buildNetworkInput(
-                label: "Kitchen Printer ID", 
+                icon: LucideIcons.link,
+                label: "PC Bridge URL", 
+                value: settings.bridgeUrl,
+                onChanged: (val) => notifier.updateSettings(bridgeUrl: val),
+              ),
+              const SizedBox(height: 16),
+              _buildNetworkInput(
+                icon: LucideIcons.terminal,
+                label: "Kitchen Station ID", 
                 value: settings.printerIdKot ?? "",
                 onChanged: (val) => notifier.updateSettings(printerIdKot: val),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               _buildNetworkInput(
-                label: "Bill/Token Printer ID", 
+                icon: LucideIcons.fileText,
+                label: "Billing Station ID", 
                 value: settings.printerIdInvoice ?? "",
                 onChanged: (val) => notifier.updateSettings(printerIdInvoice: val),
               ),
@@ -273,39 +432,51 @@ class _PrintSettingsScreenState extends ConsumerState<PrintSettingsScreen> {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFF0F172A) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? const Color(0xFF0F172A) : Colors.grey.shade200),
-          boxShadow: selected ? [BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))] : [],
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            if (selected) BoxShadow(color: const Color(0xFF0F172A).withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 8)),
+            if (!selected) BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+          ],
+          border: Border.all(color: selected ? const Color(0xFF0F172A) : Colors.grey.shade100),
         ),
         child: Column(
           children: [
-            Icon(icon, color: selected ? Colors.white : Colors.black87, size: 28),
-            const SizedBox(height: 8),
-            Text(title, style: TextStyle(color: selected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 13)),
+            Icon(icon, color: selected ? Colors.white : Colors.grey.shade400, size: 24),
+            const SizedBox(height: 12),
+            Text(title, style: GoogleFonts.outfit(
+              color: selected ? Colors.white : Colors.grey.shade400, 
+              fontWeight: FontWeight.w900, 
+              fontSize: 10,
+              letterSpacing: 0.5
+            )),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNetworkInput({required String label, required String value, required Function(String) onChanged}) {
+  Widget _buildNetworkInput({required IconData icon, required String label, required String value, required Function(String) onChanged}) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       child: TextFormField(
         initialValue: value,
         onChanged: onChanged,
+        style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14),
         decoration: InputDecoration(
+          icon: Icon(icon, size: 16, color: Colors.grey.shade300),
           border: InputBorder.none,
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+          labelText: label.toUpperCase(),
+          labelStyle: GoogleFonts.outfit(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1),
         ),
       ),
     );
@@ -423,33 +594,27 @@ class _PrintSettingsScreenState extends ConsumerState<PrintSettingsScreen> {
 
   void _handleConsolidated(bool preview) {
     final lines = [
-      // KOT Copy
-      PrintLine(text: "KITCHEN ORDER (COPY)", align: "center", bold: true),
-      PrintLine(text: "Order: #1001", align: "left"),
-      PrintLine(text: "Table: T3", align: "left", bold: true),
-      PrintLine(text: "TOKEN: 42", align: "center", bold: true),
-      PrintLine(text: "--------------------------------", align: "center"),
-      PrintLine(text: "1 x Paneer Butter Masala", align: "left", bold: true),
-      PrintLine(text: "2 x Butter Naan (Less oil)", align: "left", bold: true),
-      PrintLine(text: "================================", align: "center"),
-      PrintLine(text: " ", align: "center"),
-
-      // Customer Invoice
+      // Header
       PrintLine(text: "EZDine Demo", align: "center", bold: true),
-      PrintLine(text: "CUSTOMER INVOICE", align: "center", bold: true),
-      PrintLine(text: "Date: ${DateTime.now().toString().substring(0, 16)}", align: "left"),
+      PrintLine(text: "Branch: Main", align: "center"),
       PrintLine(text: "--------------------------------", align: "center"),
-      PrintLine(text: "Veg Biryani        1     220.0", align: "left"),
-      PrintLine(text: "Raita              1      40.0", align: "left"),
-      PrintLine(text: "--------------------------------", align: "center"),
-      PrintLine(text: "Total:                   273.0", align: "right", bold: true),
-      PrintLine(text: "================================", align: "center"),
-      PrintLine(text: " ", align: "center"),
 
-      // Token Slip
-      PrintLine(text: "TOKEN SLIP", align: "center", bold: true),
-      PrintLine(text: "42", align: "center", bold: true),
-      PrintLine(text: "Type: Dine In", align: "center"),
+      // Section 1: KOT
+      PrintLine(text: "KITCHEN ORDER (COPY)", align: "center", bold: true),
+      PrintLine(text: "TOKEN: 42", align: "center", bold: true),
+      PrintLine(text: "TABLE: T3", align: "center", bold: true),
+      PrintLine(text: "Order: #1001 | 22:45", align: "center"),
+      PrintLine(text: "1 x Paneer Butter Masala", align: "left", bold: true),
+      PrintLine(text: "2 x Butter Naan", align: "left", bold: true),
+      
+      PrintLine(text: "--------------------------------", align: "center"),
+
+      // Section 2: Bill
+      PrintLine(text: "CUSTOMER INVOICE", align: "center"),
+      PrintLine(text: "1 x Paneer Tikka        220.00", align: "left"),
+      PrintLine(text: "2 x Butter Naan          80.00", align: "left"),
+      PrintLine(text: "--------------------------------", align: "center"),
+      PrintLine(text: "TOTAL: 300.00", align: "center", bold: true),
       PrintLine(text: "Thank you!", align: "center"),
     ];
 
@@ -541,7 +706,7 @@ class _PrintSettingsScreenState extends ConsumerState<PrintSettingsScreen> {
                             style: TextStyle(
                               fontFamily: 'Courier', // Monospace for receipt look
                               fontWeight: l.bold ? FontWeight.w900 : FontWeight.normal,
-                              fontSize: 13,
+                              fontSize: 13.0 * (l.height > 1 ? 1.5 : 1.0),
                               color: Colors.black87,
                             ),
                           ),

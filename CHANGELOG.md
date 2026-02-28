@@ -1,4 +1,13 @@
 
+## v1.6.0 (2026-02-28)
+
+- Implemented dual-login system with password and OTP login methods
+- Added forgot password flow with 3-step recovery process
+- Ensured App Store compliance with legal links and mobile implementation
+- Implemented branding across mobile and web applications
+- Configured Supabase email templates for OTP and password reset
+
+
 ## v1.5.1 (2026-02-18)
 
 ### Fixes

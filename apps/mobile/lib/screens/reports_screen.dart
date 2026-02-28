@@ -14,6 +14,8 @@ import '../core/theme.dart';
 import '../services/auth_service.dart';
 import '../services/reporting_service.dart';
 import '../services/audio_service.dart';
+import '../core/responsive.dart';
+import '../widgets/lazy_tab_view.dart';
 
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
@@ -67,7 +69,27 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
   Widget build(BuildContext context) {
     final ctx = ref.watch(contextProvider);
     if (ctx.branchId == null) {
-      return const Scaffold(body: Center(child: Text('Please select a branch first')));
+      return Scaffold(
+        appBar: AppBar(title: const Text('REPORTS')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(LucideIcons.store, size: 64, color: Colors.grey.shade200),
+              const SizedBox(height: 24),
+              Text(
+                'NO BRANCH SELECTED',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, color: Colors.grey.shade400, letterSpacing: 1),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Please select a branch from the dashboard to view analytics.',
+                style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Scaffold(
@@ -107,7 +129,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
           indicatorColor: AppTheme.primary,
           indicatorWeight: 4,
           indicatorPadding: const EdgeInsets.symmetric(horizontal: 16),
-          isScrollable: true,
+          isScrollable: Responsive.isMobile(context),
           labelStyle: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1),
           tabs: const [
             Tab(text: 'TODAY'),
@@ -117,13 +139,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> with SingleTicker
           ],
         ),
       ),
-      body: TabBarView(
+      body: LazyTabView(
         controller: _tabController,
-        children: [
-          _ReportView(provider: dailyReportProvider(ctx.branchId!), title: "Daily Report"),
-          _ReportView(provider: monthlyReportProvider(ctx.branchId!), title: "Monthly Report"),
-          _ReportView(provider: yearlyReportProvider(ctx.branchId!), title: "Yearly Report"),
-          Column(
+        tabBuilders: [
+          () => _ReportView(provider: dailyReportProvider(ctx.branchId!), title: "Daily Report"),
+          () => _ReportView(provider: monthlyReportProvider(ctx.branchId!), title: "Monthly Report"),
+          () => _ReportView(provider: yearlyReportProvider(ctx.branchId!), title: "Yearly Report"),
+          () => Column(
             children: [
               Padding(
                 padding: const EdgeInsets.all(24),
@@ -262,102 +284,220 @@ class _ReportView extends ConsumerWidget {
     await Printing.sharePdf(bytes: await pdf.save(), filename: 'Report_${DateTime.now().millisecondsSinceEpoch}.pdf');
   }
 
+  Widget _buildBreakdownHeader() {
+    return Text(
+      'REVENUE BY CHANNEL',
+      style: GoogleFonts.outfit(
+        fontSize: 10,
+        fontWeight: FontWeight.w900,
+        color: Colors.grey.shade400,
+        letterSpacing: 2,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final reportAsync = ref.watch(provider);
+    final isMobile = Responsive.isMobile(context);
 
     return reportAsync.when(
-      data: (report) => SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _exportExcel(report),
-                    icon: const Icon(LucideIcons.download, size: 16),
-                    label: const Text("EXCEL"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: AppTheme.primary,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), border: Border.all(color: AppTheme.primary.withOpacity(0.1))),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => _exportPDF(report),
-                    icon: const Icon(LucideIcons.fileText, size: 16),
-                    label: const Text("PDF"),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.indigo,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.indigo.withOpacity(0.1))),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            _buildSummaryGrid(report),
-            const SizedBox(height: 32),
-            Text(
-              'REVENUE BY CHANNEL',
-              style: GoogleFonts.outfit(
-                fontSize: 10,
-                fontWeight: FontWeight.w900,
-                color: Colors.grey.shade400,
-                letterSpacing: 2,
+      data: (report) {
+        final excelBtn = ElevatedButton.icon(
+          onPressed: () => _exportExcel(report),
+          icon: const Icon(LucideIcons.download, size: 16),
+          label: const Text("EXCEL"),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: AppTheme.primary,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: AppTheme.primary.withOpacity(0.1))),
+          ),
+        );
+
+        final pdfBtn = ElevatedButton.icon(
+          onPressed: () => _exportPDF(report),
+          icon: const Icon(LucideIcons.fileText, size: 16),
+          label: const Text("PDF"),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.indigo,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.indigo.withOpacity(0.1))),
+          ),
+        );
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.all(isMobile ? 24 : 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  if (isMobile) Expanded(child: excelBtn) else SizedBox(width: 160, child: excelBtn),
+                  const SizedBox(width: 12),
+                  if (isMobile) Expanded(child: pdfBtn) else SizedBox(width: 160, child: pdfBtn),
+                ],
               ),
-            ),
-            const SizedBox(height: 16),
-            _buildPaymentBreakdown(report),
-          ],
-        ),
-      ),
+              const SizedBox(height: 32),
+              if (isMobile) ...[
+                _buildSummaryGrid(report, context),
+                const SizedBox(height: 32),
+                _buildBreakdownHeader(),
+                const SizedBox(height: 16),
+                _buildPaymentBreakdown(report),
+                _buildRecentBills(report),
+              ] else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        children: [
+                          _buildSummaryGrid(report, context),
+                          _buildRecentBills(report),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 40),
+                    Expanded(
+                      flex: 2,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildBreakdownHeader(),
+                          const SizedBox(height: 16),
+                          _buildPaymentBreakdown(report),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        );
+      },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, s) => Center(child: Text('Error: $e')),
     );
   }
 
-  Widget _buildSummaryGrid(SalesReport report) {
-    return Column(
+  Widget _buildSummaryGrid(SalesReport report, BuildContext context) {
+    final isMobile = Responsive.isMobile(context);
+    return GridView.count(
+      shrinkWrap: true,
+      padding: EdgeInsets.zero,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: isMobile ? 2 : 3,
+      mainAxisSpacing: 16,
+      crossAxisSpacing: 16,
+      childAspectRatio: isMobile ? 1.25 : 1.5,
       children: [
         _StatCard(
-          label: 'GROSS REVENUE',
+          label: 'REVENUE',
           value: '₹${report.totalSales.toStringAsFixed(0)}',
-          icon: LucideIcons.circleDollarSign,
+          icon: LucideIcons.indianRupee,
           color: AppTheme.primary,
-          subtitle: 'Total including taxes',
+          subtitle: 'Inc. taxes',
         ).animate().fadeIn().slideY(begin: 0.1, end: 0),
+        _StatCard(
+          label: 'TAX',
+          value: '₹${report.totalTax.toStringAsFixed(0)}',
+          icon: LucideIcons.receipt,
+          color: Colors.orange,
+          subtitle: 'Liability',
+        ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1, end: 0),
+        _StatCard(
+          label: 'ORDERS',
+          value: report.orderCount.toString(),
+          icon: LucideIcons.shoppingBag,
+          color: Colors.indigo,
+          subtitle: 'Completed',
+        ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1, end: 0),
+      ],
+    );
+  }
+
+  Widget _buildRecentBills(SalesReport report) {
+    if (report.rawBills.isEmpty) return const SizedBox();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 32),
+        Text(
+          'RECENT TRANSACTIONS',
+          style: GoogleFonts.outfit(
+            fontSize: 10,
+            fontWeight: FontWeight.w900,
+            color: Colors.grey.shade400,
+            letterSpacing: 2,
+          ),
+        ),
         const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _StatCard(
-                label: 'TOTAL TAX',
-                value: '₹${report.totalTax.toStringAsFixed(0)}',
-                icon: LucideIcons.receipt,
-                color: Colors.orange,
-                subtitle: 'Tax liability',
-              ).animate().fadeIn(delay: 100.ms).slideY(begin: 0.1, end: 0),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _StatCard(
-                label: 'ORDERS',
-                value: report.orderCount.toString(),
-                icon: LucideIcons.shoppingBag,
-                color: Colors.indigo,
-                subtitle: 'Completed bills',
-              ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.1, end: 0),
-            ),
-          ],
+        ListView.builder(
+          shrinkWrap: true,
+          padding: EdgeInsets.zero,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: report.rawBills.length > 20 ? 20 : report.rawBills.length,
+          itemBuilder: (context, index) {
+            final bill = report.rawBills[index];
+            final date = DateTime.tryParse(bill['created_at'] ?? "") ?? DateTime.now();
+            final billNum = bill['bill_number']?.toString().toUpperCase() ?? bill['id'].toString().substring(0, 6).toUpperCase();
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade50),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.01), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(LucideIcons.receipt, size: 16, color: AppTheme.primary),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "BILL #$billNum",
+                          style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 13, color: AppTheme.secondary),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          DateFormat('MMM dd, hh:mm a').format(date),
+                          style: TextStyle(color: Colors.grey.shade400, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      "₹${(bill['total'] as num).toStringAsFixed(0)}",
+                      style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 14, color: AppTheme.secondary),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ],
     );
@@ -443,7 +583,7 @@ class _ReportView extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
-                    ).animate().shimmer(),
+                    ).animate(),
                   ],
                 ),
               ],
@@ -509,57 +649,44 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 20, offset: const Offset(0, 10)),
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 5)),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: color, size: 28),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, color: color, size: 16),
+              ),
+            ],
           ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.outfit(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.grey,
-                    letterSpacing: 1.5,
-                  ),
-                ),
-                Text(
-                  value,
-                  style: GoogleFonts.outfit(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.secondary,
-                    letterSpacing: -1,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade400, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
+          const Spacer(),
+          Text(
+            label.toUpperCase(),
+            style: GoogleFonts.outfit(fontSize: 8, fontWeight: FontWeight.w900, color: Colors.grey.shade400, letterSpacing: 1),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w900, color: const Color(0xFF0F172A), letterSpacing: -0.5),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: TextStyle(fontSize: 8, color: Colors.grey.shade400, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
 }
-

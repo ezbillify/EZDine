@@ -44,13 +44,15 @@ dependencies:
   audioplayers: ^6.5.1
   uuid: ^4.5.2
   http: ^1.6.0
-  print_bluetooth_thermal: ^1.1.9
+  flutter_blue_plus: ^1.36.8
   esc_pos_utils_plus: ^2.0.4
-  flutter_ringtone_player: ^3.2.0
+  flutter_ringtone_player: ^4.0.0+4
   share_plus: ^12.0.1
   path_provider: ^2.1.5
   pdf: ^3.11.3
   printing: ^5.14.2
+  permission_handler: ^12.0.1
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +64,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -76,6 +79,9 @@ flutter:
 
   assets:
     - assets/sounds/
+    - assets/images/
+    - assets/templates/
+    - assets/templates/
   # https://flutter.dev/to/resolution-aware-images
 
   # For details regarding adding assets from package dependencies, see
@@ -100,3 +106,18 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+
+# App Icon Configuration
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/EZDineLOGO.png"
+  min_sdk_android: 21
+  
+  # Adaptive icon for Android 8.0+
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/images/EZDineLOGO.png"
+  
+  # iOS specific
+  remove_alpha_ios: true

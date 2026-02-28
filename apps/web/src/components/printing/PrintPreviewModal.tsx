@@ -48,11 +48,13 @@ export function PrintPreviewModal({
                 {/* Receipt Body */}
                 <div className="flex justify-center bg-slate-100 p-8 min-h-[400px] max-h-[60vh] overflow-y-auto custom-scrollbar">
                     <div
-                        className="bg-white p-6 shadow-xl relative transition-all duration-300"
+                        className="bg-white p-6 shadow-xl relative transition-all duration-300 receipt-html-content"
                         style={{
                             width: width === 58 ? "240px" : "320px",
                             minHeight: "400px",
-                            fontFamily: "'Courier New', Courier, monospace"
+                            fontFamily: "'Courier New', Courier, monospace",
+                            backgroundColor: "white",
+                            color: "black"
                         }}
                     >
                         {/* Scalloped edge effect top */}
@@ -62,19 +64,19 @@ export function PrintPreviewModal({
                             ))}
                         </div>
 
-                        <div className="py-4 space-y-0.5">
+                        <div className="py-2 space-y-0 text-black">
                             {lines.map((line, idx) => (
                                 <div
                                     key={idx}
-                                    className={`text-sm leading-tight break-words ${line.align === "center"
-                                            ? "text-center"
-                                            : line.align === "right"
-                                                ? "text-right"
-                                                : "text-left"
-                                        } ${line.bold ? "font-black" : "font-medium"}`}
+                                    className={`leading-none break-words ${line.align === "center"
+                                        ? "text-center"
+                                        : line.align === "right"
+                                            ? "text-right"
+                                            : "text-left"
+                                        } ${line.bold ? "font-bold" : "font-normal"}`}
                                     style={{
-                                        color: "#1e293b",
-                                        fontSize: line.bold ? "14px" : "13px"
+                                        fontSize: line.bold ? "12px" : "11px",
+                                        letterSpacing: "-0.5px"
                                     }}
                                 >
                                     {line.text || "\u00A0"}

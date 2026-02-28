@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class NumericKeypad extends StatelessWidget {
   final Function(String) onKeyPress;
@@ -16,10 +17,11 @@ class NumericKeypad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.grey.shade100),
       ),
       child: Column(
         children: [
@@ -39,35 +41,38 @@ class NumericKeypad extends StatelessWidget {
   }
 
   Widget _buildKey(String key) {
+    final bool isDel = key == 'DEL';
+    
     return Padding(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(6),
       child: InkWell(
         onTap: () {
-          if (key == 'DEL') {
-            onDelete();
-          } else if (key == 'CLR') {
-            onClear();
+          if (isDel) {
+             onDelete();
           } else {
-            onKeyPress(key);
+             onKeyPress(key);
           }
         },
+        onLongPress: isDel ? onClear : null,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          height: 54,
+          height: 60,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: key == 'DEL' ? Colors.red.shade50 : Colors.white,
+            color: isDel ? Colors.red.withValues(alpha: 0.05) : Colors.grey.shade50,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
+            border: Border.all(
+              color: isDel ? Colors.red.withValues(alpha: 0.1) : Colors.transparent,
+            ),
           ),
-          child: key == 'DEL'
-              ? Icon(LucideIcons.delete, color: Colors.red.shade400, size: 20)
+          child: isDel
+              ? Icon(LucideIcons.delete, color: Colors.red.shade400, size: 22)
               : Text(
                   key,
-                  style: TextStyle(
-                    fontSize: 20,
+                  style: GoogleFonts.outfit(
+                    fontSize: 22,
                     fontWeight: FontWeight.w900,
-                    color: key == '.' ? Colors.grey : Colors.blueGrey.shade900,
+                    color: key == '.' ? Colors.blueGrey.shade300 : Colors.blueGrey.shade900,
                   ),
                 ),
         ),

@@ -145,7 +145,20 @@ export function PaymentModal({
                                         type="number"
                                         placeholder="0.00"
                                         value={amounts[method.id]}
-                                        onChange={e => setAmounts(prev => ({ ...prev, [method.id]: e.target.value }))}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            const numVal = parseFloat(val) || 0;
+                                            const otherTotal = Object.entries(amounts)
+                                                .filter(([key]) => key !== method.id)
+                                                .reduce((sum, [_, v]) => sum + (parseFloat(v) || 0), 0);
+
+                                            if (otherTotal + numVal > totalAmount + 0.01) {
+                                                const max = Math.max(0, totalAmount - otherTotal);
+                                                setAmounts(prev => ({ ...prev, [method.id]: max.toFixed(2) }));
+                                            } else {
+                                                setAmounts(prev => ({ ...prev, [method.id]: val }));
+                                            }
+                                        }}
                                         autoFocus={method.id === 'cash'}
                                         className="h-12 w-full rounded-xl border border-slate-200 pl-4 pr-4 font-mono font-bold text-lg text-slate-900 placeholder:text-slate-300 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 transition-all"
                                     />

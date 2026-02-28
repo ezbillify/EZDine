@@ -80,9 +80,11 @@ export async function saveDocNumberingSettings(
 
 export async function sendPrintJob(job: PrintJob) {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_PRINT_SERVER_URL;
+    const settings = await getPrintingSettings();
+    const baseUrl = settings?.bridgeUrl || process.env.NEXT_PUBLIC_PRINT_SERVER_URL;
+
     if (!baseUrl) {
-      console.warn("Printing skipped: NEXT_PUBLIC_PRINT_SERVER_URL not configured");
+      console.warn("Printing skipped: No print server URL (Bridge URL or Env) configured");
       return false;
     }
 
@@ -110,9 +112,10 @@ export function buildKotLines(input: {
   orderId: string;
   tokenNumber?: string | null;
   items: { name: string; qty: number; notes?: string | null }[];
+  paperWidth?: 58 | 80;
 }) {
-  // Determine separator length based on generic width assumption (will be refined by printer driver usually, but good for preview)
-  const separator = "--------------------------------"; // 32 chars for 58mm usually, 48 for 80mm
+  const charCount = input.paperWidth === 80 ? 48 : 32;
+  const separator = "-".repeat(charCount);
 
   const lines: PrintLine[] = [
     { text: input.restaurantName, align: "center", bold: true },
@@ -125,19 +128,18 @@ export function buildKotLines(input: {
     lines.push({ text: separator, align: "center" as const });
   }
 
-  lines.push({ text: "KITCHEN ORDER TICKET", align: "center" as const, bold: true });
-  lines.push({ text: `Order: ${input.orderId.slice(0, 8)}...`, align: "left" as const });
-  lines.push({ text: `Date: ${new Date().toLocaleString()}`, align: "left" as const });
-  if (input.tableName) lines.push({ text: `Table: ${input.tableName}`, align: "left" as const, bold: true });
-  lines.push({ text: separator, align: "center" as const });
+  lines.push({ text: "KITCHEN ORDER TICKET", align: "center", bold: true });
+  lines.push({ text: separator, align: "center" });
+  lines.push({ text: `Order: ${input.orderId.slice(0, 8).toUpperCase()}`, align: "center" });
+  lines.push({ text: `Table: ${input.tableName || "N/A"}`, align: "center", bold: true });
+  lines.push({ text: `Date: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')}`, align: "center" });
+  lines.push({ text: separator, align: "center" });
 
   input.items.forEach((item) => {
-    lines.push({ text: `${item.name}`, align: "left", bold: true });
-    lines.push({ text: `Qty: ${item.qty}`, align: "left" });
+    lines.push({ text: `${item.qty} x ${item.name}`, align: "left", bold: true });
     if (item.notes) {
-      lines.push({ text: `Note: ${item.notes}`, align: "left" });
+      lines.push({ text: `  * ${item.notes}`, align: "left" });
     }
-    lines.push({ text: " ", align: "left" });
   });
 
   lines.push({ text: separator, align: "center" });
@@ -176,8 +178,10 @@ export function buildInvoiceLines(input: {
   subtotal: number;
   tax: number;
   total: number;
+  paperWidth?: 58 | 80;
 }) {
-  const separator = "--------------------------------";
+  const charCount = input.paperWidth === 80 ? 48 : 32;
+  const separator = "-".repeat(charCount);
 
   const lines: PrintLine[] = [
     { text: input.restaurantName, align: "center", bold: true },
@@ -190,14 +194,17 @@ export function buildInvoiceLines(input: {
     lines.push({ text: separator, align: "center" as const });
   }
 
-  lines.push({ text: `Bill No: ${input.billId}`, align: "left" });
-  lines.push({ text: `Date: ${new Date().toLocaleString()}`, align: "left" });
+  lines.push({ text: `INVOICE: ${input.billId.toUpperCase()}`, align: "center", bold: true });
+  lines.push({ text: `Date: ${new Date().toLocaleDateString()} ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')}`, align: "center" });
   lines.push({ text: separator, align: "center" });
 
   input.items.forEach((item) => {
-    // 2-line layout for better cleaner look on small paper
-    lines.push({ text: `${item.name}`, align: "left" });
-    lines.push({ text: `${item.qty} x ${item.price.toFixed(2)} = ${(item.qty * item.price).toFixed(2)}`, align: "right" });
+    const qtyTotal = (item.qty * item.price).toFixed(2);
+    let row = `${item.qty} x ${item.name}`;
+    const maxRowLen = charCount - qtyTotal.length - 1;
+    if (row.length > maxRowLen) row = row.slice(0, maxRowLen - 3) + "...";
+    const padding = " ".repeat(Math.max(1, charCount - row.length - qtyTotal.length));
+    lines.push({ text: `${row}${padding}${qtyTotal}`, align: "left" });
   });
 
   lines.push({ text: separator, align: "center" });
@@ -224,51 +231,85 @@ export function buildConsolidatedReceiptLines(input: {
   total: number;
 }) {
   const separator = "--------------------------------";
-  const sectionBreak = "================================";
-
   const lines: PrintLine[] = [];
 
-  // 1. KOT Section
+  // --- SECTION 1: KOT ---
   lines.push({ text: "KITCHEN ORDER (COPY)", align: "center", bold: true });
-  lines.push({ text: `Order: ${input.orderId.substring(0, 8)}`, align: "left" });
-  if (input.tableName) lines.push({ text: `Table: ${input.tableName}`, align: "left", bold: true });
   if (input.tokenNumber) lines.push({ text: `TOKEN: ${input.tokenNumber}`, align: "center", bold: true });
-  lines.push({ text: separator, align: "center" });
+  if (input.tableName) lines.push({ text: `TABLE: ${input.tableName}`, align: "center", bold: true });
+  lines.push({ text: `Order: ${input.orderId.slice(0, 8).toUpperCase()} | ${new Date().getHours()}:${new Date().getMinutes()}`, align: "center" });
 
   input.items.forEach((item) => {
-    lines.push({ text: `${item.name}`, align: "left", bold: true });
-    lines.push({ text: `Qty: ${item.qty} ${item.notes ? '(' + item.notes + ')' : ''}`, align: "left" });
+    lines.push({ text: `${item.qty} x ${item.name}`, align: "left", bold: true });
   });
 
-  lines.push({ text: sectionBreak, align: "center" });
-  lines.push({ text: " ", align: "center" }); // Space between sections
+  // --- DIVIDER LINE ---
+  lines.push({ text: separator, align: "center" });
 
-  // 2. Bill Section
+  // --- SECTION 2: BILL ---
   lines.push({ text: input.restaurantName, align: "center", bold: true });
-  lines.push({ text: "CUSTOMER INVOICE", align: "center", bold: true });
-  lines.push({ text: `Date: ${new Date().toLocaleString()}`, align: "left" });
-  lines.push({ text: separator, align: "center" });
+  lines.push({ text: "CUSTOMER INVOICE", align: "center" });
 
   input.items.forEach((item) => {
-    lines.push({ text: `${item.name}`, align: "left" });
-    lines.push({ text: `${item.qty} x ${item.price.toFixed(2)} = ${(item.qty * item.price).toFixed(2)}`, align: "right" });
+    const qtyTotal = (item.qty * item.price).toFixed(2);
+    let row = `${item.qty} x ${item.name}`;
+    if (row.length > 22) row = row.slice(0, 19) + "...";
+    const padding = " ".repeat(Math.max(1, 32 - row.length - qtyTotal.length));
+    lines.push({ text: `${row}${padding}${qtyTotal}`, align: "left" });
   });
 
   lines.push({ text: separator, align: "center" });
-  lines.push({ text: `Total: ${input.total.toFixed(2)}`, align: "right", bold: true });
-
-  lines.push({ text: sectionBreak, align: "center" });
-  lines.push({ text: " ", align: "center" });
-
-  // 3. Token Slip Section
-  if (input.tokenNumber) {
-    lines.push({ text: "TOKEN SLIP", align: "center", bold: true });
-    lines.push({ text: `${input.tokenNumber}`, align: "center", bold: true }); // Large font implied by driver if configured
-    lines.push({ text: `Type: ${input.orderType}`, align: "center" });
-    lines.push({ text: separator, align: "center" });
-  }
-
+  lines.push({ text: `TOTAL: ${input.total.toFixed(2)}`, align: "center", bold: true });
   lines.push({ text: "Thank you!", align: "center" });
 
   return lines;
+}
+
+export function generateThermalHtml(lines: PrintLine[], width: 58 | 80 = 80) {
+  const pixelWidth = width === 58 ? 240 : 320;
+
+  const content = lines.map(line => {
+    const alignClass = line.align === 'center' ? 'text-center' : line.align === 'right' ? 'text-right' : 'text-left';
+    const weightClass = line.bold ? 'font-bold' : 'font-normal';
+    const fontSize = line.bold ? '12px' : '11px';
+
+    return `<div class="${alignClass} ${weightClass}" style="font-size: ${fontSize}; line-height: 1.2; letter-spacing: -0.5px;">${line.text || '&nbsp;'}</div>`;
+  }).join('');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          @page { margin: 0; }
+          body {
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 20px;
+            width: ${pixelWidth}px;
+            background: white;
+            color: black;
+          }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .text-left { text-align: left; }
+          .font-bold { font-weight: bold; }
+          .font-normal { font-weight: normal; }
+          
+          @media print {
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        ${content}
+        <script>
+          window.onload = () => {
+            window.print();
+          };
+        </script>
+      </body>
+    </html>
+  `;
 }

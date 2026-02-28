@@ -25,17 +25,17 @@ export function StatCard({ label, value, trend, icon: Icon, color = "brand", des
   };
 
   return (
-    <div className="group relative overflow-hidden rounded-[2.5rem] bg-white border border-slate-100 p-6 shadow-xl shadow-slate-200/40 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-300">
+    <div className="group relative overflow-hidden rounded-3xl bg-white border border-slate-100 p-5 shadow-xl shadow-slate-200/40 transition-all hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-300">
       <div className="flex items-start justify-between mb-4">
         {Icon && (
-          <div className={`mt-1 flex h-12 w-12 items-center justify-center rounded-2xl ${colorMap[color]} shadow-lg transition-transform group-hover:scale-110 group-hover:rotate-3`}>
-            <Icon size={24} />
+          <div className={`mt-1 flex h-11 w-11 items-center justify-center rounded-2xl ${colorMap[color]} shadow-lg transition-transform group-hover:scale-110 group-hover:rotate-3`}>
+            <Icon size={22} />
           </div>
         )}
         {trend && (
           <div className={`flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest ${trend.type === 'up' ? 'bg-emerald-50 text-emerald-600' :
-              trend.type === 'down' ? 'bg-rose-50 text-rose-600' :
-                'bg-slate-50 text-slate-500'
+            trend.type === 'down' ? 'bg-rose-50 text-rose-600' :
+              'bg-slate-50 text-slate-500'
             }`}>
             {trend.type === 'up' && <TrendingUp size={12} />}
             {trend.type === 'down' && <TrendingDown size={12} />}

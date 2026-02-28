@@ -22,80 +22,71 @@ class AppStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.shade100),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF64748B).withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            color: const Color(0xFF64748B).withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                height: 48,
-                width: 48,
+                height: 32,
+                width: 32,
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: color, size: 24),
+                child: Icon(icon, color: color, size: 16),
               ),
               if (trend != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: (isUp ? const Color(0xFF10B981) : const Color(0xFFF43F5E)).withOpacity(0.05),
                     borderRadius: BorderRadius.circular(100),
                   ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isUp ? Icons.arrow_outward : Icons.south_east,
-                        size: 12,
-                        color: isUp ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        trend!,
-                        style: GoogleFonts.outfit(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          color: isUp ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    trend!,
+                    style: GoogleFonts.outfit(
+                      fontSize: 8,
+                      fontWeight: FontWeight.w900,
+                      color: isUp ? const Color(0xFF10B981) : const Color(0xFFF43F5E),
+                    ),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 20),
+          const Spacer(),
           Text(
             label.toUpperCase(),
             style: GoogleFonts.outfit(
-              fontSize: 10,
+              fontSize: 8,
               fontWeight: FontWeight.w900,
               color: Colors.grey.shade400,
-              letterSpacing: 1.5,
+              letterSpacing: 1,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             value,
             style: GoogleFonts.outfit(
-              fontSize: 28,
+              fontSize: 20,
               fontWeight: FontWeight.w900,
               color: const Color(0xFF0F172A),
-              letterSpacing: -1,
+              letterSpacing: -0.5,
             ),
           ),
         ],

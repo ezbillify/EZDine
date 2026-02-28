@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            width: 58mm;
+            padding: 1mm;
+            font-size: 11px;
+            color: #000;
+            line-height: 1.0;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .bold {
+            font-weight: bold;
+        }
+
+        .company-header {
+            margin-bottom: 1.5mm;
+        }
+
+        .company-name {
+            font-size: 15px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 0.1mm;
+        }
+
+        .branch-name {
+            font-size: 11px;
+            font-weight: bold;
+            margin-bottom: 0.1mm;
+        }
+
+        .info-txt {
+            font-size: 10px;
+            margin-bottom: 0.1mm;
+        }
+
+        .label-invoice {
+            font-size: 13px;
+            font-weight: bold;
+            margin: 1mm 0;
+            text-transform: uppercase;
+            border-top: 1px dashed #000;
+            border-bottom: 1px dashed #000;
+            padding: 0.2mm 0;
+        }
+
+        .meta-section {
+            font-size: 11px;
+            margin-bottom: 1mm;
+        }
+
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.1mm;
+        }
+
+        .divider {
+            border-top: 1px solid #000;
+            margin: 0.5mm 0;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin: 0.5mm 0;
+        }
+
+        .item-row td {
+            padding: 0.2mm 0;
+            vertical-align: top;
+        }
+
+        .qty-col {
+            padding-right: 2mm;
+            text-align: center;
+        }
+
+        .amt-col {
+            padding-left: 2mm;
+            text-align: right;
+        }
+
+        .summary-section {
+            font-size: 12px;
+            margin-top: 0.5mm;
+        }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.1mm;
+        }
+
+        .grand-total {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 1mm;
+            padding: 0.5mm 0;
+            border-top: 1.2px solid #000;
+            border-bottom: 1.2px solid #000;
+        }
+
+        .footer {
+            margin-top: 4mm;
+            font-size: 10px;
+        }
+
+        .powered {
+            font-size: 8px;
+            margin-top: 0.5mm;
+            color: #444;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="company-header text-center">
+        <div class="company-name">{{restaurantName}}</div>
+        <div class="branch-name">{{branchName}}</div>
+        <div class="info-txt">{{branchAddress}}</div>
+        {{#if gstin}}<div class="info-txt">GST: {{gstin}}</div>{{/if}}
+        {{#if fssai}}<div class="info-txt">FSSAI: {{fssai}}</div>{{/if}}
+        <div class="info-txt">PH: {{phone}}</div>
+    </div>
+
+    <div class="label-invoice text-center">INVOICE</div>
+
+    <div class="meta-section">
+        <div class="meta-row">
+            <span>Bill: #{{billId}}</span>
+            <span>{{date}}</span>
+        </div>
+        <div class="meta-row">
+            <span class="bold">Token: {{tokenNumber}}</span>
+            <span>{{time}}</span>
+        </div>
+        <div class="meta-row">
+            <span class="bold">Table: {{tableName}}</span>
+        </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <table class="items-table">
+        <tbody>
+            {{#each items}}
+            <tr class="item-row">
+                <td style="width: 55%; font-weight: bold;">{{name}}</td>
+                <td style="width: 15%;" class="qty-col">{{qty}}</td>
+                <td style="width: 30%;" class="amt-col">{{amt}}</td>
+            </tr>
+            {{/each}}
+        </tbody>
+    </table>
+
+    <div class="divider"></div>
+
+    <div class="summary-section">
+        <div class="summary-row">
+            <span>SUB TOTAL</span>
+            <span>{{subtotal}}</span>
+        </div>
+        {{#if tax}}
+        <div class="summary-row">
+            <span>TAX TOTAL</span>
+            <span>{{tax}}</span>
+        </div>
+        {{/if}}
+        <div class="summary-row grand-total">
+            <span>TOTAL</span>
+            <span>₹{{total}}</span>
+        </div>
+    </div>
+
+    <div class="footer text-center">
+        <div class="bold">THANK YOU</div>
+        <div class="powered">POWERED BY EZBILLIFY</div>
+    </div>
+</body>
+
+</html>
