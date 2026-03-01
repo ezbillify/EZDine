@@ -1,4 +1,15 @@
 
+## v1.12.0 (2026-03-01)
+
+
+### Features
+* Added EZ-Dine management schema with plans, subscriptions, and invoices tables
+* Implemented Row-Level Security (RLS) policies for secure data access
+* Included sample plans for testing purposes
+### Fixes
+* None
+
+
 ## v1.11.0 (2026-03-01)
 
 
