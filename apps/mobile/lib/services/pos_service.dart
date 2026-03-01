@@ -42,7 +42,7 @@ class PosService {
             'branch_id': branchId,
             'table_id': tableId,
             'customer_id': customerId,
-            'status': 'pending',
+            'status': 'counter_pending',
             'order_number': nextNum,
             'token_number': nextToken,
             'source': 'pos',
@@ -158,10 +158,15 @@ class PosService {
       });
     }
 
-    // 4. Update Order (Settle payment only, leave status/is_open for KDS to handle)
+    // 4. Update Order (Mark as paid and send to kitchen)
+    // Fetch current status to check if it's counter_pending
+    final currentOrder = await _client.from('orders').select('status').eq('id', order['id']).single();
+    final newStatus = (currentOrder['status'] == 'counter_pending') ? 'pending' : currentOrder['status'];
+    
     await _client.from('orders').update({
       'payment_status': 'paid',
       'payment_method': primaryMethod,
+      'status': newStatus, // Change from counter_pending to pending after payment
     }).eq('id', order['id']);
 
     return {
