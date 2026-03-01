@@ -13,12 +13,11 @@ import {
     MonitorCheck,
     Calendar,
     LogOut,
-    Sparkles,
     Search
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { getActiveBranchRole, getActiveRestaurantRole } from "../../lib/tenant";
 import { supabase } from "../../lib/supabaseClient";
@@ -42,6 +41,7 @@ const baseItems = [
 export function Sidebar({ className = "" }: { className?: string }) {
     const pathname = usePathname();
     const router = useRouter();
+    const [isPending, startTransition] = useTransition();
     const [role, setRole] = useState<string | null>(null);
     const [branchRole, setBranchRole] = useState<string | null>(null);
 
@@ -60,6 +60,12 @@ export function Sidebar({ className = "" }: { className?: string }) {
     const handleLogout = async () => {
         await supabase.auth.signOut();
         router.push("/login");
+    };
+
+    const handleNavigation = (href: string) => {
+        startTransition(() => {
+            router.push(href);
+        });
     };
 
     const items =
@@ -122,10 +128,15 @@ export function Sidebar({ className = "" }: { className?: string }) {
                         <Link
                             key={item.href}
                             href={item.href}
-                            className={`group flex items-center gap-4 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all duration-300 ${isActive
+                            prefetch={true}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                handleNavigation(item.href);
+                            }}
+                            className={`group flex items-center gap-4 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all duration-200 ${isActive
                                 ? "bg-slate-900 text-white shadow-2xl shadow-slate-900/20 translate-x-1"
                                 : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
-                                }`}
+                                } ${isPending ? 'opacity-50' : ''}`}
                         >
                             <Icon
                                 size={18}

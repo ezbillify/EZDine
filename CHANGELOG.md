@@ -1,4 +1,12 @@
 
+## v1.7.0 (2026-03-01)
+
+- Added missing functions and policies for settings table
+- Enabled Row Level Security (RLS) for settings table
+- Created user role tables for restaurant and branch roles
+- Updated iOS configuration for better performance and Bluetooth connectivity
+
+
 ## v1.6.0 (2026-02-28)
 
 - Implemented dual-login system with password and OTP login methods

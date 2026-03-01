@@ -8,11 +8,6 @@ import {
   Hash,
   ChevronRight,
   Info,
-  LayoutDashboard,
-  Building2,
-  Store,
-  CreditCard,
-  UserCog,
   QrCode,
   Link2
 } from "lucide-react";
@@ -25,7 +20,7 @@ import { OwnershipTransfer } from "../../components/owner/OwnershipTransfer";
 import { RestaurantManager } from "../../components/owner/RestaurantManager";
 import { GeneralSettings } from "../../components/printing/GeneralSettings";
 import { PrintTestCard } from "../../components/printing/PrintTestCard";
-import { PrintingSettings } from "../../components/printing/PrintingSettings";
+import PrintingSettings from "../../components/printing/PrintingSettings";
 import { NumberingSettings } from "../../components/settings/NumberingSettings";
 import { QrSettings } from "../../components/settings/QrSettings";
 import { RazorpaySettings } from "../../components/settings/RazorpaySettings";

@@ -5,6 +5,7 @@ const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-outfit",
   display: "swap",
+  preload: true,
 });
 
 export const metadata = {
@@ -19,6 +20,9 @@ export const viewport = {
   userScalable: false
 };
 
+// Enable faster navigation
+export const runtime = 'edge';
+
 export default function RootLayout({
   children
 }: {
@@ -26,6 +30,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={outfit.variable}>
+      <head>
+        {/* Preconnect to improve performance */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* DNS prefetch for Supabase */}
+        <link rel="dns-prefetch" href="https://supabase.co" />
+      </head>
       <body className="min-h-screen font-sans antialiased selection:bg-brand-500/30">
         {children}
       </body>

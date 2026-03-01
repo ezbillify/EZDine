@@ -45,7 +45,7 @@ export default function GuestManagementPage() {
     const [phone, setPhone] = useState("");
     const [size, setSize] = useState("2");
     const [time, setTime] = useState("");
-    const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+    const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0] || "");
     const [isNewUser, setIsNewUser] = useState(true);
     const [fetchingCustomer, setFetchingCustomer] = useState(false);
 

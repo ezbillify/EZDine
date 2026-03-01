@@ -18,37 +18,67 @@ const PRINTING_KEY = "printing";
 const DOC_NUMBERING_KEY = "doc_numbering";
 
 export async function getPrintingSettings() {
-  const profile = await getCurrentUserProfile();
-  if (!profile?.active_restaurant_id || !profile.active_branch_id) {
-    throw new Error("Select restaurant and branch first.");
+  // TEMPORARY: Use localStorage instead of Supabase for immediate testing
+  try {
+    const saved = localStorage.getItem('ezdine_printer_settings');
+    return saved ? JSON.parse(saved) : null;
+  } catch (err) {
+    console.warn('Failed to load from localStorage, falling back to Supabase');
+    
+    // Fallback to Supabase if available
+    try {
+      const profile = await getCurrentUserProfile();
+      if (!profile?.active_restaurant_id || !profile.active_branch_id) {
+        throw new Error("Select restaurant and branch first.");
+      }
+
+      const { data, error } = await supabase
+        .from("settings")
+        .select("*")
+        .eq("restaurant_id", profile.active_restaurant_id)
+        .eq("branch_id", profile.active_branch_id)
+        .eq("key", PRINTING_KEY)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data?.value ?? null;
+    } catch (supabaseErr) {
+      console.warn('Supabase also failed, using defaults');
+      return null;
+    }
   }
-
-  const { data, error } = await supabase
-    .from("settings")
-    .select("*")
-    .eq("restaurant_id", profile.active_restaurant_id)
-    .eq("branch_id", profile.active_branch_id)
-    .eq("key", PRINTING_KEY)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data?.value ?? null;
 }
 
 export async function savePrintingSettings(value: any) {
-  const profile = await getCurrentUserProfile();
-  if (!profile?.active_restaurant_id || !profile.active_branch_id) {
-    throw new Error("Select restaurant and branch first.");
+  // TEMPORARY: Save to localStorage for immediate testing
+  try {
+    localStorage.setItem('ezdine_printer_settings', JSON.stringify(value));
+    console.log('Settings saved to localStorage successfully');
+    
+    // Also try to save to Supabase in background (don't fail if it doesn't work)
+    try {
+      const profile = await getCurrentUserProfile();
+      if (profile?.active_restaurant_id && profile.active_branch_id) {
+        const { error } = await supabase.from("settings").upsert({
+          restaurant_id: profile.active_restaurant_id,
+          branch_id: profile.active_branch_id,
+          key: PRINTING_KEY,
+          value
+        });
+        
+        if (!error) {
+          console.log('Settings also saved to Supabase');
+        }
+      }
+    } catch (supabaseErr) {
+      console.warn('Supabase save failed, but localStorage worked:', supabaseErr);
+    }
+    
+    return true;
+  } catch (err) {
+    console.error('Failed to save to localStorage:', err);
+    throw new Error('Failed to save printer settings');
   }
-
-  const { error } = await supabase.from("settings").upsert({
-    restaurant_id: profile.active_restaurant_id,
-    branch_id: profile.active_branch_id,
-    key: PRINTING_KEY,
-    value
-  });
-
-  if (error) throw error;
 }
 
 export async function getDocNumberingSettings(restaurantId: string, branchId: string | null) {
@@ -79,29 +109,47 @@ export async function saveDocNumberingSettings(
 }
 
 export async function sendPrintJob(job: PrintJob) {
+  let baseUrl = 'http://localhost:8080';
   try {
     const settings = await getPrintingSettings();
-    const baseUrl = settings?.bridgeUrl || process.env.NEXT_PUBLIC_PRINT_SERVER_URL;
+    baseUrl = settings?.bridgeUrl || process.env.NEXT_PUBLIC_PRINT_SERVER_URL || 'http://localhost:8080';
 
     if (!baseUrl) {
-      console.warn("Printing skipped: No print server URL (Bridge URL or Env) configured");
-      return false;
+      throw new Error("No print server URL configured. Please set up printer settings first.");
     }
+
+    console.log(`Attempting to print to: ${baseUrl}/print`);
+    console.log('Print job:', job);
+
+    // Add timeout and better error handling
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
     const response = await fetch(`${baseUrl}/print`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(job)
+      body: JSON.stringify(job),
+      signal: controller.signal
     });
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
-      console.warn("Print server responded with error", await response.text());
-      return false;
+      const errorText = await response.text();
+      throw new Error(`Print server error (${response.status}): ${errorText}`);
     }
+
+    const result = await response.text();
+    console.log('Print server response:', result);
     return true;
-  } catch (err) {
-    console.error("Critical print job failure:", err);
-    return false;
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error("Print server timeout - check if server is running on the configured URL");
+    } else if (err.message?.includes('fetch')) {
+      throw new Error(`Cannot connect to print server at ${baseUrl}. Make sure the print server is running.`);
+    } else {
+      throw new Error(`Print failed: ${err.message}`);
+    }
   }
 }
 

@@ -1,0 +1,84 @@
+╔════════════════════════════════════════════════════════════╗
+║                                                            ║
+║              EZDINE PRINT BRIDGE                           ║
+║              Installation Guide                            ║
+║                                                            ║
+╚════════════════════════════════════════════════════════════╝
+
+📦 STEP 1: EXTRACT FILES
+   Extract this ZIP file to a permanent location
+   Example: C:\EZDine\print-bridge (Windows)
+           ~/Applications/EZDine/print-bridge (macOS)
+
+🚀 STEP 2: START PRINT BRIDGE
+
+   macOS:
+   ------
+   1. Double-click "start-macos.command"
+   2. If blocked: Right-click → Open → Open
+   3. Terminal window will open showing print bridge status
+
+   Windows:
+   --------
+   1. Double-click "start-windows.bat"
+   2. Command window will open showing print bridge status
+
+⚙️ STEP 3: SETUP AUTO-START (Optional but Recommended)
+
+   macOS:
+   ------
+   1. Double-click "setup-autostart-macos.command"
+   2. Follow the prompts
+   3. Print bridge will start automatically on login
+
+   Windows:
+   --------
+   1. Right-click "setup-autostart-windows.bat"
+   2. Select "Run as administrator"
+   3. Follow the prompts
+   4. Print bridge will start automatically on Windows startup
+
+🔧 STEP 4: CONFIGURE EZDINE
+
+   1. Open EZDine web application
+   2. Go to Settings > Printing Setup
+   3. Set Print Server URL: http://localhost:8080
+   4. Click "Test Server" - should show success ✅
+   5. Configure your printer settings
+   6. Click "Save Settings"
+   7. Click "Test Print" - should print! 🖨️
+
+✅ VERIFICATION
+
+   You'll know it's working when:
+   • Print bridge window shows "Print Bridge is running"
+   • EZDine "Test Server" button shows success
+   • Test prints appear in the print bridge console
+   • Actual receipts print from your thermal printer
+
+🔍 TROUBLESHOOTING
+
+   Print bridge won't start:
+   • macOS: Install Python 3 (python3 --version)
+   • Windows: Install Python (python --version)
+
+   Can't connect from EZDine:
+   • Check print bridge is running
+   • Verify URL is exactly: http://localhost:8080
+   • Check firewall settings
+
+   IP printing not working:
+   • Verify printer IP address
+   • Ensure printer is on same network
+   • Check printer supports ESC/POS commands
+
+📞 NEED HELP?
+
+   Check the README.md file for detailed information
+   or contact EZDine support.
+
+═══════════════════════════════════════════════════════════
+
+   Thank you for using EZDine Print Bridge! 🎉
+
+═══════════════════════════════════════════════════════════

@@ -352,9 +352,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       // KOT Print
       if (settings != null) {
         await printService.printPremiumKot(
+          restaurantName: ctx.restaurantName ?? "EZDine",
+          branchName: ctx.branchName ?? "Branch",
           orderId: res['order_number'].toString(),
-          date: DateTime.now().toString().split(' ')[0],
-          time: TimeOfDay.now().format(context),
           items: _cart.map((i) => {
             'name': i['name'] ?? 'Item',
             'qty': i['qty'] ?? 1,
@@ -364,6 +364,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           tokenNumber: res['token_number'].toString(),
           orderType: _orderType == 'dine_in' ? "DINE IN" : "TAKEAWAY",
           printerId: settings['printerIdKot'],
+          paperWidth: settings['paperWidthKot'] ?? 58,
         );
       } else {
         debugPrint('No print settings found or network error');
@@ -453,20 +454,21 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       final printService = ref.read(printServiceProvider);
       final settings = await printService.getPrintingSettings(ctx.branchId!);
 
-      if (settings != null) {
+      if (settings != null && printReceipt) {
         final bool isConsolidated = settings['consolidatedPrinting'] ?? false;
+        final int paperWidth = settings['paperWidthInvoice'] ?? 58; // Use configured paper width
 
-        if (isConsolidated && hasNewItems) {
-          // Consolidated mode: Print Invoice + KOT together in one document
-          final items = [..._existingOrderItems, ..._cart].map((i) => {
-            'name': i['name'] ?? i['menu_items']?['name'] ?? 'Item',
-            'qty': i['qty'] ?? i['quantity'] ?? 1,
-            'price': (i['price'] as num?)?.toDouble() ?? (i['base_price'] as num?)?.toDouble() ?? 0.0,
-            'tax_rate': i['tax_rate'] ?? i['menu_items']?['gst_rate'] ?? i['gst_rate'] ?? 0.0,
-            'hsn_code': i['hsn_code'] ?? i['menu_items']?['hsn_code'] ?? i['hsn'] ?? '',
-          }).toList();
+        final items = [..._existingOrderItems, ..._cart].map((i) => {
+          'name': i['name'] ?? i['menu_items']?['name'] ?? 'Item',
+          'qty': i['qty'] ?? i['quantity'] ?? 1,
+          'price': (i['price'] as num?)?.toDouble() ?? (i['base_price'] as num?)?.toDouble() ?? 0.0,
+          'tax_rate': i['tax_rate'] ?? i['menu_items']?['gst_rate'] ?? i['gst_rate'] ?? 0.0,
+          'hsn_code': i['hsn_code'] ?? i['menu_items']?['hsn_code'] ?? i['hsn'] ?? '',
+        }).toList();
 
-          await printService.printPremiumConsolidated(
+        if (isConsolidated) {
+          // CONSOLIDATED MODE: Print Invoice → Cut → KOT sequence
+          await printService.printConsolidatedSequence(
             restaurantName: ctx.restaurantName ?? "EZDine",
             branchName: ctx.branchName ?? "Branch",
             branchAddress: ctx.branchAddress,
@@ -482,18 +484,11 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
             tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
             total: (res['total'] as num?)?.toDouble() ?? 0.0,
+            paperWidth: paperWidth,
             printerId: settings['printerIdInvoice'] ?? settings['printerIdKot'],
           );
         } else {
-          // Non-consolidated mode: Print ONLY Invoice (no KOT)
-          final items = [..._existingOrderItems, ..._cart].map((i) => {
-            'name': i['name'] ?? i['menu_items']?['name'] ?? 'Item',
-            'qty': i['qty'] ?? i['quantity'] ?? 1,
-            'price': (i['price'] as num?)?.toDouble() ?? (i['base_price'] as num?)?.toDouble() ?? 0.0,
-            'tax_rate': i['tax_rate'] ?? i['menu_items']?['gst_rate'] ?? i['gst_rate'] ?? 0.0,
-            'hsn_code': i['hsn_code'] ?? i['menu_items']?['hsn_code'] ?? i['hsn'] ?? '',
-          }).toList();
-
+          // SEPARATE MODE: Only print Invoice (no KOT)
           await printService.printPremiumInvoice(
             restaurantName: ctx.restaurantName ?? "EZDine",
             branchName: ctx.branchName ?? "Branch",
@@ -513,6 +508,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             customerName: _selectedCustomer?['name'] ?? 'Guest',
             orderType: _isQuickBill ? "Takeaway" : (_orderType == 'dine_in' ? "Dine In" : "Takeaway"),
             printerId: settings['printerIdInvoice'],
+            paperWidth: paperWidth,
           );
         }
       }
@@ -520,15 +516,24 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       AudioService.instance.playSuccess();
 
       if (mounted) {
-        // Pop only the Payment Modal (and cart sheet if present)
-        // Do NOT pop the POS screen itself
-        Navigator.of(context).pop(); // Pop payment modal
-        
-        _resetPos();
+        // Show success message
+        _triggerSuccess('PAYMENT COMPLETED!');
       }
     } catch (e) {
       debugPrint("Settle Error: $e");
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('Payment Failed: $e'),
+            action: SnackBarAction(
+              label: 'RETRY',
+              textColor: Colors.white,
+              onPressed: () => _handlePayment(printReceipt: printReceipt),
+            ),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
