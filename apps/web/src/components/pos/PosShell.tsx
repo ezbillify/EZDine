@@ -556,7 +556,7 @@ export function PosShell() {
       let orderNumber = activeOrderNumber;
 
       if (!orderId) {
-        const order = await createOrder(activeTableId, cart, undefined, selectedCustomerId, 'pos', 'pending', undefined, undefined, 'cash', orderType);
+        const order = await createOrder(activeTableId, cart, undefined, selectedCustomerId, 'pos', 'counter_pending', undefined, undefined, 'cash', orderType);
         orderId = order.id;
         orderNumber = order.order_number;
         setActiveOrderId(orderId);
@@ -875,7 +875,7 @@ export function PosShell() {
           setStatus("idle");
           return;
         }
-        const order = await createOrder(null, cart, undefined, selectedCustomerId || null, 'pos', 'pending', undefined, undefined, 'cash', orderType);
+        const order = await createOrder(null, cart, undefined, selectedCustomerId || null, 'pos', 'counter_pending', undefined, undefined, 'cash', orderType);
         currentOrderId = order.id;
         // Print KOT for Quick Bill too if needed? Usually yes.
         try {

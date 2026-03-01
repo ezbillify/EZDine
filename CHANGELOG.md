@@ -1,4 +1,10 @@
 
+## v1.10.0 (2026-03-01)
+
+- Introduced a numeric keypad for easy payment entry in the payment modal
+- Improved payment handling to prevent overpayment and enhance user experience
+
+
 ## v1.9.0 (2026-03-01)
 
 ### Features
