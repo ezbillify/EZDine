@@ -172,19 +172,19 @@ const MenuItemCard = ({ item, addToCart, cart, updateQty }: any) => {
                 
                 <div className="flex flex-col justify-end items-end gap-3">
                     {quantity > 0 ? (
-                        <div className="flex flex-col items-center gap-3 bg-emerald-50 rounded-2xl p-3 border-2 border-emerald-200">
-                            <button
-                                onClick={() => addToCart(item)}
-                                className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
-                            >
-                                <Plus size={20} strokeWidth={3} />
-                            </button>
-                            <span className="font-black text-2xl text-emerald-900 min-w-[32px] text-center">{quantity}</span>
+                        <div className="flex items-center gap-2 bg-emerald-50 rounded-2xl p-2 border-2 border-emerald-200">
                             <button
                                 onClick={() => updateQty(item.id, -1)}
-                                className="w-11 h-11 rounded-xl bg-white text-slate-600 flex items-center justify-center shadow-sm border-2 border-slate-200 active:scale-95 transition-all"
+                                className="w-10 h-10 rounded-xl bg-white text-slate-600 flex items-center justify-center shadow-sm border-2 border-slate-200 active:scale-95 transition-all"
                             >
-                                <Minus size={20} strokeWidth={3} />
+                                <Minus size={18} strokeWidth={3} />
+                            </button>
+                            <span className="font-black text-xl text-emerald-900 min-w-[40px] text-center">{quantity}</span>
+                            <button
+                                onClick={() => addToCart(item)}
+                                className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
+                            >
+                                <Plus size={18} strokeWidth={3} />
                             </button>
                         </div>
                     ) : (

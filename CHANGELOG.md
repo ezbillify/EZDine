@@ -1,4 +1,11 @@
 
+## v1.8.1 (2026-03-01)
+
+### Fixes
+* Corrected add to cart and update quantity buttons functionality
+* Updated button icons to match the correct functionality
+
+
 ## v1.8.0 (2026-03-01)
 
 
