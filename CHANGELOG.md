@@ -1,4 +1,12 @@
 
+## v1.9.0 (2026-03-01)
+
+### Features
+* Added real-time order status tracking on the success screen
+* Introduced toast notifications for order status changes
+* Updated order status display on the success screen to reflect real-time changes
+
+
 ## v1.8.1 (2026-03-01)
 
 ### Fixes

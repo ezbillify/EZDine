@@ -234,8 +234,48 @@ export default function QrOrderPage() {
     const [tokenNumber, setTokenNumber] = useState<number | null>(null);
     const [trackedOrders, setTrackedOrders] = useState<any[]>([]);
     const [trackPhone, setTrackPhone] = useState("");
+    const [currentOrderStatus, setCurrentOrderStatus] = useState<string | null>(null);
 
     const categoryRef = useRef<HTMLDivElement>(null);
+
+    // Real-time order status tracking for success screen
+    useEffect(() => {
+        if (step === "success" && orderId) {
+            // Subscribe to order status changes
+            const channel = supabase
+                .channel(`order-status-${orderId}`)
+                .on(
+                    "postgres_changes",
+                    {
+                        event: "UPDATE",
+                        schema: "public",
+                        table: "orders",
+                        filter: `id=eq.${orderId}`
+                    },
+                    (payload) => {
+                        const updatedOrder = payload.new as any;
+                        setCurrentOrderStatus(updatedOrder.status);
+                        
+                        // Show toast notification when status changes
+                        if (updatedOrder.status === 'preparing') {
+                            toast.success("🔥 Your order is being prepared!", {
+                                description: "Our kitchen is working on your delicious meal"
+                            });
+                        } else if (updatedOrder.status === 'ready') {
+                            toast.success("✅ Your order is ready!", {
+                                description: "Please collect from the counter",
+                                duration: 10000
+                            });
+                        }
+                    }
+                )
+                .subscribe();
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
+        }
+    }, [step, orderId]);
 
     useEffect(() => {
         const load = async () => {
@@ -970,14 +1010,48 @@ export default function QrOrderPage() {
                             {tokenNumber ?? '---'}
                         </div>
 
+                        {currentOrderStatus && (
+                            <div className={`mb-6 p-4 rounded-2xl ${
+                                currentOrderStatus === 'ready' 
+                                    ? 'bg-emerald-50 border-2 border-emerald-200' 
+                                    : 'bg-amber-50 border-2 border-amber-200'
+                            }`}>
+                                <p className={`text-sm font-black uppercase tracking-tight ${
+                                    currentOrderStatus === 'ready' ? 'text-emerald-900' : 'text-amber-900'
+                                }`}>
+                                    {currentOrderStatus === 'ready' 
+                                        ? '🎉 Your order is ready!' 
+                                        : '👨‍🍳 Chef is cooking your meal'}
+                                </p>
+                                <p className={`text-[10px] font-bold mt-1 ${
+                                    currentOrderStatus === 'ready' ? 'text-emerald-600' : 'text-amber-600'
+                                }`}>
+                                    {currentOrderStatus === 'ready' 
+                                        ? 'Please collect from the counter' 
+                                        : 'We\'ll notify you when it\'s ready'}
+                                </p>
+                            </div>
+                        )}
+
                         <div className="pt-6 border-t-2 border-dashed border-slate-100 space-y-3">
                             <div className="flex justify-between items-center">
                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status</span>
-                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${paymentMethod === 'cash'
-                                    ? 'text-amber-600 bg-amber-50'
-                                    : 'text-emerald-600 bg-emerald-50'
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
+                                    currentOrderStatus === 'ready' 
+                                        ? 'text-emerald-600 bg-emerald-50 animate-pulse' 
+                                        : currentOrderStatus === 'preparing' 
+                                            ? 'text-amber-600 bg-amber-50 animate-pulse' 
+                                            : paymentMethod === 'cash'
+                                                ? 'text-amber-600 bg-amber-50'
+                                                : 'text-blue-600 bg-blue-50'
                                     }`}>
-                                    {paymentMethod === 'cash' ? 'Awaiting Payment' : 'Confirmed'}
+                                    {currentOrderStatus === 'ready' 
+                                        ? '✅ Ready' 
+                                        : currentOrderStatus === 'preparing' 
+                                            ? '🔥 Preparing' 
+                                            : paymentMethod === 'cash' 
+                                                ? 'Awaiting Payment' 
+                                                : 'Confirmed'}
                                 </span>
                             </div>
                             <div className="flex justify-between items-center text-[9px] font-bold text-slate-300">
