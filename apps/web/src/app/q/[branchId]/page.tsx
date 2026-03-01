@@ -126,63 +126,80 @@ const WelcomeHero = ({ branchInfo, orderType, setOrderType }: any) => (
     </div>
 );
 
-const MenuItemCard = ({ item, addToCart, cart }: any) => {
+const MenuItemCard = ({ item, addToCart, cart, updateQty }: any) => {
     const cartItem = cart.find((c: any) => c.item_id === item.id);
     const quantity = cartItem?.qty || 0;
 
     return (
-        <div className={`bg-white rounded-2xl p-5 border border-slate-100 shadow-sm transition-all duration-200 ${
-            !item.is_available ? 'opacity-50 grayscale' : 'hover:shadow-md hover:border-slate-200'
+        <div className={`bg-white rounded-3xl p-6 border-2 transition-all duration-200 ${
+            !item.is_available 
+                ? 'opacity-50 grayscale border-slate-100' 
+                : quantity > 0 
+                    ? 'border-emerald-200 shadow-lg shadow-emerald-500/5' 
+                    : 'border-slate-100 hover:shadow-md hover:border-slate-200'
         }`}>
-            <div className="flex gap-4">
+            <div className="flex gap-5">
                 <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className={`w-3 h-3 rounded-full ${item.is_veg ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">
+                    <div className="flex items-center gap-2 mb-3">
+                        <div className={`w-4 h-4 rounded-md flex items-center justify-center border-2 ${
+                            item.is_veg ? 'border-emerald-500' : 'border-rose-500'
+                        }`}>
+                            <div className={`w-2 h-2 rounded-full ${item.is_veg ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                             {item.menu_categories?.name}
                         </span>
                         {!item.is_available && (
-                            <span className="ml-auto text-[9px] font-black text-rose-500 uppercase tracking-widest bg-rose-50 px-2 py-1 rounded-full">
+                            <span className="ml-auto text-[9px] font-black text-rose-600 uppercase tracking-widest bg-rose-50 px-2.5 py-1 rounded-full">
                                 Sold Out
                             </span>
                         )}
                     </div>
                     
-                    <h3 className="font-bold text-lg text-slate-900 leading-tight mb-1">{item.name}</h3>
+                    <h3 className="font-black text-xl text-slate-900 leading-tight mb-2 tracking-tight">{item.name}</h3>
                     
                     {item.description && (
-                        <p className="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed">
+                        <p className="text-sm text-slate-500 line-clamp-2 mb-4 leading-relaxed font-medium">
                             {item.description}
                         </p>
                     )}
                     
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-baseline gap-1">
-                            <span className="text-xs font-bold text-slate-400">₹</span>
-                            <span className="font-black text-xl text-slate-900 tracking-tight">{item.base_price}</span>
-                        </div>
-                        
-                        {quantity > 0 && (
-                            <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2">
-                                <span className="text-sm font-bold text-slate-600">{quantity}</span>
-                                <span className="text-xs text-slate-400">in cart</span>
-                            </div>
-                        )}
+                    <div className="flex items-baseline gap-1.5">
+                        <span className="text-sm font-black text-slate-400">₹</span>
+                        <span className="font-black text-2xl text-slate-900 tracking-tight">{item.base_price}</span>
                     </div>
                 </div>
                 
-                <div className="flex flex-col justify-between items-end">
-                    <button
-                        onClick={() => addToCart(item)}
-                        disabled={!item.is_available}
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 ${
-                            item.is_available 
-                                ? 'bg-slate-900 text-white shadow-lg hover:bg-slate-800 active:scale-95' 
-                                : 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                        }`}
-                    >
-                        <Plus size={20} strokeWidth={2.5} />
-                    </button>
+                <div className="flex flex-col justify-end items-end gap-3">
+                    {quantity > 0 ? (
+                        <div className="flex flex-col items-center gap-3 bg-emerald-50 rounded-2xl p-3 border-2 border-emerald-200">
+                            <button
+                                onClick={() => addToCart(item)}
+                                className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 active:scale-95 transition-all"
+                            >
+                                <Plus size={20} strokeWidth={3} />
+                            </button>
+                            <span className="font-black text-2xl text-emerald-900 min-w-[32px] text-center">{quantity}</span>
+                            <button
+                                onClick={() => updateQty(item.id, -1)}
+                                className="w-11 h-11 rounded-xl bg-white text-slate-600 flex items-center justify-center shadow-sm border-2 border-slate-200 active:scale-95 transition-all"
+                            >
+                                <Minus size={20} strokeWidth={3} />
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            onClick={() => addToCart(item)}
+                            disabled={!item.is_available}
+                            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+                                item.is_available 
+                                    ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 hover:bg-slate-800 active:scale-95' 
+                                    : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                            }`}
+                        >
+                            <Plus size={24} strokeWidth={3} />
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
@@ -742,26 +759,26 @@ export default function QrOrderPage() {
                     {/* Enhanced Search & Categories */}
                     <div className="px-4 pt-4 pb-3 bg-white/80 sticky top-[73px] z-40 backdrop-blur-md border-b border-slate-100">
                         <div className="relative mb-4">
-                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                                <Search size={18} />
+                            <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
+                                <Search size={20} />
                             </div>
                             <input
                                 placeholder="Search delicious food..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full h-12 bg-slate-50 border border-slate-200 rounded-2xl pl-12 pr-4 text-sm font-medium focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 transition-all outline-none placeholder:text-slate-400"
+                                className="w-full h-14 bg-slate-50 border-2 border-slate-200 rounded-2xl pl-14 pr-5 text-base font-semibold focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 transition-all outline-none placeholder:text-slate-400"
                             />
                         </div>
 
-                        <div ref={categoryRef} className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                        <div ref={categoryRef} className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
                             {categories.map(cat => (
                                 <button
                                     key={cat.id}
                                     onClick={() => setActiveCategory(cat.name)}
-                                    className={`whitespace-nowrap px-5 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
+                                    className={`whitespace-nowrap px-6 py-3 rounded-2xl text-sm font-black transition-all duration-200 ${
                                         activeCategory === cat.name
-                                            ? "bg-slate-900 text-white shadow-lg"
-                                            : "bg-white text-slate-600 border border-slate-200 hover:border-slate-300"
+                                            ? "bg-slate-900 text-white shadow-xl shadow-slate-900/20"
+                                            : "bg-white text-slate-600 border-2 border-slate-200 hover:border-slate-300"
                                     }`}
                                 >
                                     {cat.name}
@@ -781,13 +798,14 @@ export default function QrOrderPage() {
                                 <p className="text-sm text-slate-400">Try searching for something else</p>
                             </div>
                         ) : (
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 {filteredItems.map(item => (
                                     <MenuItemCard 
                                         key={item.id} 
                                         item={item} 
                                         addToCart={addToCart} 
                                         cart={cart}
+                                        updateQty={updateQty}
                                     />
                                 ))}
                             </div>

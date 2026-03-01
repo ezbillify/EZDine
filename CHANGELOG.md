@@ -1,4 +1,17 @@
 
+## v1.8.0 (2026-03-01)
+
+
+### Features
+* Enhanced menu item card design with improved layout and visuals
+* Updated search bar with new icon and styling
+* Added update quantity feature to menu item card
+* Improved category buttons with new styling and layout
+
+### Fixes
+* None
+
+
 ## v1.7.0 (2026-03-01)
 
 - Added missing functions and policies for settings table
