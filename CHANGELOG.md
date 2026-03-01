@@ -1,4 +1,14 @@
 
+## v1.11.0 (2026-03-01)
+
+
+### Features
+* Added keyboard shortcuts for quick fill, payment method selection, and confirmation
+* Improved input handling for payment amounts
+* Added a toggle for keyboard and keypad input
+
+
+
 ## v1.10.0 (2026-03-01)
 
 - Introduced a numeric keypad for easy payment entry in the payment modal
