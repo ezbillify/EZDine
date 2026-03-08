@@ -14,6 +14,7 @@ import '../services/print_service.dart';
 import '../services/pos_cache_service.dart';
 import '../core/theme.dart';
 import '../core/responsive.dart';
+import '../services/pos_notifier.dart';
 import '../widgets/numeric_keypad.dart';
 import '../widgets/lazy_tab_view.dart';
 import '../widgets/optimized_menu_grid.dart';
@@ -57,51 +58,41 @@ class PosScreen extends ConsumerStatefulWidget {
 
 class _PosScreenState extends ConsumerState<PosScreen> {
   String? _selectedCategoryId;
-  Map<String, dynamic>? _selectedTable;
-  Map<String, dynamic>? _selectedCustomer;
-  final List<Map<String, dynamic>> _cart = [];
-  String? _activeOrderId;
-  String? _activeOrderNumber;
-  String? _activeTokenNumber;
 
   // Search State with debouncing
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
   bool _isSearchActive = false;
   String _searchQuery = "";
-  String _sortBy = "name";
   late final Debouncer _searchDebouncer;
 
-  // Business Logic State
-  String? _activeBillNumber;
-  double _existingOrderTotal = 0;
-  bool _isSaving = false;
-  bool _isLoadingItems = false;
-  bool _isQuickBill = true;
-  String _orderType = 'dine_in';
-  String? _activeOrderPaymentStatus;
-  List<Map<String, dynamic>> _existingOrderItems = [];
+  // Real-time
   StreamSubscription? _ordersSubscription;
   RealtimeChannel? _menuChannel;
   final Set<String> _notifiedOrderIds = {};
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  
   bool _showSuccessOverlay = false;
   String _successMessage = "";
   bool get isMobile => Responsive.isMobile(context);
   
   // Performance optimizations
   final _cacheService = PosCacheService();
-  final _addToCartThrottler = Throttler(); // Uses adaptive duration
+  final _addToCartThrottler = Throttler(); 
+  String _sortBy = "name";
 
   @override
   void initState() {
     super.initState();
-    _searchDebouncer = Debouncer(); // Uses adaptive delay
+    _searchDebouncer = Debouncer(); 
     _searchFocusNode.addListener(() {
       setState(() => _isSearchActive = _searchFocusNode.hasFocus);
     });
     _setupOrderSubscription();
     _setupMenuRealtime();
+    
+    // Ensure POS state is reset when entering POS
+    Future.delayed(Duration.zero, () => ref.read(posStateProvider.notifier).reset());
   }
 
   @override
@@ -137,6 +128,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final ctx = ref.read(contextProvider);
     if (ctx.branchId == null) return;
 
+    bool isInitial = true;
     _ordersSubscription = Supabase.instance.client
         .from('orders')
         .stream(primaryKey: ['id'])
@@ -144,12 +136,11 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         .listen((orders) {
           bool hasNew = false;
           for (var o in orders) {
-            // Filter is_open on client side since stream only supports one eq filter in this version
             if (o['is_open'] != true) continue;
             
             if (!_notifiedOrderIds.contains(o['id'])) {
               _notifiedOrderIds.add(o['id']);
-              hasNew = true;
+              if (!isInitial) hasNew = true;
             }
           }
           if (hasNew) {
@@ -158,74 +149,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                _scaffoldKey.currentState?.openDrawer();
             }
           }
+          isInitial = false;
         });
   }
 
   Future<void> _loadOrderItems(String orderId) async {
-    // 1. Check Cache for "Instant" feel
-    final cachedItems = _cacheService.getOrderItems(orderId);
-    if (cachedItems != null) {
-      setState(() {
-        _existingOrderItems = cachedItems;
-        _existingOrderTotal = _existingOrderItems.fold(0.0, (sum, i) => sum + ((i['price'] ?? 0.0) * (i['quantity'] ?? 0)));
-        _isLoadingItems = false;
-      });
-      return;
-    }
-
-    setState(() => _isLoadingItems = true);
-
-    try {
-      final results = await Future.wait<dynamic>([
-        Supabase.instance.client
-            .from('order_items')
-            .select('*, menu_items(name)')
-            .eq('order_id', orderId),
-        Supabase.instance.client
-            .from('orders')
-            .select('*, bills(*), tables(*), customers(*)')
-            .eq('id', orderId)
-            .single()
-      ]);
-
-      final List<Map<String, dynamic>> res = List<Map<String, dynamic>>.from(results[0] as List);
-      final Map<String, dynamic> orderRes = results[1] as Map<String, dynamic>;
-
-      if (mounted) {
-        // Cache the results
-        _cacheService.cacheOrderItems(orderId, res);
-        _cacheService.cacheOrderDetails(orderId, orderRes);
-        
-        setState(() {
-          _existingOrderItems = res;
-          _existingOrderTotal = _existingOrderItems.fold(0.0, (sum, i) => sum + ((i['price'] ?? 0.0) * (i['quantity'] ?? 0)));
-          _activeTokenNumber = orderRes['token_number']?.toString();
-          _activeOrderNumber = orderRes['order_number']?.toString();
-          _activeOrderPaymentStatus = orderRes['payment_status'];
-          _selectedTable = orderRes['tables'];
-          _selectedCustomer = orderRes['customers'];
-          _orderType = orderRes['order_type'] ?? 'dine_in';
-          
-          final bills = orderRes['bills'] as List?;
-          if (bills != null && bills.isNotEmpty) {
-            _activeBillNumber = bills.first['bill_number'];
-          } else {
-            _activeBillNumber = null;
-          }
-          _isLoadingItems = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Load Order Items Error: $e');
-      if (mounted) setState(() => _isLoadingItems = false);
-    }
+    await ref.read(posStateProvider.notifier).loadOrder(orderId);
   }
 
   Future<void> _prefetchOrderItems(String orderId) async {
-    // Check if already cached
-    if (_cacheService.getOrderItems(orderId) != null) {
-      return;
-    }
+    if (_cacheService.getOrderItems(orderId) != null) return;
     
     try {
       final res = await Supabase.instance.client
@@ -235,39 +168,23 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       
       final items = List<Map<String, dynamic>>.from(res);
       _cacheService.cacheOrderItems(orderId, items);
-    } catch (_) {
-      // Silent fail for background prefetch
-    }
+    } catch (_) {}
   }
 
-  double get _total => _cart.fold(0, (sum, item) => sum + (item['base_price'] * item['qty']));
-
   void _addToCart(Map<String, dynamic> item) {
-    if (!_addToCartThrottler.shouldExecute()) {
-      return; // Prevent rapid taps
-    }
-    
-    AudioService.instance.playClick();
-    setState(() {
-      final existingIndex = _cart.indexWhere((i) => i['id'] == item['id']);
-      if (existingIndex >= 0) {
-        _cart[existingIndex]['qty']++;
-      } else {
-        _cart.add({...item, 'qty': 1});
-      }
-    });
+    if (!_addToCartThrottler.shouldExecute()) return;
+    ref.read(posStateProvider.notifier).addToCart(item);
   }
 
   void _updateQty(String id, int delta) {
-    AudioService.instance.playClick();
+    ref.read(posStateProvider.notifier).updateQty(id, delta);
+  }
+
+  void _resetPos() {
+    ref.read(posStateProvider.notifier).reset();
     setState(() {
-      final index = _cart.indexWhere((i) => i['id'] == id);
-      if (index >= 0) {
-        _cart[index]['qty'] += delta;
-        if (_cart[index]['qty'] <= 0) {
-          _cart.removeAt(index);
-        }
-      }
+      _searchQuery = "";
+      _searchController.clear();
     });
   }
 
@@ -294,32 +211,15 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     }
   }
 
-  void _resetPos() {
-    setState(() {
-      _cart.clear();
-      _existingOrderItems = [];
-      _selectedTable = null;
-      _selectedCustomer = null;
-      _activeOrderId = null;
-      _activeOrderNumber = null;
-      _activeTokenNumber = null;
-      _activeBillNumber = null;
-      _existingOrderTotal = 0;
-      _isQuickBill = true;
-      _orderType = 'dine_in';
-      _activeOrderPaymentStatus = null;
-      _searchQuery = "";
-      _searchController.clear();
-    });
-  }
-
   void _triggerSuccess(String message) {
+    // Ensure all current dialogs/sheets are closed before showing the success overlay
+    Navigator.of(context).popUntil((route) => route.settings.name == 'pos' || route.isFirst);
+
     setState(() {
       _successMessage = message;
       _showSuccessOverlay = true;
     });
-    
-    // Auto-reset and hide after 1.5 seconds
+
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) {
         setState(() => _showSuccessOverlay = false);
@@ -329,64 +229,68 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   }
 
   Future<void> _handleSaveAndSend() async {
-    if (_cart.isEmpty && _activeOrderId == null) return;
+    final pos = ref.read(posStateProvider);
+    if (pos.cart.isEmpty && pos.activeOrderId == null) return;
     
-    setState(() => _isSaving = true);
     final ctx = ref.read(contextProvider);
     final posService = ref.read(posServiceProvider);
 
     try {
       final res = await posService.saveAndSendToKitchen(
-        cart: _cart,
-        tableId: _selectedTable?['id'],
-        customerId: _selectedCustomer?['id'],
-        orderId: _activeOrderId,
+        cart: pos.cart,
+        tableId: pos.selectedTable?['id'],
+        customerId: pos.selectedCustomer?['id'],
+        orderId: pos.activeOrderId,
         restaurantId: ctx.restaurantId!,
         branchId: ctx.branchId!,
-        orderType: _orderType,
+        orderType: pos.orderType,
       );
 
-      final printService = ref.read(printServiceProvider);
-      final settings = await printService.getPrintingSettings(ctx.branchId!);
+      // --- BACKGROUND KOT PRINTING ---
+      () async {
+        try {
+          final printService = ref.read(printServiceProvider);
+          final settings = await printService.getPrintingSettings(ctx.branchId!);
 
-      // KOT Print
-      if (settings != null) {
-        await printService.printPremiumKot(
-          restaurantName: ctx.restaurantName ?? "EZDine",
-          branchName: ctx.branchName ?? "Branch",
-          orderId: res['order_number'].toString(),
-          items: _cart.map((i) => {
-            'name': i['name'] ?? 'Item',
-            'qty': i['qty'] ?? 1,
-            'notes': i['notes'] ?? '',
-          }).toList(),
-          tableName: _selectedTable?['name'] ?? (_isQuickBill ? "QUICK BILL" : "--"),
-          tokenNumber: res['token_number'].toString(),
-          orderType: _orderType == 'dine_in' ? "DINE IN" : "TAKEAWAY",
-          printerId: settings['printerIdKot'],
-          paperWidth: settings['paperWidthKot'] ?? 58,
-        );
-      } else {
-        debugPrint('No print settings found or network error');
-      }
+          if (settings != null) {
+            await printService.printPremiumKot(
+              restaurantName: ctx.restaurantName ?? "EZDine",
+              branchName: ctx.branchName ?? "Branch",
+              orderId: res['order_number'].toString(),
+              items: pos.cart.map((i) => {
+                'name': i['name'] ?? 'Item',
+                'qty': i['qty'] ?? 1,
+                'notes': i['notes'] ?? '',
+              }).toList(),
+              tableName: pos.selectedTable?['name'] ?? (pos.isQuickBill ? "QUICK BILL" : "--"),
+              tokenNumber: res['token_number'].toString(),
+              orderType: pos.orderType == 'dine_in' ? "DINE IN" : "TAKEAWAY",
+              printerId: settings['printerIdKot'],
+              paperWidth: settings['paperWidthKot'] ?? 58,
+            );
+          }
+        } catch (e) {
+          debugPrint("Silent KOT Print Error: $e");
+        }
+      }();
 
       AudioService.instance.playSuccess();
 
       if (mounted) {
-        if (Responsive.isMobile(context)) {
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        }
-        _triggerSuccess(_activeOrderId == null ? 'ORDER CREATED!' : 'ORDER UPDATED!');
+        _triggerSuccess(pos.activeOrderId == null ? 'ORDER CREATED!' : 'ORDER UPDATED!');
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        ref.read(posStateProvider.notifier).setSaving(false);
+      }
     }
   }
 
   Future<void> _handlePayment({bool printReceipt = false}) async {
-    final totalPayable = _total + _existingOrderTotal;
+    final pos = ref.read(posStateProvider);
+    final totalPayable = pos.totalPayable;
     if (totalPayable <= 0) return;
 
     if (isMobile) {
@@ -402,11 +306,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           ),
           child: PaymentModal(
             totalAmount: totalPayable,
-            isLoading: _isSaving,
+            isLoading: pos.isSaving,
             isSheet: true,
             onConfirm: (payments) async {
               await _processSettlement(payments, printReceipt);
-              if (mounted) Navigator.pop(context);
             },
           ),
         ),
@@ -414,17 +317,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     } else {
       showDialog(
         context: context,
-        barrierDismissible: !_isSaving,
+        barrierDismissible: !pos.isSaving,
         barrierColor: Colors.black.withValues(alpha: 0.5),
         builder: (context) => Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
           child: PaymentModal(
             totalAmount: totalPayable,
-            isLoading: _isSaving,
+            isLoading: pos.isSaving,
             onConfirm: (payments) async {
               await _processSettlement(payments, printReceipt);
-              if (mounted) Navigator.pop(context);
             },
           ),
         ),
@@ -434,89 +336,105 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
   Future<void> _processSettlement(List<Map<String, dynamic>> payments, bool printReceipt) async {
     if (!mounted) return;
-    setState(() => _isSaving = true);
+    
+    final notifier = ref.read(posStateProvider.notifier);
+    notifier.setSaving(true);
+    
     final ctx = ref.read(contextProvider);
     final posService = ref.read(posServiceProvider);
 
     try {
-      final hasNewItems = _cart.isNotEmpty;
+      final pos = ref.read(posStateProvider);
       final res = await posService.settleOrder(
-        cart: _cart,
-        orderId: _activeOrderId,
-        tableId: _selectedTable?['id'],
-        customerId: _selectedCustomer?['id'],
+        cart: pos.cart,
+        allItems: [...pos.existingOrderItems, ...pos.cart],
+        orderId: pos.activeOrderId,
+        tableId: pos.selectedTable?['id'],
+        customerId: pos.selectedCustomer?['id'],
         restaurantId: ctx.restaurantId!,
         branchId: ctx.branchId!,
         payments: payments,
-        orderType: _orderType,
+        orderType: pos.orderType,
       );
 
-      final printService = ref.read(printServiceProvider);
-      final settings = await printService.getPrintingSettings(ctx.branchId!);
+      // --- LIGHTNING FAST BACKGROUND PRINTING ---
+      if (printReceipt) {
+        // Fire and forget printing to avoid blocking the UI
+        () async {
+          try {
+            final now = DateTime.now();
+            final formattedTime = "${now.hour}:${now.minute.toString().padLeft(2, '0')}";
+            
+            final printService = ref.read(printServiceProvider);
+            final settings = await printService.getPrintingSettings(ctx.branchId!);
+            if (settings == null) return;
 
-      if (settings != null && printReceipt) {
-        final bool isConsolidated = settings['consolidatedPrinting'] ?? false;
-        final int paperWidth = settings['paperWidthInvoice'] ?? 58; // Use configured paper width
+            final bool isConsolidated = settings['consolidatedPrinting'] ?? false;
+            final int paperWidth = settings['paperWidthInvoice'] ?? 58;
 
-        final items = [..._existingOrderItems, ..._cart].map((i) => {
-          'name': i['name'] ?? i['menu_items']?['name'] ?? 'Item',
-          'qty': i['qty'] ?? i['quantity'] ?? 1,
-          'price': (i['price'] as num?)?.toDouble() ?? (i['base_price'] as num?)?.toDouble() ?? 0.0,
-          'tax_rate': i['tax_rate'] ?? i['menu_items']?['gst_rate'] ?? i['gst_rate'] ?? 0.0,
-          'hsn_code': i['hsn_code'] ?? i['menu_items']?['hsn_code'] ?? i['hsn'] ?? '',
-        }).toList();
+            final items = [...pos.existingOrderItems, ...pos.cart].map((i) => {
+              'name': i['name'] ?? i['menu_items']?['name'] ?? 'Item',
+              'qty': i['qty'] ?? i['quantity'] ?? 1,
+              'price': (i['price'] as num?)?.toDouble() ?? (i['base_price'] as num?)?.toDouble() ?? 0.0,
+              'tax_rate': i['tax_rate'] ?? i['menu_items']?['gst_rate'] ?? i['gst_rate'] ?? 0.0,
+              'hsn_code': i['hsn_code'] ?? i['menu_items']?['hsn_code'] ?? i['hsn'] ?? '',
+            }).toList();
 
-        if (isConsolidated) {
-          // CONSOLIDATED MODE: Print Invoice → Cut → KOT sequence
-          await printService.printConsolidatedSequence(
-            restaurantName: ctx.restaurantName ?? "EZDine",
-            branchName: ctx.branchName ?? "Branch",
-            branchAddress: ctx.branchAddress,
-            gstin: ctx.gstin,
-            fssai: ctx.fssai,
-            phone: ctx.branchPhone,
-            tableName: _selectedTable?['name'] ?? (_isQuickBill ? "QUICK BILL" : "--"),
-            orderId: res['order']['order_number']?.toString() ?? "0000",
-            tokenNumber: res['order']['token_number']?.toString() ?? "00",
-            customerName: _selectedCustomer?['name'] ?? 'Guest',
-            orderType: _isQuickBill ? "Takeaway" : (_orderType == 'dine_in' ? "Dine In" : "Takeaway"),
-            items: items,
-            subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
-            tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
-            total: (res['total'] as num?)?.toDouble() ?? 0.0,
-            paperWidth: paperWidth,
-            printerId: settings['printerIdInvoice'] ?? settings['printerIdKot'],
-          );
-        } else {
-          // SEPARATE MODE: Only print Invoice (no KOT)
-          await printService.printPremiumInvoice(
-            restaurantName: ctx.restaurantName ?? "EZDine",
-            branchName: ctx.branchName ?? "Branch",
-            branchAddress: ctx.branchAddress,
-            phone: ctx.branchPhone,
-            gstin: ctx.gstin,
-            fssai: ctx.fssai,
-            orderId: res['order']['order_number']?.toString() ?? "0000",
-            date: DateTime.now().toString().split(' ')[0],
-            time: TimeOfDay.now().format(context),
-            items: items,
-            subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
-            tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
-            total: (res['total'] as num?)?.toDouble() ?? 0.0,
-            tableName: _selectedTable?['name'] ?? (_isQuickBill ? "QUICK BILL" : "--"),
-            tokenNumber: res['order']['token_number']?.toString() ?? "00",
-            customerName: _selectedCustomer?['name'] ?? 'Guest',
-            orderType: _isQuickBill ? "Takeaway" : (_orderType == 'dine_in' ? "Dine In" : "Takeaway"),
-            printerId: settings['printerIdInvoice'],
-            paperWidth: paperWidth,
-          );
-        }
+            final String orderIdStr = res['order']['order_number']?.toString() ?? "0000";
+            final String tokenNumberStr = res['order']['token_number']?.toString() ?? "00";
+
+            if (isConsolidated) {
+              await printService.printConsolidatedSequence(
+                restaurantName: ctx.restaurantName ?? "EZDine",
+                branchName: ctx.branchName ?? "Branch",
+                branchAddress: ctx.branchAddress,
+                gstin: ctx.gstin,
+                fssai: ctx.fssai,
+                phone: ctx.branchPhone,
+                tableName: pos.selectedTable?['name'] ?? (pos.isQuickBill ? "QUICK BILL" : "--"),
+                orderId: orderIdStr,
+                tokenNumber: tokenNumberStr,
+                customerName: pos.selectedCustomer?['name'] ?? 'Guest',
+                orderType: pos.isQuickBill ? "Takeaway" : (pos.orderType == 'dine_in' ? "Dine In" : "Takeaway"),
+                items: items,
+                subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
+                tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
+                total: (res['total'] as num?)?.toDouble() ?? 0.0,
+                paperWidth: paperWidth,
+                printerId: settings['printerIdInvoice'] ?? settings['printerIdKot'],
+              );
+            } else {
+              await printService.printPremiumInvoice(
+                restaurantName: ctx.restaurantName ?? "EZDine",
+                branchName: ctx.branchName ?? "Branch",
+                branchAddress: ctx.branchAddress,
+                phone: ctx.branchPhone,
+                gstin: ctx.gstin,
+                fssai: ctx.fssai,
+                orderId: orderIdStr,
+                date: now.toString().split(' ')[0],
+                time: formattedTime,
+                items: items,
+                subtotal: (res['bill']?['subtotal'] as num?)?.toDouble() ?? (res['total'] as num?)?.toDouble() ?? 0.0,
+                tax: (res['bill']?['tax'] as num?)?.toDouble() ?? 0.0,
+                total: (res['total'] as num?)?.toDouble() ?? 0.0,
+                tableName: pos.selectedTable?['name'] ?? (pos.isQuickBill ? "QUICK BILL" : "--"),
+                tokenNumber: tokenNumberStr,
+                customerName: pos.selectedCustomer?['name'] ?? 'Guest',
+                orderType: pos.isQuickBill ? "Takeaway" : (pos.orderType == 'dine_in' ? "Dine In" : "Takeaway"),
+                printerId: settings['printerIdInvoice'],
+                paperWidth: paperWidth,
+              );
+            }
+          } catch (e) {
+            debugPrint("Silent Print Error: $e");
+          }
+        }();
       }
 
       AudioService.instance.playSuccess();
 
       if (mounted) {
-        // Show success message
         _triggerSuccess('PAYMENT COMPLETED!');
       }
     } catch (e) {
@@ -535,7 +453,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) {
+        ref.read(posStateProvider.notifier).setSaving(false);
+      }
     }
   }
 
@@ -546,6 +466,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
     final isMobile = Responsive.isMobile(context);
     final isTablet = Responsive.isTablet(context) || Responsive.isDesktop(context);
+
+    final pos = ref.watch(posStateProvider);
+    final notifier = ref.read(posStateProvider.notifier);
 
     return Stack(
       children: [
@@ -603,7 +526,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             ),
         ],
       ),
-      floatingActionButton: !isTablet && (_cart.isNotEmpty || _activeOrderId != null) 
+      floatingActionButton: !isTablet && (pos.cart.isNotEmpty || pos.activeOrderId != null) 
           ? Container(
               height: 64,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -618,7 +541,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 icon: const Icon(LucideIcons.shoppingBag, size: 20),
                 label: Text(
-                  'VIEW CART • ₹${_total.toStringAsFixed(0)}', 
+                  'VIEW CART • ₹${pos.totalPayable.toStringAsFixed(0)}', 
                   style: GoogleFonts.outfit(fontWeight: FontWeight.w900, letterSpacing: 1, fontSize: 13)
                 ),
               ),
@@ -627,35 +550,54 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     ),
         if (_showSuccessOverlay)
           Positioned.fill(
-            child: Container(
-              color: Colors.black.withOpacity(0.85),
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.9),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: const BoxDecoration(
-                        color: Colors.green,
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981),
                         shape: BoxShape.circle,
+                        boxShadow: [
+                            BoxShadow(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.3),
+                                blurRadius: 40,
+                                spreadRadius: 10,
+                            ),
+                        ],
                       ),
-                      child: const Icon(LucideIcons.check, color: Colors.white, size: 54),
-                    ),
-                    const SizedBox(height: 24),
+                      child: const Icon(LucideIcons.check, color: Colors.white, size: 60),
+                    ).animate(onPlay: (c) => c.forward())
+                     .scale(duration: 400.ms, curve: Curves.easeOutBack)
+                     .shimmer(delay: 500.ms, duration: 1200.ms, color: Colors.white.withValues(alpha: 0.3)),
+                    const SizedBox(height: 32),
                     Text(
                       _successMessage,
-                      style: const TextStyle(
+                      style: GoogleFonts.outfit(
                         color: Colors.white,
-                        fontSize: 24,
+                        fontSize: 28,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 1.5,
+                        letterSpacing: 2,
                       ),
-                    ),
+                    ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2, end: 0, curve: Curves.easeOutCubic),
+                    const SizedBox(height: 8),
+                    Text(
+                      'TRANSACTION SECURE',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white.withValues(alpha: 0.4),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 4,
+                      ),
+                    ).animate().fadeIn(delay: 400.ms),
                   ],
                 ),
               ),
             ),
-          ),
+          ).animate().fadeIn(duration: 300.ms),
       ],
     );
   }
@@ -665,6 +607,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     final categoriesAsync = ref.watch(menuCategoriesProvider(ctx.branchId!));
     final itemsAsync = ref.watch(menuItemsProvider(ctx.branchId!));
     final isMobile = Responsive.isMobile(context);
+
+    final pos = ref.watch(posStateProvider);
+    final notifier = ref.read(posStateProvider.notifier);
 
     return Column(
       children: [
@@ -677,30 +622,25 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               _SelectorButton(
                 label: 'QUICK BILL',
                 icon: LucideIcons.zap,
-                isSelected: _isQuickBill,
+                isSelected: pos.isQuickBill,
                 onTap: () {
                   AudioService.instance.playClick();
-                  setState(() {
-                    _isQuickBill = true;
-                    _selectedTable = null;
-                    _activeOrderId = null;
-                    _orderType = 'dine_in';
-                  });
+                  notifier.setQuickBill();
                 },
                 color: Colors.orange,
               ),
               const SizedBox(width: 12),
               _SelectorButton(
-                label: _selectedTable?['name'] ?? 'TABLE',
+                label: pos.selectedTable?['name'] ?? 'TABLE',
                 icon: LucideIcons.armchair,
-                isSelected: !_isQuickBill && _selectedTable != null,
+                isSelected: !pos.isQuickBill && pos.selectedTable != null,
                 onTap: () => _showTableSheet(context),
               ),
               const SizedBox(width: 12),
               _SelectorButton(
-                label: _selectedCustomer?['name'] ?? 'GUEST',
+                label: pos.selectedCustomer?['name'] ?? 'GUEST',
                 icon: LucideIcons.user,
-                isSelected: _selectedCustomer != null,
+                isSelected: pos.selectedCustomer != null,
                 onTap: () => _showCustomerSheet(context),
                 color: Colors.green,
               ),
@@ -724,8 +664,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   child: _OrderTypeToggle(
                     label: 'DINE IN',
                     icon: LucideIcons.armchair,
-                    isActive: _orderType == 'dine_in',
-                    onTap: () => setState(() => _orderType = 'dine_in'),
+                    isActive: pos.orderType == 'dine_in',
+                    onTap: () => notifier.setOrderType('dine_in'),
                     activeColor: Colors.blue.shade600,
                   ),
                 ),
@@ -734,8 +674,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   child: _OrderTypeToggle(
                     label: 'TAKEAWAY',
                     icon: LucideIcons.shoppingBag,
-                    isActive: _orderType == 'takeaway',
-                    onTap: () => setState(() => _orderType = 'takeaway'),
+                    isActive: pos.orderType == 'takeaway',
+                    onTap: () => notifier.setOrderType('takeaway'),
                     activeColor: Colors.orange.shade600,
                   ),
                 ),
@@ -905,6 +845,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   }
 
   Widget _buildCartArea() {
+    final pos = ref.watch(posStateProvider);
+    final notifier = ref.read(posStateProvider.notifier);
+    
     return Column(
       children: [
         Padding(
@@ -915,16 +858,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               const SizedBox(width: 12),
               const Text('YOUR CART', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
               const Spacer(),
-              _cart.isNotEmpty 
-                ? IconButton(icon: const Icon(LucideIcons.trash2, size: 18, color: Colors.grey), onPressed: () => setState(() => _cart.clear()))
+              pos.cart.isNotEmpty 
+                ? IconButton(icon: const Icon(LucideIcons.trash2, size: 18, color: Colors.grey), onPressed: () => notifier.clearCart())
                 : const SizedBox.shrink(),
             ],
           ),
         ),
          Expanded(
-           child: _isLoadingItems 
+           child: pos.isLoadingItems 
              ? const Center(child: CircularProgressIndicator()) 
-             : _cart.isEmpty && _existingOrderItems.isEmpty
+             : pos.cart.isEmpty && pos.existingOrderItems.isEmpty
                ? Center(child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -936,7 +879,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               : ListView(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   children: [
-                    if (_existingOrderItems.isNotEmpty) ...[
+                    if (pos.existingOrderItems.isNotEmpty) ...[
                       const SizedBox(height: 16),
                       Row(
                         children: [
@@ -946,10 +889,10 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      ..._existingOrderItems.map((item) => _ExistingItemTile(item: item)),
+                      ...pos.existingOrderItems.map((item) => _ExistingItemTile(item: item)),
                       const SizedBox(height: 24),
                     ],
-                    if (_cart.isNotEmpty) ...[
+                    if (pos.cart.isNotEmpty) ...[
                       Row(
                         children: [
                           const Text('NEW ITEMS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: AppTheme.primary, letterSpacing: 1.5)),
@@ -958,9 +901,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                         ],
                       ),
                       const SizedBox(height: 16),
-                      ..._cart.asMap().entries.map((entry) => Padding(
+                      ...pos.cart.asMap().entries.map((entry) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _CartItemTile(item: entry.value, onUpdate: _updateQty),
+                        child: _CartItemTile(item: entry.value, onUpdate: (id, delta) => notifier.updateQty(id, delta)),
                       )),
                     ],
                   ],
@@ -971,24 +914,24 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey.shade100))),
           child: Column(
             children: [
-              if (_activeOrderId != null) ...[
+              if (pos.activeOrderId != null) ...[
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('ORDER #$_activeOrderNumber', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                        Text('ORDER #${pos.activeOrderNumber ?? "---"}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: _activeOrderPaymentStatus == 'paid' ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                            color: pos.activeOrderPaymentStatus == 'paid' ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            _activeOrderPaymentStatus?.toUpperCase() ?? 'PENDING',
+                            pos.activeOrderPaymentStatus?.toUpperCase() ?? 'PENDING',
                             style: TextStyle(
-                              color: _activeOrderPaymentStatus == 'paid' ? Colors.green : Colors.orange,
+                              color: pos.activeOrderPaymentStatus == 'paid' ? Colors.green : Colors.orange,
                               fontWeight: FontWeight.w900,
                               fontSize: 10
                             ),
@@ -1000,17 +943,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     Wrap(
                       spacing: 16,
                       children: [
-                        if (_activeTokenNumber != null) 
+                        if (pos.activeTokenNumber != null) 
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(6)),
-                            child: Text('TOKEN: $_activeTokenNumber', style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w800)),
+                            child: Text('TOKEN: ${pos.activeTokenNumber}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w800)),
                           ),
-                        if (_activeBillNumber != null) 
+                        if (pos.activeBillNumber != null) 
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(6)),
-                            child: Text('BILL: $_activeBillNumber', style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w800)),
+                            child: Text('BILL: ${pos.activeBillNumber}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w800)),
                           ),
                       ],
                     ),
@@ -1022,18 +965,18 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text('Total Amount', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                  Text('₹${(_total + _existingOrderTotal).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
+                  Text('₹${(pos.totalPayable).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
                 ],
               ),
               const SizedBox(height: 24),
-              if (_activeOrderPaymentStatus == 'paid') ...[
+              if (pos.activeOrderPaymentStatus == 'paid') ...[
                 Row(
                   children: [
                     Expanded(
                       child: SizedBox(
                         height: 54,
                         child: OutlinedButton(
-                          onPressed: _resetPos,
+                          onPressed: () => notifier.reset(),
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: Colors.green),
                             foregroundColor: Colors.green,
@@ -1054,17 +997,17 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                       child: SizedBox(
                         height: 60,
                         child: ElevatedButton(
-                          onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : _handleSaveAndSend,
+                          onPressed: pos.isSaving || (pos.cart.isEmpty && pos.activeOrderId == null) ? null : _handleSaveAndSend,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _activeOrderId == null ? Colors.indigo : Colors.orange.shade800,
+                            backgroundColor: pos.activeOrderId == null ? Colors.indigo : Colors.orange.shade800,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: 0,
                           ),
-                          child: _isSaving 
+                          child: pos.isSaving 
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                             : Text(
-                                _activeOrderId == null ? 'PLACE ORDER' : 'UPDATE ORDER', 
+                                pos.activeOrderId == null ? 'PLACE ORDER' : 'UPDATE ORDER', 
                                 style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)
                               ),
                           ),
@@ -1078,7 +1021,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     height: 54,
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : () => _handlePayment(printReceipt: false),
+                      onPressed: pos.isSaving || (pos.cart.isEmpty && pos.activeOrderId == null) ? null : () => _handlePayment(printReceipt: false),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF10B981),
                         foregroundColor: Colors.white,
@@ -1093,7 +1036,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     height: 54,
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : () => _handlePayment(printReceipt: true),
+                      onPressed: pos.isSaving || (pos.cart.isEmpty && pos.activeOrderId == null) ? null : () => _handlePayment(printReceipt: true),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFF59E0B),
                         foregroundColor: Colors.white,
@@ -1110,7 +1053,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                         child: SizedBox(
                           height: 60,
                           child: ElevatedButton(
-                            onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : () => _handlePayment(printReceipt: false),
+                            onPressed: pos.isSaving || (pos.cart.isEmpty && pos.activeOrderId == null) ? null : () => _handlePayment(printReceipt: false),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF10B981),
                               foregroundColor: Colors.white,
@@ -1127,12 +1070,12 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: SizedBox(
                           height: 60,
                           child: ElevatedButton(
-                            onPressed: _isSaving || (_cart.isEmpty && _activeOrderId == null) ? null : () => _handlePayment(printReceipt: true),
+                            onPressed: pos.isSaving || (pos.cart.isEmpty && pos.activeOrderId == null) ? null : () => _handlePayment(printReceipt: true),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFF59E0B),
                               foregroundColor: Colors.white,
@@ -1163,6 +1106,8 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   Widget _buildLiveOrdersSidebar({bool isDrawer = false}) {
     final ctx = ref.watch(contextProvider);
     if (ctx.branchId == null) return const SizedBox.shrink();
+    
+    final pos = ref.watch(posStateProvider);
 
     // Combined stream for both Dine-In and QR orders
     return StreamBuilder(
@@ -1179,7 +1124,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         // Background Pre-fetch items for orders not in cache
         for (var o in allOrders) {
           final id = o['id'];
-          if (_cacheService.getOrderItems(id) == null && !_isLoadingItems) {
+          if (_cacheService.getOrderItems(id) == null && !pos.isLoadingItems) {
              // Fetch in background, don't await
              _prefetchOrderItems(id);
           }
@@ -1190,20 +1135,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           final isOpen = o['is_open'] == true;
           final isPaid = o['payment_status'] == 'paid';
           
-          if (!isOpen) return false;
+          if (!isPaid) return isOpen;
           
-          // If paid, show for 30 seconds
-          if (isPaid) {
-            try {
-              final updatedAt = DateTime.parse(o['updated_at']);
-              return now.difference(updatedAt).inSeconds < 120;
-            } catch (e) {
-              return true; // Fallback
-            }
+          // Recent paid orders (for grace period)
+          try {
+            final updatedAt = DateTime.parse(o['updated_at']);
+            // Show for 120s even if closed
+            return now.difference(updatedAt).inSeconds < 120;
+          } catch (e) {
+            return false;
           }
-          
-          // Always show unpaid/open orders
-          return true;
         }).toList();
 
         return Container(
@@ -1228,7 +1169,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     final o = liveOrders[i];
                     final isPaid = o['payment_status'] == 'paid';
                     final isQr = o['source'] == 'qr' || o['source'] == 'online';
-                    final isActive = _activeOrderId == o['id'];
+                    final isActive = pos.activeOrderId == o['id'];
 
 
                     final statusColor = isPaid ? Colors.green : (isQr ? Colors.orange : Colors.blue);
@@ -1318,17 +1259,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                     return GestureDetector(
                       onTap: () async {
                         AudioService.instance.playClick();
-                        setState(() {
-                          _activeOrderId = o['id'];
-                          _activeOrderNumber = o['order_number'];
-                          _selectedTable = null;
-                          _isQuickBill = false;
-                          _orderType = o['order_type'] ?? 'dine_in';
-                          _activeOrderPaymentStatus = o['payment_status'];
-                          _existingOrderTotal = 0;
-                          _existingOrderItems = [];
-                          _cart.clear();
-                        });
+                        ref.read(posStateProvider.notifier).loadOrder(o['id']);
 
                         if (isDrawer) {
                           Navigator.pop(context);
@@ -1418,22 +1349,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
   void _loadOrderFromHistory(Map<String, dynamic> o) {
       if (!mounted) return;
-      setState(() {
-        _activeOrderId = o['id'];
-        _activeOrderNumber = o['order_number']?.toString();
-        _activeTokenNumber = o['token_number']?.toString();
-        _activeBillNumber = (o['bills'] is List && (o['bills'] as List).isNotEmpty)
-            ? (o['bills'] as List)[0]['bill_number']?.toString()
-            : null;
-        _selectedTable = o['tables'];
-        _selectedCustomer = o['customers'];
-        _isQuickBill = o['tables'] == null;
-        _orderType = o['order_type'] ?? 'dine_in';
-        _activeOrderPaymentStatus = o['payment_status'];
-        _existingOrderTotal = 0;
-        _cart.clear();
-      });
-      _loadOrderItems(o['id']);
+      ref.read(posStateProvider.notifier).loadOrder(o['id']);
   }
   void _showMobileCart(BuildContext context) {
     showModalBottomSheet(
@@ -1443,22 +1359,9 @@ class _PosScreenState extends ConsumerState<PosScreen> {
       barrierColor: Colors.black.withValues(alpha: 0.5),
       elevation: 0,
       builder: (c) => _MobileCartSheet(
-        cart: _cart,
-        existingOrderItems: _existingOrderItems,
-        isLoadingItems: _isLoadingItems,
-        total: _total,
-        existingOrderTotal: _existingOrderTotal,
-        activeOrderId: _activeOrderId,
-        activeOrderNumber: _activeOrderNumber,
-        activeOrderPaymentStatus: _activeOrderPaymentStatus,
-        activeTokenNumber: _activeTokenNumber,
-        activeBillNumber: _activeBillNumber,
-        isSaving: _isSaving,
-        onUpdateQty: _updateQty,
-        onClearCart: () => setState(() => _cart.clear()),
         onSaveAndSend: _handleSaveAndSend,
         onPayment: () => _handlePayment(printReceipt: false),
-        onReset: _resetPos,
+        onPaymentAndPrint: () => _handlePayment(printReceipt: true),
         isMobile: Responsive.isMobile(context),
       ),
     );
@@ -1491,16 +1394,12 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                   itemCount: tables.length,
                   itemBuilder: (context, index) {
                     final table = tables[index];
-                    final isSelected = _selectedTable?['id'] == table['id'];
+                    final pos = ref.read(posStateProvider);
+                    final isSelected = pos.selectedTable?['id'] == table['id'];
                     return GestureDetector(
                       onTap: () {
                         AudioService.instance.playClick();
-                        setState(() {
-                          _selectedTable = table;
-                          _isQuickBill = false;
-                          _activeOrderId = null;
-                          _orderType = 'dine_in';
-                        });
+                        ref.read(posStateProvider.notifier).setSelectedTable(table);
                         Navigator.pop(context);
                       },
                       child: Container(
@@ -1541,7 +1440,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           child: _CustomerSearchSheet(
             onSelect: (customer) {
               AudioService.instance.playClick();
-              setState(() => _selectedCustomer = customer);
+              ref.read(posStateProvider.notifier).setSelectedCustomer(customer);
               Navigator.pop(context);
             },
           ),
@@ -2419,83 +2318,29 @@ class _OrderList extends StatelessWidget {
   }
 }
 
-class _MobileCartSheet extends StatefulWidget {
-  final List<Map<String, dynamic>> cart;
-  final List<Map<String, dynamic>> existingOrderItems;
-  final bool isLoadingItems;
-  final double total;
-  final double existingOrderTotal;
-  final String? activeOrderId;
-  final String? activeOrderNumber;
-  final String? activeOrderPaymentStatus;
-  final String? activeTokenNumber;
-  final String? activeBillNumber;
-  final bool isSaving;
-  final Function(String, int) onUpdateQty;
-  final VoidCallback onClearCart;
+class _MobileCartSheet extends ConsumerStatefulWidget {
   final VoidCallback onSaveAndSend;
   final VoidCallback onPayment;
-  final VoidCallback onReset;
+  final VoidCallback onPaymentAndPrint;
   final bool isMobile;
 
   const _MobileCartSheet({
-    required this.cart,
-    required this.existingOrderItems,
-    required this.isLoadingItems,
-    required this.total,
-    required this.existingOrderTotal,
-    required this.activeOrderId,
-    required this.activeOrderNumber,
-    required this.activeOrderPaymentStatus,
-    required this.activeTokenNumber,
-    required this.activeBillNumber,
-    required this.isSaving,
-    required this.onUpdateQty,
-    required this.onClearCart,
     required this.onSaveAndSend,
     required this.onPayment,
-    required this.onReset,
+    required this.onPaymentAndPrint,
     required this.isMobile,
   });
 
   @override
-  State<_MobileCartSheet> createState() => _MobileCartSheetState();
+  ConsumerState<_MobileCartSheet> createState() => _MobileCartSheetState();
 }
 
-class _MobileCartSheetState extends State<_MobileCartSheet> {
-  late List<Map<String, dynamic>> _localCart;
-
-  @override
-  void initState() {
-    super.initState();
-    _localCart = List.from(widget.cart);
-  }
-
-  // Calculate total from local cart
-  double get _localTotal {
-    return _localCart.fold<double>(0, (sum, item) {
-      final price = (item['base_price'] ?? 0).toDouble();
-      final qty = (item['qty'] ?? 0).toInt();
-      return sum + (price * qty);
-    });
-  }
-
-  void _updateLocalQty(String id, int delta) {
-    setState(() {
-      final index = _localCart.indexWhere((i) => i['id'] == id);
-      if (index >= 0) {
-        _localCart[index]['qty'] += delta;
-        if (_localCart[index]['qty'] <= 0) {
-          _localCart.removeAt(index);
-        }
-      }
-    });
-    // Also update parent
-    widget.onUpdateQty(id, delta);
-  }
-
+class _MobileCartSheetState extends ConsumerState<_MobileCartSheet> {
   @override
   Widget build(BuildContext context) {
+    final pos = ref.watch(posStateProvider);
+    final notifier = ref.read(posStateProvider.notifier);
+
     return Material(
       color: Colors.white,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
@@ -2513,22 +2358,19 @@ class _MobileCartSheetState extends State<_MobileCartSheet> {
                   const SizedBox(width: 12),
                   const Text('YOUR CART', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                   const Spacer(),
-                  _localCart.isNotEmpty 
+                  pos.cart.isNotEmpty 
                     ? IconButton(
                         icon: const Icon(LucideIcons.trash2, size: 18, color: Colors.grey), 
-                        onPressed: () {
-                          setState(() => _localCart.clear());
-                          widget.onClearCart();
-                        }
+                        onPressed: () => notifier.clearCart()
                       )
                     : const SizedBox.shrink(),
                 ],
               ),
             ),
             Expanded(
-              child: widget.isLoadingItems 
+              child: pos.isLoadingItems 
                 ? const Center(child: CircularProgressIndicator()) 
-                : _localCart.isEmpty && widget.existingOrderItems.isEmpty
+                : pos.cart.isEmpty && pos.existingOrderItems.isEmpty
                   ? Center(child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -2540,7 +2382,7 @@ class _MobileCartSheetState extends State<_MobileCartSheet> {
                   : ListView(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       children: [
-                        if (widget.existingOrderItems.isNotEmpty) ...[
+                        if (pos.existingOrderItems.isNotEmpty) ...[
                           const SizedBox(height: 16),
                           Row(
                             children: [
@@ -2550,10 +2392,10 @@ class _MobileCartSheetState extends State<_MobileCartSheet> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          ...widget.existingOrderItems.map((item) => _ExistingItemTile(item: item)),
+                          ...pos.existingOrderItems.map((item) => _ExistingItemTile(item: item)),
                           const SizedBox(height: 24),
                         ],
-                        if (_localCart.isNotEmpty) ...[
+                        if (pos.cart.isNotEmpty) ...[
                           Row(
                             children: [
                               const Text('NEW ITEMS', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 10, color: AppTheme.primary, letterSpacing: 1.5)),
@@ -2562,9 +2404,9 @@ class _MobileCartSheetState extends State<_MobileCartSheet> {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          ..._localCart.asMap().entries.map((entry) => Padding(
+                          ...pos.cart.asMap().entries.map((entry) => Padding(
                             padding: const EdgeInsets.only(bottom: 12),
-                            child: _CartItemTile(item: entry.value, onUpdate: _updateLocalQty),
+                            child: _CartItemTile(item: entry.value, onUpdate: (id, delta) => notifier.updateQty(id, delta)),
                           )),
                         ],
                       ],
@@ -2575,24 +2417,24 @@ class _MobileCartSheetState extends State<_MobileCartSheet> {
               decoration: BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.grey.shade100))),
               child: Column(
                 children: [
-                  if (widget.activeOrderId != null) ...[
+                  if (pos.activeOrderId != null) ...[
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('ORDER #${widget.activeOrderNumber}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                            Text('ORDER #${pos.activeOrderNumber ?? "---"}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: widget.activeOrderPaymentStatus == 'paid' ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                                color: pos.activeOrderPaymentStatus == 'paid' ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
-                                widget.activeOrderPaymentStatus?.toUpperCase() ?? 'PENDING',
+                                pos.activeOrderPaymentStatus?.toUpperCase() ?? 'PENDING',
                                 style: TextStyle(
-                                  color: widget.activeOrderPaymentStatus == 'paid' ? Colors.green : Colors.orange,
+                                  color: pos.activeOrderPaymentStatus == 'paid' ? Colors.green : Colors.orange,
                                   fontWeight: FontWeight.w900,
                                   fontSize: 10
                                 ),
@@ -2604,17 +2446,17 @@ class _MobileCartSheetState extends State<_MobileCartSheet> {
                         Wrap(
                           spacing: 16,
                           children: [
-                            if (widget.activeTokenNumber != null) 
+                            if (pos.activeTokenNumber != null) 
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(6)),
-                                child: Text('TOKEN: ${widget.activeTokenNumber}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w800)),
+                                child: Text('TOKEN: ${pos.activeTokenNumber}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w800)),
                               ),
-                            if (widget.activeBillNumber != null) 
+                            if (pos.activeBillNumber != null) 
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(6)),
-                                child: Text('BILL: ${widget.activeBillNumber}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w800)),
+                                child: Text('BILL: ${pos.activeBillNumber}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontWeight: FontWeight.w800)),
                               ),
                           ],
                         ),
@@ -2626,18 +2468,18 @@ class _MobileCartSheetState extends State<_MobileCartSheet> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Total Amount', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                      Text('₹${(_localTotal + widget.existingOrderTotal).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
+                      Text('₹${(pos.totalPayable).toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 24)),
                     ],
                   ),
                   const SizedBox(height: 24),
-                  if (widget.activeOrderPaymentStatus == 'paid') ...[
+                  if (pos.activeOrderPaymentStatus == 'paid') ...[
                     Row(
                       children: [
                         Expanded(
                           child: SizedBox(
                             height: 54,
                             child: OutlinedButton(
-                              onPressed: widget.onReset,
+                              onPressed: () => notifier.reset(),
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: Colors.green),
                                 foregroundColor: Colors.green,
@@ -2658,17 +2500,17 @@ class _MobileCartSheetState extends State<_MobileCartSheet> {
                           child: SizedBox(
                             height: 60,
                             child: ElevatedButton(
-                              onPressed: widget.isSaving || (_localCart.isEmpty && widget.activeOrderId == null) ? null : widget.onSaveAndSend,
+                              onPressed: pos.isSaving || (pos.cart.isEmpty && pos.existingOrderItems.isEmpty) ? null : widget.onSaveAndSend,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: widget.activeOrderId == null ? Colors.indigo : Colors.orange.shade800,
+                                backgroundColor: pos.activeOrderId == null ? Colors.indigo : Colors.orange.shade800,
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                 elevation: 0,
                               ),
-                              child: widget.isSaving 
+                              child: pos.isSaving 
                                 ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                                 : Text(
-                                    widget.activeOrderId == null ? 'PLACE ORDER' : 'UPDATE ORDER', 
+                                    pos.activeOrderId == null ? 'PLACE ORDER' : 'UPDATE ORDER', 
                                     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)
                                   ),
                             ),
@@ -2682,16 +2524,33 @@ class _MobileCartSheetState extends State<_MobileCartSheet> {
                         height: 54,
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: widget.isSaving || (_localCart.isEmpty && widget.activeOrderId == null) ? null : widget.onPayment,
+                          onPressed: pos.isSaving || (pos.cart.isEmpty && pos.existingOrderItems.isEmpty) ? null : widget.onPayment,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF10B981),
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: 0,
                           ),
-                          child: widget.isSaving 
+                          child: pos.isSaving 
                             ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Text('SETTLE & PAY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, letterSpacing: 1)),
+                            : const Text('SETTLE & PAY', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 54,
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: pos.isSaving || (pos.cart.isEmpty && pos.existingOrderItems.isEmpty) ? null : widget.onPaymentAndPrint,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF59E0B),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            elevation: 0,
+                          ),
+                          child: pos.isSaving 
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                            : const Text('SETTLE & PRINT', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, letterSpacing: 1)),
                         ),
                       ),
                     ],

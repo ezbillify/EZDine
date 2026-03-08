@@ -36,11 +36,11 @@ const PrintingSettings: React.FC = () => {
     try {
       const { getCurrentUserProfile, getAccessibleRestaurants, getAccessibleBranches } = await import("../../lib/tenant");
       const profile = await getCurrentUserProfile();
-      
+
       if (profile) {
         let restaurantName = '';
         let branchName = '';
-        
+
         // Get restaurant name if active_restaurant_id exists
         if (profile.active_restaurant_id) {
           try {
@@ -53,7 +53,7 @@ const PrintingSettings: React.FC = () => {
             }
           }
         }
-        
+
         // Get branch name if active_branch_id exists
         if (profile.active_branch_id) {
           try {
@@ -66,7 +66,7 @@ const PrintingSettings: React.FC = () => {
             }
           }
         }
-        
+
         setUserContext({
           restaurantId: profile.active_restaurant_id || undefined,
           branchId: profile.active_branch_id || undefined,
@@ -86,12 +86,12 @@ const PrintingSettings: React.FC = () => {
       if (typeof window !== 'undefined' && window.console) {
         window.console.log('Attempting to load settings...');
       }
-      
+
       const saved = await getPrintingSettings();
       if (typeof window !== 'undefined' && window.console) {
         window.console.log('Loaded settings:', saved);
       }
-      
+
       if (saved) {
         setSettings({
           bridgeUrl: saved.bridgeUrl || 'http://localhost:8080',
@@ -120,13 +120,13 @@ const PrintingSettings: React.FC = () => {
       if (typeof window !== 'undefined' && window.console) {
         window.console.log('Attempting to save settings:', settings);
       }
-      
+
       // Save directly - no user context required for localStorage
       const result = await savePrintingSettings(settings);
       if (typeof window !== 'undefined' && window.console) {
         window.console.log('Settings saved successfully');
       }
-      
+
       setSaveSuccess(true);
       toast.success('Printer settings saved successfully!');
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -138,7 +138,7 @@ const PrintingSettings: React.FC = () => {
         window.console.error('Error message:', err?.message);
         window.console.error('Error stack:', err?.stack);
       }
-      
+
       let errorMessage = 'Unknown error occurred';
       if (err instanceof Error) {
         errorMessage = err.message;
@@ -156,7 +156,7 @@ const PrintingSettings: React.FC = () => {
           errorMessage = JSON.stringify(err);
         }
       }
-      
+
       if (typeof window !== 'undefined' && window.console) {
         window.console.error('Final error message to show user:', errorMessage);
       }
@@ -170,21 +170,21 @@ const PrintingSettings: React.FC = () => {
     try {
       const currentSettings = await getPrintingSettings();
       const serverUrl = currentSettings?.bridgeUrl || 'http://localhost:8080';
-      
+
       if (typeof window !== 'undefined' && window.console) {
         window.console.log('Testing print server at:', serverUrl);
       }
-      
+
       // Test print server connectivity with timeout
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-      
+
       const response = await fetch(`${serverUrl}/health`, {
         signal: controller.signal
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (response.ok) {
         toast.success(`Print server is reachable at ${serverUrl}!`);
       } else {
@@ -194,7 +194,7 @@ const PrintingSettings: React.FC = () => {
       if (typeof window !== 'undefined' && window.console) {
         window.console.error('Print server test failed:', err);
       }
-      
+
       if (err.name === 'AbortError') {
         toast.error('Print server timeout - server may not be running');
       } else if (err.message?.includes('fetch') || err.message?.includes('Failed to fetch')) {
@@ -209,12 +209,12 @@ const PrintingSettings: React.FC = () => {
     try {
       const currentSettings = await getPrintingSettings();
       console.log('Current printing settings:', currentSettings);
-      
+
       if (!currentSettings) {
         toast.error('No printer settings configured');
         return;
       }
-      
+
       // Test print job
       const testLines = [
         { text: "=== TEST PRINT ===", align: "center" as const, bold: true },
@@ -223,14 +223,14 @@ const PrintingSettings: React.FC = () => {
         { text: new Date().toLocaleString(), align: "center" as const },
         { text: "==================", align: "center" as const }
       ];
-      
+
       const success = await sendPrintJob({
         printerId: currentSettings.printerIdInvoice || 'default-printer',
         width: currentSettings.widthInvoice || 80,
         type: 'invoice',
         lines: testLines
       });
-      
+
       if (success) {
         toast.success('Test print sent successfully!');
       } else {
@@ -278,48 +278,56 @@ const PrintingSettings: React.FC = () => {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-bold text-slate-700 mb-2">Print Server URL</label>
-          <input
-            type="text"
-            value={settings.bridgeUrl}
-            onChange={(e) => setSettings(prev => ({ ...prev, bridgeUrl: e.target.value }))}
-            placeholder="http://localhost:8080"
-            className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-          />
-          <p className="text-xs text-slate-500 mt-1">URL of your print server or bridge application</p>
-        </div>
+        {settings.connectionType !== 'browser' && (
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">Print Server URL</label>
+            <input
+              type="text"
+              value={settings.bridgeUrl}
+              onChange={(e) => setSettings(prev => ({ ...prev, bridgeUrl: e.target.value }))}
+              placeholder="http://localhost:8080"
+              className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            />
+            <p className="text-xs text-slate-500 mt-1">URL of your print server or bridge application</p>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-bold text-slate-700 mb-3">Connection Method</label>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <button
+              onClick={() => setSettings(prev => ({ ...prev, connectionType: 'browser' }))}
+              className={`p-4 rounded-xl border-2 text-center transition-all ${settings.connectionType === 'browser'
+                ? 'border-brand-300 bg-brand-50'
+                : 'border-slate-200 hover:border-slate-300'
+                }`}
+            >
+              <div className="font-bold">Browser Print</div>
+            </button>
             <button
               onClick={() => setSettings(prev => ({ ...prev, connectionType: 'network' }))}
-              className={`p-4 rounded-xl border-2 text-center transition-all ${
-                settings.connectionType === 'network'
-                  ? 'border-brand-300 bg-brand-50'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
+              className={`p-4 rounded-xl border-2 text-center transition-all ${settings.connectionType === 'network'
+                ? 'border-brand-300 bg-brand-50'
+                : 'border-slate-200 hover:border-slate-300'
+                }`}
             >
               <div className="font-bold">Network</div>
             </button>
             <button
               onClick={() => setSettings(prev => ({ ...prev, connectionType: 'bluetooth' }))}
-              className={`p-4 rounded-xl border-2 text-center transition-all ${
-                settings.connectionType === 'bluetooth'
-                  ? 'border-brand-300 bg-brand-50'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
+              className={`p-4 rounded-xl border-2 text-center transition-all ${settings.connectionType === 'bluetooth'
+                ? 'border-brand-300 bg-brand-50'
+                : 'border-slate-200 hover:border-slate-300'
+                }`}
             >
               <div className="font-bold">Bluetooth</div>
             </button>
             <button
               onClick={() => setSettings(prev => ({ ...prev, connectionType: 'ip' }))}
-              className={`p-4 rounded-xl border-2 text-center transition-all ${
-                settings.connectionType === 'ip'
-                  ? 'border-brand-300 bg-brand-50'
-                  : 'border-slate-200 hover:border-slate-300'
-              }`}
+              className={`p-4 rounded-xl border-2 text-center transition-all ${settings.connectionType === 'ip'
+                ? 'border-brand-300 bg-brand-50'
+                : 'border-slate-200 hover:border-slate-300'
+                }`}
             >
               <div className="font-bold">IP Address</div>
             </button>
@@ -331,8 +339,8 @@ const PrintingSettings: React.FC = () => {
             <label className="block text-sm font-bold text-slate-700 mb-2">Paper Width</label>
             <select
               value={settings.widthInvoice}
-              onChange={(e) => setSettings(prev => ({ 
-                ...prev, 
+              onChange={(e) => setSettings(prev => ({
+                ...prev,
                 widthInvoice: parseInt(e.target.value),
                 widthKot: parseInt(e.target.value)
               }))}
@@ -350,8 +358,8 @@ const PrintingSettings: React.FC = () => {
               <input
                 type="text"
                 value={settings.printerName}
-                onChange={(e) => setSettings(prev => ({ 
-                  ...prev, 
+                onChange={(e) => setSettings(prev => ({
+                  ...prev,
                   printerName: e.target.value,
                   printerIdInvoice: e.target.value,
                   printerIdKot: e.target.value
@@ -368,8 +376,8 @@ const PrintingSettings: React.FC = () => {
               <input
                 type="text"
                 value={settings.ipAddress}
-                onChange={(e) => setSettings(prev => ({ 
-                  ...prev, 
+                onChange={(e) => setSettings(prev => ({
+                  ...prev,
                   ipAddress: e.target.value,
                   printerIdInvoice: e.target.value,
                   printerIdKot: e.target.value
@@ -386,8 +394,8 @@ const PrintingSettings: React.FC = () => {
               <input
                 type="text"
                 value={settings.bluetoothAddress}
-                onChange={(e) => setSettings(prev => ({ 
-                  ...prev, 
+                onChange={(e) => setSettings(prev => ({
+                  ...prev,
                   bluetoothAddress: e.target.value,
                   printerIdInvoice: e.target.value,
                   printerIdKot: e.target.value
@@ -402,12 +410,14 @@ const PrintingSettings: React.FC = () => {
 
       <div className="p-6 bg-slate-50 border-t flex justify-between items-center">
         <div className="flex gap-2">
-          <button
-            onClick={testPrintServer}
-            className="px-3 py-1 bg-purple-600 text-white rounded text-xs font-bold hover:bg-purple-700"
-          >
-            Test Server
-          </button>
+          {settings.connectionType !== 'browser' && (
+            <button
+              onClick={testPrintServer}
+              className="px-3 py-1 bg-purple-600 text-white rounded text-xs font-bold hover:bg-purple-700"
+            >
+              Test Server
+            </button>
+          )}
           <button
             onClick={testPrint}
             className="px-3 py-1 bg-orange-600 text-white rounded text-xs font-bold hover:bg-orange-700"
@@ -446,10 +456,10 @@ const PrintingSettings: React.FC = () => {
           <div>
             <h4 className="font-bold text-blue-900 text-sm">Troubleshooting</h4>
             <p className="text-blue-700 text-sm mt-1">
-              1. Make sure your print server is running on the specified URL<br/>
-              2. Use "Test Server" to check connectivity<br/>
-              3. Use "Test Print" to verify printer setup<br/>
-              4. Check browser console for detailed error messages<br/>
+              1. Make sure your print server is running on the specified URL<br />
+              2. Use "Test Server" to check connectivity<br />
+              3. Use "Test Print" to verify printer setup<br />
+              4. Check browser console for detailed error messages<br />
               5. Ensure you have selected a restaurant and branch
             </p>
           </div>

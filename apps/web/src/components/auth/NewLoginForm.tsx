@@ -7,12 +7,12 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Lock, Mail, Eye, EyeOff, ShieldCheck } from "lucide-react";
 
-type LoginMode = "password" | "otp";
+type LoginMode = "password" | "otp" | "register";
 type ForgotPasswordStep = "email" | "verify-otp" | "new-password";
 
 export function NewLoginForm() {
   const router = useRouter();
-  
+
   // Login state
   const [loginMode, setLoginMode] = useState<LoginMode>("password");
   const [email, setEmail] = useState("");
@@ -20,7 +20,7 @@ export function NewLoginForm() {
   const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
-  
+
   // Forgot password state
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotStep, setForgotStep] = useState<ForgotPasswordStep>("email");
@@ -28,7 +28,7 @@ export function NewLoginForm() {
   const [forgotOtp, setForgotOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  
+
   // UI state
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -49,6 +49,40 @@ export function NewLoginForm() {
       router.replace("/dashboard");
     } catch (error: any) {
       setMessage({ type: "error", text: error.message || "Login failed" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Password Register
+  const handlePasswordRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      if (password.length < 6) {
+        throw new Error("Password must be at least 6 characters");
+      }
+
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      // Some simple handling: if successful, they are logged in or sent a confirm email.
+      // We will assume auto-login or they need to verify:
+      setMessage({ type: "success", text: "Account created! You may need to verify your email." });
+
+      // Wait briefly then push them to dashboard (if auto logged in, AuthGate handles onboarding redirect)
+      setTimeout(() => {
+        router.replace("/dashboard");
+      }, 2000);
+
+    } catch (error: any) {
+      setMessage({ type: "error", text: error.message || "Registration failed" });
     } finally {
       setLoading(false);
     }
@@ -146,7 +180,7 @@ export function NewLoginForm() {
   // Forgot Password - Set New Password
   const handleSetNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (newPassword !== confirmPassword) {
       setMessage({ type: "error", text: "Passwords do not match" });
       return;
@@ -166,7 +200,7 @@ export function NewLoginForm() {
       });
 
       if (error) throw error;
-      
+
       setMessage({ type: "success", text: "Password updated successfully!" });
       setTimeout(() => {
         setShowForgotPassword(false);
@@ -306,11 +340,10 @@ export function NewLoginForm() {
 
         {message && (
           <div
-            className={`rounded-lg p-3 text-sm ${
-              message.type === "error"
+            className={`rounded-lg p-3 text-sm ${message.type === "error"
                 ? "bg-red-50 text-red-700"
                 : "bg-green-50 text-green-700"
-            }`}
+              }`}
           >
             {message.text}
           </div>
@@ -332,14 +365,13 @@ export function NewLoginForm() {
               setOtpSent(false);
               setMessage(null);
             }}
-            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
-              loginMode === "password"
+            className={`flex-1 rounded-lg px-2 py-2.5 text-xs sm:text-sm font-semibold transition-all ${loginMode === "password"
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-600 hover:text-slate-900"
-            }`}
+              }`}
           >
-            <Lock className="inline h-4 w-4 mr-2" />
-            Password
+            <Lock className="inline h-4 w-4 mr-1 sm:mr-2" />
+            Sign In
           </button>
           <button
             type="button"
@@ -348,14 +380,28 @@ export function NewLoginForm() {
               setOtpSent(false);
               setMessage(null);
             }}
-            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
-              loginMode === "otp"
+            className={`flex-1 rounded-lg px-2 py-2.5 text-xs sm:text-sm font-semibold transition-all ${loginMode === "otp"
                 ? "bg-white text-slate-900 shadow-sm"
                 : "text-slate-600 hover:text-slate-900"
-            }`}
+              }`}
           >
-            <Mail className="inline h-4 w-4 mr-2" />
+            <Mail className="inline h-4 w-4 mr-1 sm:mr-2" />
             OTP
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLoginMode("register");
+              setOtpSent(false);
+              setMessage(null);
+            }}
+            className={`flex-1 rounded-lg px-2 py-2.5 text-xs sm:text-sm font-semibold transition-all ${loginMode === "register"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+              }`}
+          >
+            <ShieldCheck className="inline h-4 w-4 mr-1 sm:mr-2" />
+            Register
           </button>
         </div>
       )}
@@ -443,6 +489,52 @@ export function NewLoginForm() {
         </form>
       )}
 
+      {/* Register */}
+      {loginMode === "register" && !otpSent && (
+        <form onSubmit={handlePasswordRegister} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700">Email Address</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@restaurant.com"
+                className="pl-10"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-slate-700">Choose a Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+              <Input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Secure password (min 6 chars)"
+                className="pl-10 pr-10"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
+          </div>
+
+          <Button type="submit" disabled={loading || !email || !password} className="w-full">
+            {loading ? "Creating Account..." : "Register & Start Setup"}
+          </Button>
+        </form>
+      )}
+
       {/* OTP Login - Verify */}
       {loginMode === "otp" && otpSent && (
         <form onSubmit={handleVerifyOtp} className="space-y-4">
@@ -483,11 +575,10 @@ export function NewLoginForm() {
       {/* Message */}
       {message && (
         <div
-          className={`rounded-lg p-3 text-sm ${
-            message.type === "error"
+          className={`rounded-lg p-3 text-sm ${message.type === "error"
               ? "bg-red-50 text-red-700"
               : "bg-green-50 text-green-700"
-          }`}
+            }`}
         >
           {message.text}
         </div>

@@ -24,7 +24,7 @@ export async function getPrintingSettings() {
     return saved ? JSON.parse(saved) : null;
   } catch (err) {
     console.warn('Failed to load from localStorage, falling back to Supabase');
-    
+
     // Fallback to Supabase if available
     try {
       const profile = await getCurrentUserProfile();
@@ -54,7 +54,7 @@ export async function savePrintingSettings(value: any) {
   try {
     localStorage.setItem('ezdine_printer_settings', JSON.stringify(value));
     console.log('Settings saved to localStorage successfully');
-    
+
     // Also try to save to Supabase in background (don't fail if it doesn't work)
     try {
       const profile = await getCurrentUserProfile();
@@ -65,7 +65,7 @@ export async function savePrintingSettings(value: any) {
           key: PRINTING_KEY,
           value
         });
-        
+
         if (!error) {
           console.log('Settings also saved to Supabase');
         }
@@ -73,7 +73,7 @@ export async function savePrintingSettings(value: any) {
     } catch (supabaseErr) {
       console.warn('Supabase save failed, but localStorage worked:', supabaseErr);
     }
-    
+
     return true;
   } catch (err) {
     console.error('Failed to save to localStorage:', err);
@@ -112,6 +112,29 @@ export async function sendPrintJob(job: PrintJob) {
   let baseUrl = 'http://localhost:8080';
   try {
     const settings = await getPrintingSettings();
+
+    // Direct Browser HTML Thermal Printing
+    if (settings?.connectionType === 'browser') {
+      console.log('Using direct browser HTML thermal printing', job);
+      const html = generateThermalHtml(job.lines, job.width);
+
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+
+      iframe.contentWindow?.document.open();
+      iframe.contentWindow?.document.write(html);
+      iframe.contentWindow?.document.close();
+
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 5000);
+
+      return true;
+    }
+
     baseUrl = settings?.bridgeUrl || process.env.NEXT_PUBLIC_PRINT_SERVER_URL || 'http://localhost:8080';
 
     if (!baseUrl) {
@@ -199,8 +222,10 @@ export function buildTokenSlipLines(input: {
   tokenNumber: string | number;
   orderType: string;
   itemsCount: number;
+  paperWidth?: 58 | 80;
 }) {
-  const separator = "--------------------------------";
+  const charCount = input.paperWidth === 80 ? 48 : 32;
+  const separator = "-".repeat(charCount);
 
   const lines: PrintLine[] = [
     { text: input.restaurantName, align: "center", bold: true },
@@ -277,8 +302,10 @@ export function buildConsolidatedReceiptLines(input: {
   subtotal: number;
   tax: number;
   total: number;
+  paperWidth?: 58 | 80;
 }) {
-  const separator = "--------------------------------";
+  const charCount = input.paperWidth === 80 ? 48 : 32;
+  const separator = "-".repeat(charCount);
   const lines: PrintLine[] = [];
 
   // --- SECTION 1: KOT ---
@@ -301,8 +328,9 @@ export function buildConsolidatedReceiptLines(input: {
   input.items.forEach((item) => {
     const qtyTotal = (item.qty * item.price).toFixed(2);
     let row = `${item.qty} x ${item.name}`;
-    if (row.length > 22) row = row.slice(0, 19) + "...";
-    const padding = " ".repeat(Math.max(1, 32 - row.length - qtyTotal.length));
+    const maxRowLen = charCount - qtyTotal.length - 1;
+    if (row.length > maxRowLen) row = row.slice(0, maxRowLen - 3) + "...";
+    const padding = " ".repeat(Math.max(1, charCount - row.length - qtyTotal.length));
     lines.push({ text: `${row}${padding}${qtyTotal}`, align: "left" });
   });
 
@@ -345,6 +373,13 @@ export function generateThermalHtml(lines: PrintLine[], width: 58 | 80 = 80) {
           .font-bold { font-weight: bold; }
           .font-normal { font-weight: normal; }
           
+          hr.divider {
+            border: none;
+            border-top: 1px dashed black;
+            margin: 4px 0;
+            width: 100%;
+          }
+
           @media print {
             body { padding: 0; }
           }

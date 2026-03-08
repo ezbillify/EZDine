@@ -23,16 +23,19 @@ class PosService {
     String? notes,
   }) async {
     if (orderId == null) {
-      // 1. Generate Order Number
-      final nextNum = await _client.rpc('next_doc_number', params: {
-        'p_branch_id': branchId,
-        'p_doc_type': 'order'
-      });
-
-      // 2. Generate Token Number
-      final nextToken = await _client.rpc('next_token_number', params: {
-        'p_branch_id': branchId,
-      });
+      // 1. Generate Order Number & Token Number in parallel
+      final futures = await Future.wait([
+        _client.rpc('next_doc_number', params: {
+          'p_branch_id': branchId,
+          'p_doc_type': 'order'
+        }),
+        _client.rpc('next_token_number', params: {
+          'p_branch_id': branchId,
+        }),
+      ]);
+      
+      final nextNum = futures[0];
+      final nextToken = futures[1];
 
       // 3. Create Order
       final orderRes = await _client
@@ -42,7 +45,7 @@ class PosService {
             'branch_id': branchId,
             'table_id': tableId,
             'customer_id': customerId,
-            'status': 'counter_pending',
+            'status': 'pending',
             'order_number': nextNum,
             'token_number': nextToken,
             'source': 'pos',
@@ -96,6 +99,7 @@ class PosService {
 
   Future<Map<String, dynamic>> settleOrder({
     required List<Map<String, dynamic>> cart,
+    required List<Map<String, dynamic>> allItems,
     required String? orderId,
     required String? tableId,
     required String? customerId,
@@ -105,32 +109,35 @@ class PosService {
     required List<Map<String, dynamic>> payments,
     double? totalAmount,
   }) async {
-    // 1. Ensure order is saved/updated first
-    final order = await saveAndSendToKitchen(
-      cart: cart,
-      tableId: tableId,
-      customerId: customerId,
-      orderId: orderId,
-      restaurantId: restaurantId,
-      branchId: branchId,
-      orderType: orderType,
-    );
+    // 1. Ensure order is saved/updated AND fetch bill number in parallel
+    final futures = await Future.wait<dynamic>([
+      saveAndSendToKitchen(
+        cart: cart,
+        tableId: tableId,
+        customerId: customerId,
+        orderId: orderId,
+        restaurantId: restaurantId,
+        branchId: branchId,
+        orderType: orderType,
+      ),
+      _client.rpc('next_doc_number', params: {
+        'p_branch_id': branchId,
+        'p_doc_type': 'bill'
+      }),
+    ]);
 
-    // 2. Create Bill
-    final billNumber = await _client.rpc('next_doc_number', params: {
-      'p_branch_id': branchId,
-      'p_doc_type': 'bill'
-    });
+    final order = futures[0] as Map<String, dynamic>;
+    final billNumber = futures[1];
 
-    // Calculate accurate tax breakdown from all items in this order
-    final orderItemsRes = await _client.from('order_items').select('price, quantity, menu_items(gst_rate)').eq('order_id', order['id']);
-    final orderItems = List<Map<String, dynamic>>.from(orderItemsRes);
-    
+    // Calculate accurate tax breakdown directly from passed cache
     double total = 0;
     double tax = 0;
-    for (var i in orderItems) {
-      double lineTotal = (i['price'] as num).toDouble() * (i['quantity'] as num).toDouble();
-      double rate = (i['menu_items']?['gst_rate'] as num?)?.toDouble() ?? 0.0;
+    for (var i in allItems) {
+      double actPrice = (i['price'] as num?)?.toDouble() ?? (i['base_price'] as num?)?.toDouble() ?? 0.0;
+      double actQty = (i['quantity'] as num?)?.toDouble() ?? (i['qty'] as num?)?.toDouble() ?? 1.0;
+      double rate = (i['menu_items']?['gst_rate'] as num?)?.toDouble() ?? (i['gst_rate'] as num?)?.toDouble() ?? (i['tax_rate'] as num?)?.toDouble() ?? 0.0;
+      
+      double lineTotal = actPrice * actQty;
       total += lineTotal;
       tax += lineTotal - (lineTotal / (1 + (rate / 100)));
     }
@@ -148,26 +155,22 @@ class PosService {
       'status': 'paid',
     }).select().single();
 
-    // 3. Add Payments
+    // 3. Batch insert Payments & Update Order concurrently
     final primaryMethod = payments.isNotEmpty ? payments.first['mode'] : 'cash';
-    for (var p in payments) {
-      await _client.from('payments').insert({
-        'bill_id': billRes['id'],
-        'mode': p['mode'],
-        'amount': p['amount'],
-      });
-    }
+    final paymentsData = payments.map((p) => {
+      'bill_id': billRes['id'],
+      'mode': p['mode'],
+      'amount': p['amount'],
+    }).toList();
 
-    // 4. Update Order (Mark as paid and send to kitchen)
-    // Fetch current status to check if it's counter_pending
-    final currentOrder = await _client.from('orders').select('status').eq('id', order['id']).single();
-    final newStatus = (currentOrder['status'] == 'counter_pending') ? 'pending' : currentOrder['status'];
-    
-    await _client.from('orders').update({
-      'payment_status': 'paid',
-      'payment_method': primaryMethod,
-      'status': newStatus, // Change from counter_pending to pending after payment
-    }).eq('id', order['id']);
+    await Future.wait([
+      if (paymentsData.isNotEmpty) _client.from('payments').insert(paymentsData),
+      _client.from('orders').update({
+        'payment_status': 'paid',
+        'payment_method': primaryMethod,
+        'status': (order['status'] == 'pending') ? 'pending' : order['status'], 
+      }).eq('id', order['id']),
+    ]);
 
     return {
       'order': order,

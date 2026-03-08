@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../core/theme.dart';
 import '../services/auth_service.dart';
 import '../services/audio_service.dart';
+import '../services/print_service.dart';
 
 final orderHistoryProvider = FutureProvider.family<List<Map<String, dynamic>>, OrderHistoryParams>((ref, params) async {
   final res = await Supabase.instance.client
@@ -194,7 +195,7 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
                   padding: const EdgeInsets.all(16),
                   itemCount: filtered.length,
                   separatorBuilder: (c, i) => const SizedBox(height: 12),
-                  itemBuilder: (c, i) => _buildOrderCard(filtered[i]),
+                  itemBuilder: (c, i) => _buildOrderCard(context, filtered[i], ctx),
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -263,7 +264,7 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
     );
   }
 
-  Widget _buildOrderCard(Map<String, dynamic> order) {
+  Widget _buildOrderCard(BuildContext context, Map<String, dynamic> order, ContextState ctx) {
     final orderNumber = order['order_number']?.toString() ?? 'N/A';
     final tableName = order['tables']?['name'] ?? 'Quick Bill';
     final customerName = order['customers']?['name'] ?? 'Guest';
@@ -369,23 +370,37 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
                   ),
                 ],
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              Row(
                 children: [
-                  Text(
-                    DateFormat('MMM dd, yyyy').format(createdAt),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey.shade600,
+                  if (status == 'paid')
+                    IconButton(
+                      icon: const Icon(LucideIcons.printer, size: 20, color: AppTheme.primary),
+                      onPressed: () {
+                        AudioService.instance.playClick();
+                        _reprintOrder(order, ctx);
+                      },
+                      tooltip: 'Reprint Invoice',
                     ),
-                  ),
-                  Text(
-                    DateFormat('hh:mm a').format(createdAt),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade600,
-                    ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        DateFormat('MMM dd, yyyy').format(createdAt),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      Text(
+                        DateFormat('hh:mm a').format(createdAt),
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -394,6 +409,87 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _reprintOrder(Map<String, dynamic> order, ContextState ctx) async {
+    try {
+      final printService = ref.read(printServiceProvider);
+      
+      // Show loading
+      showDialog(
+        context: context, 
+        barrierDismissible: false,
+        builder: (c) => const Center(child: CircularProgressIndicator()),
+      );
+      
+      // Fetch full order items
+      final itemsRes = await Supabase.instance.client
+          .from('order_items')
+          .select('*, menu_items(name, price, tax_rate)')
+          .eq('order_id', order['id']);
+      
+      List<Map<String, dynamic>> items = (itemsRes as List).map((i) => {
+        'name': i['menu_items']?['name'] ?? 'Item',
+        'qty': i['quantity'] ?? 1,
+        'price': i['menu_items']?['price'] ?? 0.0,
+        'tax_rate': i['menu_items']?['tax_rate'] ?? 0.0,
+      }).toList();
+
+      final total = (order['bills'] as List?)?.isNotEmpty == true
+        ? (order['bills'][0]['total'] as num?)?.toDouble() ?? 0.0
+        : 0.0;
+      final subtotal = (order['bills'] as List?)?.isNotEmpty == true
+        ? (order['bills'][0]['subtotal'] as num?)?.toDouble() ?? 0.0
+        : 0.0;
+      final tax = (order['bills'] as List?)?.isNotEmpty == true
+        ? (order['bills'][0]['tax'] as num?)?.toDouble() ?? 0.0
+        : 0.0;
+        
+      final createdAt = DateTime.parse(order['created_at']);
+      
+      // Fetch print settings
+      final settings = await printService.getPrintingSettings(ctx.branchId!);
+      final printerId = settings?['printerIdInvoice'];
+      final paperWidth = settings?['paperWidthInvoice'] ?? 58;
+
+      await printService.printPremiumInvoice(
+        restaurantName: ctx.restaurantName ?? 'EZDine',
+        branchName: ctx.branchName ?? 'Branch',
+        branchAddress: ctx.branchAddress,
+        phone: ctx.branchPhone,
+        gstin: ctx.gstin,
+        fssai: ctx.fssai,
+        orderId: order['order_number'].toString(),
+        date: DateFormat('dd-MM-yyyy').format(createdAt),
+        time: DateFormat('HH:mm').format(createdAt),
+        items: items,
+        subtotal: subtotal,
+        tax: tax,
+        total: total,
+        tableName: order['tables']?['name'],
+        tokenNumber: order['token_number']?.toString(),
+        customerName: order['customers']?['name'],
+        orderType: order['order_type'] ?? 'dine_in',
+        printerId: printerId,
+        paperWidth: paperWidth,
+      );
+
+      // Hide loading
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Reprint request sent successfully.', style: TextStyle(color: Colors.white)), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // pop loading
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Reprint failed: $e', style: const TextStyle(color: Colors.white)), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _selectDate(bool isStart) async {

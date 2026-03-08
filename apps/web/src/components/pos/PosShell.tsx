@@ -710,7 +710,8 @@ export function PosShell() {
               items: fullItems.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
               subtotal: totalAmount,
               tax: 0,
-              total: totalAmount
+              total: totalAmount,
+              paperWidth: settings.widthInvoice as 58 | 80 ?? 80
             });
 
             await sendPrintJob({
@@ -729,7 +730,8 @@ export function PosShell() {
               items: fullItems.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
               subtotal: totalAmount,
               tax: 0,
-              total: totalAmount
+              total: totalAmount,
+              paperWidth: settings.widthInvoice as 58 | 80 ?? 80
             });
 
             await sendPrintJob({
@@ -745,7 +747,8 @@ export function PosShell() {
                 restaurantName: "EZDine",
                 tokenNumber: tokenNumber,
                 orderType: isQuickBill ? "Takeaway" : "Dine In",
-                itemsCount: fullItems.reduce((acc, i) => acc + i.qty, 0)
+                itemsCount: fullItems.reduce((acc, i) => acc + i.qty, 0),
+                paperWidth: settings.widthInvoice as 58 | 80 ?? 80
               });
 
               await sendPrintJob({
@@ -847,7 +850,8 @@ export function PosShell() {
       items: billable,
       subtotal: subtotal,
       tax: tax,
-      total: total
+      total: total,
+      paperWidth: 80 // Assuming Preview always defaults to wide format for viewing
     });
 
     setPreviewData({
@@ -956,7 +960,8 @@ export function PosShell() {
             items: billItems.map((c) => ({ name: c.name, qty: c.qty, price: c.price })),
             subtotal: billTotal,
             tax: 0,
-            total: billTotal
+            total: billTotal,
+            paperWidth: settings.widthInvoice as 58 | 80 ?? 80
           });
           await sendPrintJob({
             printerId: settings.printerIdInvoice ?? "billing-1",
@@ -999,7 +1004,7 @@ export function PosShell() {
       <Toaster position="bottom-center" richColors />
 
       {/* Mobile-inspired Layout: Sidebar + Main Area */}
-      
+
       {/* 1. Compact Sidebar - Mobile Design Inspired */}
       <section className="flex w-72 flex-none flex-col bg-white border-r border-slate-200 shadow-lg">
         {/* Header */}
@@ -1065,15 +1070,15 @@ export function PosShell() {
                   {liveOrders.map((order) => {
                     const isPaid = order.payment_status === 'paid';
                     const isActive = activeOrderId === order.id;
-                    
+
                     return (
                       <button
                         key={order.id}
                         onClick={() => loadQrOrder(order)}
-                        className={`relative p-4 rounded-2xl border-2 transition-all ${isActive 
-                          ? "border-green-500 bg-green-50 shadow-lg" 
-                          : isPaid 
-                            ? "border-green-200 bg-green-50/50 hover:bg-green-50" 
+                        className={`relative p-4 rounded-2xl border-2 transition-all ${isActive
+                          ? "border-green-500 bg-green-50 shadow-lg"
+                          : isPaid
+                            ? "border-green-200 bg-green-50/50 hover:bg-green-50"
                             : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-md"
                           }`}
                       >
@@ -1081,15 +1086,15 @@ export function PosShell() {
                         <div className="absolute top-2 right-2">
                           <div className={`w-3 h-3 rounded-full ${isPaid ? 'bg-green-500' : 'bg-orange-500'} animate-pulse`}></div>
                         </div>
-                        
+
                         <div className="text-center">
                           <div className="text-2xl font-black text-slate-900 mb-1">
                             {order.token_number}
                           </div>
-                          <div className={`text-xs font-bold px-2 py-1 rounded-lg ${isPaid 
-                            ? 'bg-green-100 text-green-700' 
+                          <div className={`text-xs font-bold px-2 py-1 rounded-lg ${isPaid
+                            ? 'bg-green-100 text-green-700'
                             : 'bg-orange-100 text-orange-700'
-                          }`}>
+                            }`}>
                             {isPaid ? 'PAID' : 'PENDING'}
                           </div>
                         </div>
@@ -1189,7 +1194,7 @@ export function PosShell() {
                 </div>
               </div>
             </div>
-            
+
             {/* Order Type Toggle */}
             <div className="flex bg-slate-100 rounded-xl p-1">
               <button
@@ -1299,10 +1304,10 @@ export function PosShell() {
             <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
               <button
                 onClick={() => setSelectedCategoryId(null)}
-                className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategoryId === null 
-                  ? "bg-blue-500 text-white shadow-lg" 
+                className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategoryId === null
+                  ? "bg-blue-500 text-white shadow-lg"
                   : "bg-white border-2 border-slate-200 text-slate-600 hover:border-blue-300"
-                }`}
+                  }`}
               >
                 All Items
               </button>
@@ -1310,10 +1315,10 @@ export function PosShell() {
                 <button
                   key={c.id}
                   onClick={() => setSelectedCategoryId(c.id)}
-                  className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategoryId === c.id 
-                    ? "bg-blue-500 text-white shadow-lg" 
+                  className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategoryId === c.id
+                    ? "bg-blue-500 text-white shadow-lg"
                     : "bg-white border-2 border-slate-200 text-slate-600 hover:border-blue-300"
-                  }`}
+                    }`}
                 >
                   {c.name}
                 </button>
@@ -1351,7 +1356,7 @@ export function PosShell() {
                             {item.is_veg ? <Leaf size={14} /> : item.is_egg ? <Egg size={14} /> : <Flame size={14} />}
                           </div>
                         </div>
-                        
+
                         {!item.is_available && (
                           <div className="mb-3">
                             <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded-lg">
@@ -1359,7 +1364,7 @@ export function PosShell() {
                             </span>
                           </div>
                         )}
-                        
+
                         <div className="flex items-center justify-between">
                           <span className="text-lg font-black text-slate-900">₹{item.base_price}</span>
                           {item.is_available && (
@@ -1397,7 +1402,7 @@ export function PosShell() {
                   </span>
                 )}
               </div>
-              
+
               {activeOrderNumber && (
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-500">Order #{activeOrderNumber}</span>
@@ -1445,8 +1450,8 @@ export function PosShell() {
                       <AlertCircle size={16} className="text-blue-500" />
                       <p className="text-sm font-bold text-blue-600 uppercase">New Items</p>
                     </div>
-                    <button 
-                      onClick={() => setCart([])} 
+                    <button
+                      onClick={() => setCart([])}
                       className="text-sm text-red-500 hover:text-red-700 font-medium"
                     >
                       Clear

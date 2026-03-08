@@ -28,7 +28,14 @@ import 'screens/customer_screen.dart';
 import 'screens/order_history_screen.dart';
 import 'screens/table_management_screen.dart';
 import 'screens/new_login_screen.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'services/audio_service.dart';
+import 'widgets/app_update_listener.dart';
+
+final appVersionProvider = FutureProvider<String>((ref) async {
+  final packageInfo = await PackageInfo.fromPlatform();
+  return 'v${packageInfo.version} (${packageInfo.buildNumber})';
+});
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -575,11 +582,12 @@ class DashboardScreen extends ConsumerWidget {
     final user = ref.watch(authServiceProvider).currentUser;
     final roleAsync = ref.watch(userRoleProvider);
 
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
+    return AppUpdateListener(
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        appBar: AppBar(
+          leading: Padding(
+            padding: const EdgeInsets.all(8.0),
           child: Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -678,6 +686,24 @@ class DashboardScreen extends ConsumerWidget {
                                     letterSpacing: 1,
                                   ),
                                 ),
+                                const SizedBox(height: 8),
+                                Consumer(
+                                  builder: (context, ref, _) {
+                                    final versionAsync = ref.watch(appVersionProvider);
+                                    return versionAsync.when(
+                                      data: (v) => Text(
+                                        v,
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.grey.shade400,
+                                        ),
+                                      ),
+                                      loading: () => const SizedBox(),
+                                      error: (_, __) => const SizedBox(),
+                                    );
+                                  },
+                                ),
                               ],
                             ),
                           ),
@@ -689,6 +715,7 @@ class DashboardScreen extends ConsumerWidget {
                 );
               },
             ),
+        ),
     );
   }
 
@@ -769,7 +796,7 @@ class DashboardScreen extends ConsumerWidget {
         'description': 'Ordering & Billing',
         'color': Colors.indigo,
         'roles': ['owner', 'manager', 'cashier', 'waiter'],
-        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => PosScreen())),
+        'onTap': () => Navigator.push(context, MaterialPageRoute(builder: (c) => const PosScreen(), settings: const RouteSettings(name: 'pos'))),
       },
       {
         'label': 'KITCHEN KDS',

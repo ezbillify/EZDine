@@ -33,13 +33,18 @@ class DashboardService {
         .stream(primaryKey: ['id'])
         .eq('branch_id', branchId)
         .asyncMap((orders) async {
-          final today = DateTime.now().toIso8601String().split('T')[0];
+          final currentUtc = DateTime.now().toUtc();
+          final currentIst = currentUtc.add(const Duration(hours: 5, minutes: 30));
+          
+          final startOfDayUtc = DateTime.utc(currentIst.year, currentIst.month, currentIst.day).subtract(const Duration(hours: 5, minutes: 30));
+          final endOfDayUtc = DateTime.utc(currentIst.year, currentIst.month, currentIst.day, 23, 59, 59, 999).subtract(const Duration(hours: 5, minutes: 30));
           
           final billsRes = await _client
               .from('bills')
               .select('total')
               .eq('branch_id', branchId)
-              .gte('created_at', today);
+              .gte('created_at', startOfDayUtc.toIso8601String())
+              .lte('created_at', endOfDayUtc.toIso8601String());
 
           final inventoryRes = await _client
               .from('inventory_items')
@@ -49,12 +54,14 @@ class DashboardService {
 
           double volume = 0;
           for (var b in (billsRes as List)) {
-            volume += (b['total'] as num).toDouble();
+            volume += (b['total'] as num?)?.toDouble() ?? 0.0;
           }
 
           final pending = orders.where((o) => o['status'] == 'pending' || o['status'] == 'preparing').length;
           final activeTables = orders.where((o) => o['status'] != 'served' && o['status'] != 'cancelled').map((o) => o['table_id']).toSet().length;
-          final lowStock = (inventoryRes as List).where((i) => (i['current_stock'] as num) <= (i['reorder_level'] as num)).length;
+          final lowStock = (inventoryRes as List).where((i) => 
+            ((i['current_stock'] as num?)?.toDouble() ?? 0.0) <= ((i['reorder_level'] as num?)?.toDouble() ?? 0.0)
+          ).length;
 
           return DashboardStats(
             grossVolume: volume,

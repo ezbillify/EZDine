@@ -38,7 +38,7 @@ const baseItems = [
     { href: "/settings", label: "Settings", icon: Settings }
 ];
 
-export function Sidebar({ className = "" }: { className?: string }) {
+export function Sidebar({ className = "", onNavigate }: { className?: string, onNavigate?: () => void }) {
     const pathname = usePathname();
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
@@ -92,9 +92,9 @@ export function Sidebar({ className = "" }: { className?: string }) {
             <div className="flex h-20 items-center px-8 border-b border-slate-50">
                 <div className="flex items-center gap-3 group cursor-pointer">
                     <div className="flex h-10 w-10 items-center justify-center rounded-[1.25rem] bg-white shadow-md transition-all group-hover:scale-110 group-hover:rotate-6 p-1">
-                        <img 
-                            src="/images/EZDineLOGO.png" 
-                            alt="EZDine Logo" 
+                        <img
+                            src="/images/EZDineLOGO.png"
+                            alt="EZDine Logo"
                             className="h-full w-full object-contain"
                         />
                     </div>
@@ -132,6 +132,7 @@ export function Sidebar({ className = "" }: { className?: string }) {
                             onClick={(e) => {
                                 e.preventDefault();
                                 handleNavigation(item.href);
+                                onNavigate?.();
                             }}
                             className={`group flex items-center gap-4 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all duration-200 ${isActive
                                 ? "bg-slate-900 text-white shadow-2xl shadow-slate-900/20 translate-x-1"

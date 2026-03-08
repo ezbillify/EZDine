@@ -1,4 +1,14 @@
 
+## v1.13.0 (2026-03-08)
+
+### Features
+* Added order history reprint functionality
+* Improved POS screen with real-time updates and optimized performance
+* Display app version in the dashboard
+### Fixes
+* Resolved issues with order item loading and caching
+
+
 ## v1.12.0 (2026-03-01)
 
 

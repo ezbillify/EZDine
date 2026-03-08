@@ -33,16 +33,7 @@ class ReportingService {
     required DateTime start,
     required DateTime end,
   }) async {
-    // 1. Fetch accurate summary from RPC
-    final summaryResponse = await _client.rpc('get_sales_report', params: {
-      'p_branch_id': branchId,
-      'p_start_date': start.toIso8601String(),
-      'p_end_date': end.toIso8601String(),
-    });
-
-    final summary = summaryResponse as Map<String, dynamic>;
-    
-    // 2. Fetch raw bills for export/list view (if needed)
+    // Fetch raw bills and related payments
     final billsResponse = await _client
         .from('bills')
         .select('*, payments(mode, amount)')
@@ -53,18 +44,31 @@ class ReportingService {
     
     final List rawBills = billsResponse as List;
 
-    // Parse payment modes from RPC result
+    double grossSales = 0;
+    double totalTax = 0;
+    int orderCount = rawBills.length;
     Map<String, double> paymentModes = {};
-    if (summary['payment_modes'] != null) {
-        (summary['payment_modes'] as Map).forEach((key, value) {
-            paymentModes[key] = (value as num).toDouble();
-        });
+
+    for (var bill in rawBills) {
+      grossSales += (bill['total'] as num?)?.toDouble() ?? 0.0;
+      totalTax += (bill['tax'] as num?)?.toDouble() ?? 0.0;
+
+      final payments = bill['payments'] as List?;
+      if (payments != null) {
+        for (var payment in payments) {
+          final mode = payment['mode'] as String?;
+          final amount = (payment['amount'] as num?)?.toDouble() ?? 0.0;
+          if (mode != null) {
+            paymentModes[mode] = (paymentModes[mode] ?? 0) + amount;
+          }
+        }
+      }
     }
 
     return SalesReport(
-      totalSales: (summary['gross_sales'] as num).toDouble(),
-      totalTax: (summary['total_tax'] as num).toDouble(),
-      orderCount: (summary['order_count'] as num).toInt(),
+      totalSales: grossSales,
+      totalTax: totalTax,
+      orderCount: orderCount,
       salesByPaymentMode: paymentModes,
       rawBills: rawBills,
     );
@@ -75,32 +79,43 @@ final reportingServiceProvider = Provider((ref) => ReportingService());
 
 final dailyReportProvider = FutureProvider.family<SalesReport, String>((ref, branchId) async {
   final service = ref.watch(reportingServiceProvider);
-  final now = DateTime.now();
-  final start = DateTime(now.year, now.month, now.day);
-  final end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+  final currentUtc = DateTime.now().toUtc();
+  final currentIst = currentUtc.add(const Duration(hours: 5, minutes: 30));
+  
+  final start = DateTime.utc(currentIst.year, currentIst.month, currentIst.day).subtract(const Duration(hours: 5, minutes: 30));
+  final end = DateTime.utc(currentIst.year, currentIst.month, currentIst.day, 23, 59, 59, 999).subtract(const Duration(hours: 5, minutes: 30));
   
   return service.getSalesReport(branchId: branchId, start: start, end: end);
 });
 
 final monthlyReportProvider = FutureProvider.family<SalesReport, String>((ref, branchId) async {
   final service = ref.watch(reportingServiceProvider);
-  final now = DateTime.now();
-  final start = DateTime(now.year, now.month, 1);
-  final end = DateTime(now.year, now.month + 1, 0, 23, 59, 59);
+  final currentUtc = DateTime.now().toUtc();
+  final currentIst = currentUtc.add(const Duration(hours: 5, minutes: 30));
+
+  final start = DateTime.utc(currentIst.year, currentIst.month, 1).subtract(const Duration(hours: 5, minutes: 30));
+  final end = DateTime.utc(currentIst.year, currentIst.month + 1, 0, 23, 59, 59, 999).subtract(const Duration(hours: 5, minutes: 30));
   
   return service.getSalesReport(branchId: branchId, start: start, end: end);
 });
 
 final yearlyReportProvider = FutureProvider.family<SalesReport, String>((ref, branchId) async {
   final service = ref.watch(reportingServiceProvider);
-  final now = DateTime.now();
-  final start = DateTime(now.year, 1, 1);
-  final end = DateTime(now.year, 12, 31, 23, 59, 59);
+  final currentUtc = DateTime.now().toUtc();
+  final currentIst = currentUtc.add(const Duration(hours: 5, minutes: 30));
+
+  final start = DateTime.utc(currentIst.year, 1, 1).subtract(const Duration(hours: 5, minutes: 30));
+  final end = DateTime.utc(currentIst.year, 12, 31, 23, 59, 59, 999).subtract(const Duration(hours: 5, minutes: 30));
   
   return service.getSalesReport(branchId: branchId, start: start, end: end);
 });
 
 final customReportProvider = FutureProvider.family<SalesReport, ({String branchId, DateTime start, DateTime end})>((ref, arg) async {
   final service = ref.watch(reportingServiceProvider);
-  return service.getSalesReport(branchId: arg.branchId, start: arg.start, end: arg.end);
+
+  // Treat the selected logical year/month/day as IST bounds
+  final start = DateTime.utc(arg.start.year, arg.start.month, arg.start.day).subtract(const Duration(hours: 5, minutes: 30));
+  final end = DateTime.utc(arg.end.year, arg.end.month, arg.end.day, 23, 59, 59, 999).subtract(const Duration(hours: 5, minutes: 30));
+
+  return service.getSalesReport(branchId: arg.branchId, start: start, end: end);
 });

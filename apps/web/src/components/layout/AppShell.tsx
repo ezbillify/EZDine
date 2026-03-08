@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import type { ReactNode } from "react";
-import { Menu as MenuIcon, Search, Bell } from "lucide-react";
+import { Menu as MenuIcon, Search, Bell, X } from "lucide-react";
 
 import { Button } from "../ui/Button";
 import { Sidebar } from "./Sidebar";
@@ -26,18 +27,44 @@ export function AppShell({
   showUserMenu = true,
   fullWidth = false
 }: AppShellProps) {
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-50 selection:bg-brand-100 selection:text-brand-900">
 
       {/* Desktop Navigation */}
       {showNav && <Sidebar className="hidden lg:flex" />}
 
+      {/* Mobile Navigation Drawer */}
+      {showNav && isMobileNavOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setIsMobileNavOpen(false)}
+          />
+          {/* Sidebar */}
+          <div className="relative flex w-72 flex-col bg-white">
+            <button
+              className="absolute right-4 top-6 z-50 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"
+              onClick={() => setIsMobileNavOpen(false)}
+            >
+              <X size={16} />
+            </button>
+            <Sidebar className="w-full flex" onNavigate={() => setIsMobileNavOpen(false)} />
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-1 flex-col overflow-hidden relative z-10">
         {/* Modern Header */}
         <header className="relative z-30 flex h-20 items-center justify-between px-8 border-b border-white/60 bg-white/40 backdrop-blur-2xl">
           <div className="flex items-center gap-6">
             {showNav && (
-              <button className="lg:hidden h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-900 transition-all">
+              <button
+                onClick={() => setIsMobileNavOpen(true)}
+                className="lg:hidden h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-900 transition-all"
+              >
                 <MenuIcon size={20} />
               </button>
             )}
