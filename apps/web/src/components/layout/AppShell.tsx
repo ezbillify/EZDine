@@ -28,19 +28,20 @@ export function AppShell({
   fullWidth = false
 }: AppShellProps) {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isDesktopNavCollapsed, setIsDesktopNavCollapsed] = useState(false);
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-50 selection:bg-brand-100 selection:text-brand-900">
 
       {/* Desktop Navigation */}
-      {showNav && <Sidebar className="hidden lg:flex" />}
+      {showNav && <Sidebar className="hidden lg:flex" isCollapsed={isDesktopNavCollapsed} />}
 
       {/* Mobile Navigation Drawer */}
       {showNav && isMobileNavOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
           {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm"
+            className="fixed inset-0 bg-slate-900/40"
             onClick={() => setIsMobileNavOpen(false)}
           />
           {/* Sidebar */}
@@ -57,16 +58,25 @@ export function AppShell({
       )}
 
       <div className="flex flex-1 flex-col overflow-hidden relative z-10">
-        {/* Modern Header */}
-        <header className="relative z-30 flex h-20 items-center justify-between px-8 border-b border-white/60 bg-white/40 backdrop-blur-2xl">
+        {/* Modern Header - Optimized CPU by removing backdrop-blur */}
+        <header className="relative z-30 flex h-20 items-center justify-between px-8 border-b border-slate-200 bg-white">
           <div className="flex items-center gap-6">
             {showNav && (
-              <button
-                onClick={() => setIsMobileNavOpen(true)}
-                className="lg:hidden h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-900 transition-all"
-              >
-                <MenuIcon size={20} />
-              </button>
+              <>
+                <button
+                  onClick={() => setIsMobileNavOpen(true)}
+                  className="lg:hidden h-10 w-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-900 transition-all"
+                >
+                  <MenuIcon size={20} />
+                </button>
+                <button
+                  onClick={() => setIsDesktopNavCollapsed(!isDesktopNavCollapsed)}
+                  className="hidden lg:flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-900 transition-all hover:bg-slate-50"
+                  title="Toggle Sidebar"
+                >
+                  <MenuIcon size={20} />
+                </button>
+              </>
             )}
             <div className="space-y-0.5">
               <h1 className="text-xl font-black text-slate-900 leading-none tracking-tight">{title}</h1>
@@ -104,13 +114,6 @@ export function AppShell({
           </div>
         </main>
       </div>
-
-      <style jsx>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.05); border-radius: 10px; }
-        .custom-scrollbar:hover::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
-      `}</style>
     </div>
   );
 }

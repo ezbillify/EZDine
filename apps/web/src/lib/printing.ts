@@ -18,20 +18,22 @@ const PRINTING_KEY = "printing";
 const DOC_NUMBERING_KEY = "doc_numbering";
 
 export async function getPrintingSettings() {
-  // TEMPORARY: Use localStorage instead of Supabase for immediate testing
+  const DEFAULT_SETTINGS = {
+    bridgeUrl: 'http://localhost:8080',
+    printerIdInvoice: 'default-printer',
+    printerIdKot: 'default-printer',
+    widthInvoice: 80,
+    widthKot: 58,
+    connectionType: 'browser', // Default to browser print for web
+  };
+
   try {
     const saved = localStorage.getItem('ezdine_printer_settings');
-    return saved ? JSON.parse(saved) : null;
-  } catch (err) {
-    console.warn('Failed to load from localStorage, falling back to Supabase');
+    if (saved) return JSON.parse(saved);
 
-    // Fallback to Supabase if available
-    try {
-      const profile = await getCurrentUserProfile();
-      if (!profile?.active_restaurant_id || !profile.active_branch_id) {
-        throw new Error("Select restaurant and branch first.");
-      }
-
+    // Fallback to Supabase
+    const profile = await getCurrentUserProfile();
+    if (profile?.active_restaurant_id && profile.active_branch_id) {
       const { data, error } = await supabase
         .from("settings")
         .select("*")
@@ -40,12 +42,12 @@ export async function getPrintingSettings() {
         .eq("key", PRINTING_KEY)
         .maybeSingle();
 
-      if (error) throw error;
-      return data?.value ?? null;
-    } catch (supabaseErr) {
-      console.warn('Supabase also failed, using defaults');
-      return null;
+      if (!error && data?.value) return data.value;
     }
+
+    return DEFAULT_SETTINGS;
+  } catch (err) {
+    return DEFAULT_SETTINGS;
   }
 }
 

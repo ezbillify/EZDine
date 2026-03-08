@@ -196,7 +196,7 @@ function QrItem({ title, subtitle, url, onCopy, onDownload, onPrint, icon = <Zap
             <div className="flex flex-col items-center justify-center py-6 bg-slate-50/50 rounded-2xl border border-slate-50 mb-6">
                 <div className="relative group/qr">
                     <img src={qrImage} alt="QR Code" className="h-40 w-40 rounded-lg shadow-sm" />
-                    <div className="absolute inset-0 bg-white/0 group-hover/qr:bg-white/10 backdrop-blur-0 transition-all rounded-lg" />
+                    <div className="absolute inset-0 bg-white/0 group-hover/qr:bg-white/10 transition-all rounded-lg" />
                 </div>
             </div>
 

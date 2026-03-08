@@ -23,7 +23,7 @@ export function PaymentModal({
         card: "",
         upi: ""
     });
-    
+
     const [activeField, setActiveField] = useState<string>("cash");
     const [useKeyboard, setUseKeyboard] = useState(true); // Toggle between keyboard and keypad
     const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -83,7 +83,7 @@ export function PaymentModal({
                 e.preventDefault();
                 const methodIds: ('cash' | 'upi' | 'card')[] = ['cash', 'upi', 'card'];
                 const currentIndex = methodIds.indexOf(activeField as any);
-                const nextIndex = e.shiftKey 
+                const nextIndex = e.shiftKey
                     ? (currentIndex - 1 + methodIds.length) % methodIds.length
                     : (currentIndex + 1) % methodIds.length;
                 const nextMethod = methodIds[nextIndex] || 'cash';
@@ -182,7 +182,7 @@ export function PaymentModal({
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 animate-in fade-in duration-200">
             <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300 flex flex-col max-h-[90vh]">
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4 flex-none">
@@ -225,14 +225,13 @@ export function PaymentModal({
                                 {methods.map((method) => {
                                     const isActive = activeField === method.id;
                                     const hasValue = (parseFloat(amounts[method.id] || "") || 0) > 0;
-                                    
+
                                     return (
                                         <div key={method.id} className="relative">
-                                            <div className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${
-                                                isActive 
-                                                    ? 'border-slate-900 bg-slate-50' 
+                                            <div className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${isActive
+                                                    ? 'border-slate-900 bg-slate-50'
                                                     : 'border-slate-100 bg-white hover:border-slate-200'
-                                            }`}>
+                                                }`}>
                                                 <button
                                                     onClick={() => handleQuickFill(method.id)}
                                                     className={`flex h-12 w-12 flex-none items-center justify-center rounded-xl text-white shadow-md transition-all hover:scale-105 active:scale-95 ${method.color}`}
@@ -278,7 +277,7 @@ export function PaymentModal({
                                     {useKeyboard ? 'Show Keypad' : 'Use Keyboard'}
                                 </button>
                             </div>
-                            
+
                             {!useKeyboard && (
                                 <NumericKeypad
                                     onKeyPress={handleKeyPress}

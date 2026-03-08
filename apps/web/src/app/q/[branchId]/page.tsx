@@ -51,10 +51,10 @@ const WelcomeHero = ({ branchInfo, orderType, setOrderType }: any) => (
             <div className="absolute bottom-20 right-10 w-24 h-24 border border-white/20 rounded-full" />
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 border border-white/10 rounded-full" />
         </div>
-        
+
         <div className="relative px-6 py-12 text-center">
             <div className="mb-6">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 backdrop-blur-sm rounded-3xl mb-4 shadow-2xl">
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 rounded-3xl mb-4 shadow-2xl">
                     <Coffee size={28} className="text-white" />
                 </div>
                 <div className="space-y-1">
@@ -71,19 +71,17 @@ const WelcomeHero = ({ branchInfo, orderType, setOrderType }: any) => (
 
             <div className="max-w-xs mx-auto space-y-3">
                 <p className="text-white/80 text-sm font-medium mb-6">Choose your dining style</p>
-                
+
                 <div className="grid grid-cols-2 gap-3">
                     <button
                         onClick={() => setOrderType("dine_in")}
-                        className={`relative p-6 rounded-2xl transition-all duration-300 ${
-                            orderType === "dine_in"
+                        className={`relative p-6 rounded-2xl transition-all duration-300 ${orderType === "dine_in"
                                 ? "bg-white text-slate-900 shadow-2xl scale-105"
-                                : "bg-white/10 backdrop-blur-sm text-white/80 hover:bg-white/20"
-                        }`}
+                                : "bg-white/10 text-white/80 hover:bg-white/20"
+                            }`}
                     >
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 mx-auto ${
-                            orderType === "dine_in" ? "bg-slate-100" : "bg-white/20"
-                        }`}>
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 mx-auto ${orderType === "dine_in" ? "bg-slate-100" : "bg-white/20"
+                            }`}>
                             <Utensils size={20} className={orderType === "dine_in" ? "text-slate-900" : "text-white"} />
                         </div>
                         <div className="space-y-1">
@@ -99,15 +97,13 @@ const WelcomeHero = ({ branchInfo, orderType, setOrderType }: any) => (
 
                     <button
                         onClick={() => setOrderType("takeaway")}
-                        className={`relative p-6 rounded-2xl transition-all duration-300 ${
-                            orderType === "takeaway"
+                        className={`relative p-6 rounded-2xl transition-all duration-300 ${orderType === "takeaway"
                                 ? "bg-white text-slate-900 shadow-2xl scale-105"
-                                : "bg-white/10 backdrop-blur-sm text-white/80 hover:bg-white/20"
-                        }`}
+                                : "bg-white/10 text-white/80 hover:bg-white/20"
+                            }`}
                     >
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 mx-auto ${
-                            orderType === "takeaway" ? "bg-slate-100" : "bg-white/20"
-                        }`}>
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 mx-auto ${orderType === "takeaway" ? "bg-slate-100" : "bg-white/20"
+                            }`}>
                             <ShoppingBag size={20} className={orderType === "takeaway" ? "text-slate-900" : "text-white"} />
                         </div>
                         <div className="space-y-1">
@@ -131,19 +127,17 @@ const MenuItemCard = ({ item, addToCart, cart, updateQty }: any) => {
     const quantity = cartItem?.qty || 0;
 
     return (
-        <div className={`bg-white rounded-3xl p-6 border-2 transition-all duration-200 ${
-            !item.is_available 
-                ? 'opacity-50 grayscale border-slate-100' 
-                : quantity > 0 
-                    ? 'border-emerald-200 shadow-lg shadow-emerald-500/5' 
+        <div className={`bg-white rounded-3xl p-6 border-2 transition-all duration-200 ${!item.is_available
+                ? 'opacity-50 grayscale border-slate-100'
+                : quantity > 0
+                    ? 'border-emerald-200 shadow-lg shadow-emerald-500/5'
                     : 'border-slate-100 hover:shadow-md hover:border-slate-200'
-        }`}>
+            }`}>
             <div className="flex gap-5">
                 <div className="flex-1">
                     <div className="flex items-center gap-2 mb-3">
-                        <div className={`w-4 h-4 rounded-md flex items-center justify-center border-2 ${
-                            item.is_veg ? 'border-emerald-500' : 'border-rose-500'
-                        }`}>
+                        <div className={`w-4 h-4 rounded-md flex items-center justify-center border-2 ${item.is_veg ? 'border-emerald-500' : 'border-rose-500'
+                            }`}>
                             <div className={`w-2 h-2 rounded-full ${item.is_veg ? 'bg-emerald-500' : 'bg-rose-500'}`} />
                         </div>
                         <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
@@ -155,21 +149,21 @@ const MenuItemCard = ({ item, addToCart, cart, updateQty }: any) => {
                             </span>
                         )}
                     </div>
-                    
+
                     <h3 className="font-black text-xl text-slate-900 leading-tight mb-2 tracking-tight">{item.name}</h3>
-                    
+
                     {item.description && (
                         <p className="text-sm text-slate-500 line-clamp-2 mb-4 leading-relaxed font-medium">
                             {item.description}
                         </p>
                     )}
-                    
+
                     <div className="flex items-baseline gap-1.5">
                         <span className="text-sm font-black text-slate-400">₹</span>
                         <span className="font-black text-2xl text-slate-900 tracking-tight">{item.base_price}</span>
                     </div>
                 </div>
-                
+
                 <div className="flex flex-col justify-end items-end gap-3">
                     {quantity > 0 ? (
                         <div className="flex items-center gap-2 bg-emerald-50 rounded-2xl p-2 border-2 border-emerald-200">
@@ -191,11 +185,10 @@ const MenuItemCard = ({ item, addToCart, cart, updateQty }: any) => {
                         <button
                             onClick={() => addToCart(item)}
                             disabled={!item.is_available}
-                            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200 ${
-                                item.is_available 
-                                    ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 hover:bg-slate-800 active:scale-95' 
+                            className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200 ${item.is_available
+                                    ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 hover:bg-slate-800 active:scale-95'
                                     : 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                            }`}
+                                }`}
                         >
                             <Plus size={24} strokeWidth={3} />
                         </button>
@@ -255,7 +248,7 @@ export default function QrOrderPage() {
                     (payload) => {
                         const updatedOrder = payload.new as any;
                         setCurrentOrderStatus(updatedOrder.status);
-                        
+
                         // Show toast notification when status changes
                         if (updatedOrder.status === 'preparing') {
                             toast.success("🔥 Your order is being prepared!", {
@@ -548,7 +541,7 @@ export default function QrOrderPage() {
 
             {/* Premium Header */}
             {step !== "onboarding_type" && step !== "onboarding_mobile" && step !== "onboarding_name" && step !== "success" && (
-                <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-4">
+                <header className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="h-10 w-10 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-lg">
@@ -584,12 +577,12 @@ export default function QrOrderPage() {
             {/* Onboarding: Step 1 - Order Type */}
             {step === "onboarding_type" && (
                 <main className="min-h-screen bg-slate-50 animate-in fade-in zoom-in-95 duration-700">
-                    <WelcomeHero 
-                        branchInfo={branchInfo} 
-                        orderType={orderType} 
-                        setOrderType={setOrderType} 
+                    <WelcomeHero
+                        branchInfo={branchInfo}
+                        orderType={orderType}
+                        setOrderType={setOrderType}
                     />
-                    
+
                     <div className="px-6 py-8">
                         <button
                             className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-xs shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-3"
@@ -609,7 +602,7 @@ export default function QrOrderPage() {
                             </button>
                         </div>
                     </div>
-                    
+
                     <BrandingFooter />
                 </main>
             )}
@@ -797,7 +790,7 @@ export default function QrOrderPage() {
             {step === "menu" && (
                 <main className="animate-in fade-in duration-700 slide-in-from-bottom-2 pb-32">
                     {/* Enhanced Search & Categories */}
-                    <div className="px-4 pt-4 pb-3 bg-white/80 sticky top-[73px] z-40 backdrop-blur-md border-b border-slate-100">
+                    <div className="px-4 pt-4 pb-3 bg-white sticky top-[73px] z-40 border-b border-slate-100">
                         <div className="relative mb-4">
                             <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400">
                                 <Search size={20} />
@@ -815,11 +808,10 @@ export default function QrOrderPage() {
                                 <button
                                     key={cat.id}
                                     onClick={() => setActiveCategory(cat.name)}
-                                    className={`whitespace-nowrap px-6 py-3 rounded-2xl text-sm font-black transition-all duration-200 ${
-                                        activeCategory === cat.name
+                                    className={`whitespace-nowrap px-6 py-3 rounded-2xl text-sm font-black transition-all duration-200 ${activeCategory === cat.name
                                             ? "bg-slate-900 text-white shadow-xl shadow-slate-900/20"
                                             : "bg-white text-slate-600 border-2 border-slate-200 hover:border-slate-300"
-                                    }`}
+                                        }`}
                                 >
                                     {cat.name}
                                 </button>
@@ -840,10 +832,10 @@ export default function QrOrderPage() {
                         ) : (
                             <div className="space-y-4">
                                 {filteredItems.map(item => (
-                                    <MenuItemCard 
-                                        key={item.id} 
-                                        item={item} 
-                                        addToCart={addToCart} 
+                                    <MenuItemCard
+                                        key={item.id}
+                                        item={item}
+                                        addToCart={addToCart}
                                         cart={cart}
                                         updateQty={updateQty}
                                     />
@@ -1011,23 +1003,20 @@ export default function QrOrderPage() {
                         </div>
 
                         {currentOrderStatus && (
-                            <div className={`mb-6 p-4 rounded-2xl ${
-                                currentOrderStatus === 'ready' 
-                                    ? 'bg-emerald-50 border-2 border-emerald-200' 
+                            <div className={`mb-6 p-4 rounded-2xl ${currentOrderStatus === 'ready'
+                                    ? 'bg-emerald-50 border-2 border-emerald-200'
                                     : 'bg-amber-50 border-2 border-amber-200'
-                            }`}>
-                                <p className={`text-sm font-black uppercase tracking-tight ${
-                                    currentOrderStatus === 'ready' ? 'text-emerald-900' : 'text-amber-900'
                                 }`}>
-                                    {currentOrderStatus === 'ready' 
-                                        ? '🎉 Your order is ready!' 
+                                <p className={`text-sm font-black uppercase tracking-tight ${currentOrderStatus === 'ready' ? 'text-emerald-900' : 'text-amber-900'
+                                    }`}>
+                                    {currentOrderStatus === 'ready'
+                                        ? '🎉 Your order is ready!'
                                         : '👨‍🍳 Chef is cooking your meal'}
                                 </p>
-                                <p className={`text-[10px] font-bold mt-1 ${
-                                    currentOrderStatus === 'ready' ? 'text-emerald-600' : 'text-amber-600'
-                                }`}>
-                                    {currentOrderStatus === 'ready' 
-                                        ? 'Please collect from the counter' 
+                                <p className={`text-[10px] font-bold mt-1 ${currentOrderStatus === 'ready' ? 'text-emerald-600' : 'text-amber-600'
+                                    }`}>
+                                    {currentOrderStatus === 'ready'
+                                        ? 'Please collect from the counter'
                                         : 'We\'ll notify you when it\'s ready'}
                                 </p>
                             </div>
@@ -1036,21 +1025,20 @@ export default function QrOrderPage() {
                         <div className="pt-6 border-t-2 border-dashed border-slate-100 space-y-3">
                             <div className="flex justify-between items-center">
                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status</span>
-                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${
-                                    currentOrderStatus === 'ready' 
-                                        ? 'text-emerald-600 bg-emerald-50 animate-pulse' 
-                                        : currentOrderStatus === 'preparing' 
-                                            ? 'text-amber-600 bg-amber-50 animate-pulse' 
+                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${currentOrderStatus === 'ready'
+                                        ? 'text-emerald-600 bg-emerald-50 animate-pulse'
+                                        : currentOrderStatus === 'preparing'
+                                            ? 'text-amber-600 bg-amber-50 animate-pulse'
                                             : paymentMethod === 'cash'
                                                 ? 'text-amber-600 bg-amber-50'
                                                 : 'text-blue-600 bg-blue-50'
                                     }`}>
-                                    {currentOrderStatus === 'ready' 
-                                        ? '✅ Ready' 
-                                        : currentOrderStatus === 'preparing' 
-                                            ? '🔥 Preparing' 
-                                            : paymentMethod === 'cash' 
-                                                ? 'Awaiting Payment' 
+                                    {currentOrderStatus === 'ready'
+                                        ? '✅ Ready'
+                                        : currentOrderStatus === 'preparing'
+                                            ? '🔥 Preparing'
+                                            : paymentMethod === 'cash'
+                                                ? 'Awaiting Payment'
                                                 : 'Confirmed'}
                                 </span>
                             </div>

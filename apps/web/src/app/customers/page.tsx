@@ -210,11 +210,11 @@ export default function CustomersPage() {
               <div className="relative z-10">
                 <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Loyalty Insights</h4>
                 <div className="mt-4 space-y-4">
-                  <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl backdrop-blur-sm">
+                  <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
                     <span className="text-xs font-bold text-slate-300">Total Visits (MTD)</span>
                     <span className="text-lg font-black">{Math.floor(customers.length * 1.5)}</span>
                   </div>
-                  <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl backdrop-blur-sm">
+                  <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
                     <span className="text-xs font-bold text-slate-300">Reward Vouchers</span>
                     <span className="text-lg font-black">24</span>
                   </div>

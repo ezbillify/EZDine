@@ -5,14 +5,15 @@ interface GlassCardProps extends HTMLAttributes<HTMLDivElement> {
     gradient?: boolean;
 }
 
-export function GlassCard({ children, className = "", gradient = false, ...props }: GlassCardProps) {
+export function GlassCard({ children, className = "", gradient = false, onClick, ...props }: GlassCardProps) {
     return (
         <div
             className={`
-        relative overflow-hidden rounded-2xl border border-white/50 bg-white/60 p-6 shadow-sm backdrop-blur-xl transition-all hover:shadow-md
-        ${gradient ? "bg-white/90" : ""}
+        relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all hover:shadow-md
+        ${onClick ? "cursor-pointer hover:-translate-y-1 hover:border-brand-300" : ""}
         ${className}
       `}
+            onClick={onClick}
             {...props}
         >
             {children}

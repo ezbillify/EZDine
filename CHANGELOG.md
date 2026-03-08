@@ -1,4 +1,11 @@
 
+## v1.13.1 (2026-03-08)
+
+- Simplified UI styling and layout for better performance and readability
+- Removed unused print styling
+- Improved performance by reducing backdrop-blur usage
+
+
 ## v1.13.0 (2026-03-08)
 
 ### Features

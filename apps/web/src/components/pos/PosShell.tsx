@@ -57,7 +57,7 @@ export function PosShell() {
   const [activeOrderNumber, setActiveOrderNumber] = useState<string | null>(null);
   const [activeTokenNumber, setActiveTokenNumber] = useState<number | null>(null);
   const [activeBillNumber, setActiveBillNumber] = useState<string | null>(null);
-  const [isQuickBill, setIsQuickBill] = useState(false);
+  const [isQuickBill, setIsQuickBill] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "paid">("pending");
   const [liveOrders, setLiveOrders] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<"live" | "history">("live");
@@ -1084,7 +1084,7 @@ export function PosShell() {
                       >
                         {/* Status Indicator */}
                         <div className="absolute top-2 right-2">
-                          <div className={`w-3 h-3 rounded-full ${isPaid ? 'bg-green-500' : 'bg-orange-500'} animate-pulse`}></div>
+                          <div className={`w-3 h-3 rounded-full shadow-sm ${isPaid ? 'bg-green-500' : 'bg-orange-500'}`}></div>
                         </div>
 
                         <div className="text-center">
@@ -1111,7 +1111,10 @@ export function PosShell() {
                   {tables.map((table) => (
                     <button
                       key={table.id}
-                      onClick={() => setActiveTableId(table.id)}
+                      onClick={() => {
+                        setActiveTableId(table.id);
+                        setIsQuickBill(false);
+                      }}
                       className={`p-3 rounded-xl border-2 text-left transition-all ${activeTableId === table.id
                         ? "border-blue-500 bg-blue-50 shadow-md"
                         : "border-slate-200 bg-white hover:border-slate-300"
@@ -1602,7 +1605,7 @@ export function PosShell() {
 
       {
         showCustomerModal && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
             <Card className="bg-white border-slate-200 w-full animate-slide-up shadow-2xl max-w-sm p-6 rounded-3x">
               <h3 className="text-sm font-black uppercase text-slate-900 mb-4">Register New Guest</h3>
               <div className="space-y-4">

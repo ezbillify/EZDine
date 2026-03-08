@@ -326,16 +326,6 @@ export default function ReportsPage() {
             </div>
           </div>
         )}
-        {/* Hidden Print Styling */}
-        <style jsx global>{`
-          @media print {
-            .no-print { display: none !important; }
-            body { padding: 0 !important; }
-            .print-only { display: block !important; }
-            @page { margin: 2cm; }
-          }
-          .print-only { display: none; }
-        `}</style>
       </AppShell>
     </AuthGate>
   );
