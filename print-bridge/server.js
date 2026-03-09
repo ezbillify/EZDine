@@ -30,20 +30,87 @@ app.get('/', (req, res) => {
 
   res.send(`
     <html>
-      <body style="font-family: sans-serif; padding: 2rem; text-align: center;">
-        <div style="border: 2px solid #000; padding: 20px; display: inline-block; border-radius: 10px;">
+      <head>
+        <title>EZDine Print Bridge</title>
+        <style>
+          body { font-family: sans-serif; padding: 2rem; text-align: center; background: #f8fafc; color: #1e293b; }
+          .card { border: 1px solid #e2e8f0; padding: 30px; display: inline-block; border-radius: 20px; background: white; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); max-width: 500px; width: 100%; }
+          .status { color: #059669; font-weight: bold; background: #ecfdf5; padding: 4px 12px; border-radius: 20px; display: inline-block; margin-bottom: 20px; }
+          h1 { margin: 0; color: #0f172a; }
+          ul { list-style: none; padding: 0; font-size: 1.2rem; }
+          .ip-box { background: #f1f5f9; padding: 15px; border-radius: 12px; margin: 15px 0; }
+          .printer-list { text-align: left; margin-top: 20px; padding: 15px; background: #fff7ed; border-radius: 12px; border: 1px solid #ffedd5; }
+          .printer-list h3 { margin-top: 0; color: #9a3412; font-size: 0.9rem; text-transform: uppercase; }
+          .printer-name { font-family: monospace; font-size: 0.9rem; background: #ffdead; padding: 2px 6px; border-radius: 4px; display: inline-block; margin: 2px; }
+          code { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <div class="status">● Service Active on Port ${PORT}</div>
           <h1>🖨️ EZDine Print Bridge</h1>
-          <p style="color: green; font-weight: bold;">● Service Active on Port ${PORT}</p>
-          <hr/>
-          <h3>Your IP Address:</h3>
-          <ul style="list-style: none; padding: 0; font-size: 1.5rem;">
-            ${ipList}
-          </ul>
-          <p style="color: grey; font-size: 0.9rem;">(Enter this IP in your EZDine App Settings)</p>
+          <p>Local Printing Hub for EZBillify POS</p>
+          
+          <div class="ip-box">
+            <p style="margin-top: 0; font-weight: bold; color: #64748b;">BRIDGE URL:</p>
+            <code>http://${ips[0] || 'localhost'}:${PORT}</code>
+          </div>
+
+          <div id="printers" class="printer-list">
+            <h3>Detected Local Printers:</h3>
+            <div id="list-content">Loading printers...</div>
+          </div>
+
+          <p style="color: grey; font-size: 0.8rem; margin-top: 20px;">
+            Copy the <strong>BRIDGE URL</strong> into your EZDine Web POS Settings.<br/>
+            Then type the <strong>Printer Name</strong> exactly as shown above.
+          </p>
         </div>
+
+        <script>
+          fetch('/printers')
+            .then(res => res.json())
+            .then(data => {
+              const list = data.map(p => \`<span class="printer-name">\${p}</span>\`).join('');
+              document.getElementById('list-content').innerHTML = list || 'No printers detected';
+            })
+            .catch(() => {
+              document.getElementById('list-content').innerHTML = 'Error loading printers';
+            });
+        </script>
       </body>
     </html>
   `);
+});
+
+app.get('/health', (req, res) => res.send('OK'));
+
+app.get('/printers', (req, res) => {
+  const { exec } = require('child_process');
+  if (os.platform() === 'win32') {
+    // Windows: Use WMIC to get printer names
+    exec('wmic printer get name', (error, stdout) => {
+      if (error) return res.json([]);
+      const printers = stdout.split('\\r\\n')
+        .map(p => p.trim())
+        .filter(p => p && p !== 'Name');
+      res.json(printers);
+    });
+  } else if (os.platform() === 'darwin') {
+    // Mac: Use lpstat -v
+    exec('lpstat -v', (error, stdout) => {
+      if (error) return res.json([]);
+      const printers = stdout.split('\\n')
+        .map(line => {
+          const match = line.match(/device for (.*?):/);
+          return match ? match[1] : null;
+        })
+        .filter(Boolean);
+      res.json(printers);
+    });
+  } else {
+    res.json([]);
+  }
 });
 
 app.post('/print', (req, res) => {
@@ -86,7 +153,8 @@ app.post('/print', (req, res) => {
   buffer = Buffer.concat([buffer, Buffer.from([0x1D, 0x56, 66, 0])]); // Cut
 
   // DECISION: TCP (Network) vs Spooler (USB)
-  const isLogicalName = printerId && printerId.indexOf('.') === -1 && printerId !== 'localhost';
+  let cleanPrinterId = printerId.replace(/^\\\\+/, '').replace(/^[A-Z]:/, ''); // Remove slashes/drive letters
+  const isLogicalName = cleanPrinterId && cleanPrinterId.indexOf('.') === -1 && cleanPrinterId !== 'localhost';
 
   if (isLogicalName && os.platform() === 'win32') {
     // WINDOWS USB SUPPORT: Use 'copy /b' to shared printer
@@ -97,17 +165,35 @@ app.post('/print', (req, res) => {
 
     fs.writeFileSync(tempFile, buffer);
 
-    const printerPath = `\\\\localhost\\${printerId}`;
-    console.log(`Windows USB Print: Sending raw bytes to ${printerPath}`);
+    // We will try several common printer paths
+    const pathsToTry = [
+      `\\\\127.0.0.1\\${cleanPrinterId}`,
+      `\\\\localhost\\${cleanPrinterId}`,
+      `\\\\${os.hostname()}\\${cleanPrinterId}`
+    ];
 
-    exec(`copy /b "${tempFile}" "${printerPath}"`, (error, stdout, stderr) => {
-      try { fs.unlinkSync(tempFile); } catch (e) { }
-      if (error) {
-        console.error("USB Print Error:", stderr);
-        return res.status(500).json({ error: "USB Print Failed: " + stderr });
+    let triedCount = 0;
+    const tryPrint = (idx) => {
+      if (idx >= pathsToTry.length) {
+        return res.status(500).json({ error: "USB Print Failed after trying all local paths. Please ensure printer is shared correctly." });
       }
-      res.json({ success: true });
-    });
+
+      const p = pathsToTry[idx];
+      console.log(`[Windows USB] Attempt ${idx + 1}: Sending to ${p}`);
+
+      exec(`copy /b "${tempFile}" "${p}"`, (error, stdout, stderr) => {
+        if (!error) {
+          console.log(`[Success] Printed to ${p}`);
+          try { fs.unlinkSync(tempFile); } catch (e) { }
+          return res.json({ success: true });
+        } else {
+          console.warn(`[Fail] Path ${p} failed. Trying next...`);
+          tryPrint(idx + 1);
+        }
+      });
+    };
+
+    tryPrint(0);
   } else if (isLogicalName && os.platform() === 'darwin') {
     // MAC USB SUPPORT: Use 'lp'
     const fs = require('fs');

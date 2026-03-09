@@ -1,4 +1,14 @@
 
+## v1.16.0 (2026-03-09)
+
+### Features
+* Enhanced Print Bridge UI with improved styling and layout
+* Added printer detection for Windows and Mac platforms
+* Introduced a health check endpoint for monitoring
+### Fixes
+* Improved Windows USB printing by attempting multiple printer paths
+
+
 ## v1.15.0 (2026-03-09)
 
 ### Features
