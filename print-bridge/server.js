@@ -62,39 +62,85 @@ app.post('/print', (req, res) => {
   const client = new net.Socket();
   const PRINTER_PORT = 9100;
 
-  client.connect(PRINTER_PORT, targetHost, () => {
-    console.log(`Connected to Printer at ${targetHost}:${PRINTER_PORT}`);
-    client.write(Buffer.from([0x1B, 0x40])); // Init
+  // Build the buffer
+  let buffer = Buffer.from([0x1B, 0x40]); // Init
+  if (font === 'font-b') {
+    buffer = Buffer.concat([buffer, Buffer.from([0x1B, 0x4D, 1])]);
+  } else {
+    buffer = Buffer.concat([buffer, Buffer.from([0x1B, 0x4D, 0])]);
+  }
 
-    // Set global font A or B
-    if (font === 'font-b') {
-      client.write(Buffer.from([0x1B, 0x4D, 1])); // Select Font B (condensed)
-    } else {
-      client.write(Buffer.from([0x1B, 0x4D, 0])); // Select Font A (standard)
-    }
+  lines.forEach(line => {
+    let mode = 0;
+    if (line.bold) mode += 8;
+    buffer = Buffer.concat([buffer, Buffer.from([0x1B, 0x21, mode])]);
 
-    lines.forEach(line => {
-      let mode = 0;
-      if (line.bold) mode += 8;
-      client.write(Buffer.from([0x1B, 0x21, mode]));
+    let align = 0;
+    if (line.align === 'center') align = 1;
+    if (line.align === 'right') align = 2;
+    buffer = Buffer.concat([buffer, Buffer.from([0x1B, 0x61, align])]);
 
-      let align = 0;
-      if (line.align === 'center') align = 1;
-      if (line.align === 'right') align = 2;
-      client.write(Buffer.from([0x1B, 0x61, align]));
+    buffer = Buffer.concat([buffer, Buffer.from(line.text + '\n')]);
+  });
 
-      client.write(line.text + '\n');
+  buffer = Buffer.concat([buffer, Buffer.from([0x1D, 0x56, 66, 0])]); // Cut
+
+  // DECISION: TCP (Network) vs Spooler (USB)
+  const isLogicalName = printerId && printerId.indexOf('.') === -1 && printerId !== 'localhost';
+
+  if (isLogicalName && os.platform() === 'win32') {
+    // WINDOWS USB SUPPORT: Use 'copy /b' to shared printer
+    const fs = require('fs');
+    const path = require('path');
+    const { exec } = require('child_process');
+    const tempFile = path.join(os.tmpdir(), `print_${Date.now()}.bin`);
+
+    fs.writeFileSync(tempFile, buffer);
+
+    const printerPath = `\\\\localhost\\${printerId}`;
+    console.log(`Windows USB Print: Sending raw bytes to ${printerPath}`);
+
+    exec(`copy /b "${tempFile}" "${printerPath}"`, (error, stdout, stderr) => {
+      try { fs.unlinkSync(tempFile); } catch (e) { }
+      if (error) {
+        console.error("USB Print Error:", stderr);
+        return res.status(500).json({ error: "USB Print Failed: " + stderr });
+      }
+      res.json({ success: true });
+    });
+  } else if (isLogicalName && os.platform() === 'darwin') {
+    // MAC USB SUPPORT: Use 'lp'
+    const fs = require('fs');
+    const path = require('path');
+    const { exec } = require('child_process');
+    const tempFile = path.join(os.tmpdir(), `print_${Date.now()}.bin`);
+
+    fs.writeFileSync(tempFile, buffer);
+    console.log(`Mac USB Print: Sending raw bytes to ${printerId}`);
+
+    exec(`lp -d "${printerId}" "${tempFile}"`, (error, stdout, stderr) => {
+      try { fs.unlinkSync(tempFile); } catch (e) { }
+      if (error) {
+        console.error("USB Print Error:", stderr);
+        return res.status(500).json({ error: "USB Print Failed: " + stderr });
+      }
+      res.json({ success: true });
+    });
+  } else {
+    // DEFAULT: TCP Socket (Network Printer)
+    console.log(`Attempting TCP Connection to ${targetHost}:${PRINTER_PORT}...`);
+    client.connect(PRINTER_PORT, targetHost, () => {
+      console.log(`Connected to Network Printer at ${targetHost}`);
+      client.write(buffer);
+      client.end();
+      res.json({ success: true });
     });
 
-    client.write(Buffer.from([0x1D, 0x56, 66, 0])); // Cut
-    client.end();
-    res.json({ success: true });
-  });
-
-  client.on('error', (err) => {
-    console.error(`Printer Connection Failed (${targetHost}):`, err.message);
-    res.status(500).json({ error: "Printer Connection Failed: " + err.message });
-  });
+    client.on('error', (err) => {
+      console.error(`Printer Connection Failed (${targetHost}):`, err.message);
+      res.status(500).json({ error: "Printer Connection Failed: " + err.message });
+    });
+  }
 });
 
 app.listen(PORT, '0.0.0.0', () => {

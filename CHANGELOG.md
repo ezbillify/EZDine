@@ -1,4 +1,13 @@
 
+## v1.15.0 (2026-03-09)
+
+### Features
+* Added support for USB printing on Windows and macOS
+* Improved buffer handling for printer commands
+### Fixes
+* Enhanced error handling for printer connections
+
+
 ## v1.14.0 (2026-03-09)
 
 ### Features
