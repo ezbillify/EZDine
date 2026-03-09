@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>EZDine POS</title>
+  <!-- We'll use a very simple CSS for the native wrapper -->
+  <style>
+    body,
+    html {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #native-header {
+      height: 32px;
+      background-color: #1e293b;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 13px;
+      flex-shrink: 0;
+      -webkit-app-region: drag;
+      /* Draggable titlebar on windows/mac */
+    }
+
+    .ip-badge {
+      background-color: #10b981;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      -webkit-app-region: no-drag;
+    }
+
+    .brand {
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    #app-frame {
+      flex: 1;
+      width: 100%;
+      border: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="native-header">
+    <div class="brand">EZDINE POS</div>
+    <div>
+      Print Bridge: <span id="ip-display" class="ip-badge">Loading...</span>
+    </div>
+  </div>
+
+  <!-- Load the Next.js app inside a native webview to preserve local storage safely -->
+  <webview id="app-frame" allowpopups></webview>
+
+  <script>
+    async function init() {
+      const info = await window.bridgeAPI.getBridgeInfo();
+      document.getElementById('ip-display').innerText = info.url;
+      document.getElementById('app-frame').src = info.appUrl;
+    }
+    init();
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,69 @@
+{
+  "name": "@ezdine/desktop",
+  "version": "1.0.0",
+  "description": "EZDine Desktop Application with built-in Print Bridge",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac -c.mac.identity=null",
+    "build:win": "electron-builder --win -c.win.verifyUpdateCodeSignature=false"
+  },
+  "author": "EZDine",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^40.8.0",
+    "electron-builder": "^25.1.8",
+    "sharp": "^0.34.5"
+  },
+  "build": {
+    "appId": "com.ezdine.desktop",
+    "productName": "EZDine",
+    "executableName": "EZDine",
+    "publish": {
+      "provider": "github",
+      "owner": "ezbillify",
+      "repo": "EZDine"
+    },
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "extraResources": [
+      {
+        "from": "bridge",
+        "to": "bridge",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "icon": "assets/icon.png",
+      "target": [
+        "dmg"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "sign": false
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.png",
+      "publisherName": "EZDine"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
+  }
+}

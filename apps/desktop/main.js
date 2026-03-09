@@ -1,0 +1,164 @@
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const path = require('path');
+const { spawn } = require('child_process');
+const os = require('os');
+const fs = require('fs');
+const { autoUpdater } = require('electron-updater');
+
+app.setName('EZDine POS');
+if (process.platform === 'darwin') {
+    app.dock.setIcon(path.join(__dirname, 'assets', 'icon.png'));
+}
+
+let mainWindow;
+let pyProc = null;
+let pyPort = 8080; // Default, will be updated to a dynamic free port
+
+// Find the local IP address
+function getLocalIpAddress() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const net of interfaces[name]) {
+            // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
+            if (net.family === 'IPv4' && !net.internal) {
+                return net.address;
+            }
+        }
+    }
+    return '127.0.0.1';
+}
+
+const localIp = getLocalIpAddress();
+
+// Determine the executable for the current platform
+function getBridgeExecutable() {
+    return os.platform() === 'win32'
+        ? 'ezdine-print-bridge-win.exe'
+        : 'ezdine-print-bridge-macos';
+}
+
+function createPyProc() {
+    const binaryName = getBridgeExecutable();
+    let scriptPath = path.join(__dirname, 'bridge', binaryName);
+
+    // When packaged, resources might be in process.resourcesPath
+    if (!fs.existsSync(scriptPath)) {
+        scriptPath = path.join(process.resourcesPath, 'bridge', binaryName);
+    }
+
+    console.log('Starting Print Bridge Binary:', scriptPath);
+
+    if (!fs.existsSync(scriptPath)) {
+        console.error(`ERROR: Could not find ${binaryName}!`);
+        return;
+    }
+
+    // Choose a random port between 4000 and 4999
+    pyPort = Math.floor(Math.random() * 1000) + 4000;
+
+    // Execute the standalone binary directly, passing the port as the first argument
+    pyProc = spawn(scriptPath, [pyPort.toString()], {
+        // Ensure the binary is executable on Unix
+        stdio: 'pipe'
+    });
+
+    pyProc.stdout.on('data', (data) => {
+        console.log(`PrintBridge: ${data.toString()}`);
+    });
+
+    pyProc.stderr.on('data', (data) => {
+        console.error(`PrintBridge Error: ${data.toString()}`);
+    });
+
+    pyProc.on('close', (code) => {
+        console.log(`PrintBridge exited with code ${code}`);
+        pyProc = null;
+    });
+}
+
+function exitPyProc() {
+    if (pyProc != null) {
+        // kill logic
+        if (os.platform() === 'win32') {
+            spawn("taskkill", ["/pid", pyProc.pid, '/f', '/t']);
+        } else {
+            pyProc.kill('SIGINT');
+        }
+        pyProc = null;
+    }
+}
+
+function createWindow() {
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+
+    mainWindow = new BrowserWindow({
+        width: Math.floor(width * 0.9),
+        height: Math.floor(height * 0.9),
+        minWidth: 1024,
+        minHeight: 768,
+        show: false, // Don't show until ready-to-show to prevent flickering
+        title: "EZDine POS",
+        icon: path.join(__dirname, 'assets', 'icon.png'),
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.js'),
+            nodeIntegration: false,
+            contextIsolation: true,
+            webSecurity: true, // Recommended for production
+            allowRunningInsecureContent: false,
+            webviewTag: true,
+        }
+    });
+
+    // Enable autoplay so KOT sounds ring even without interaction
+    mainWindow.webContents.on('did-finish-load', () => {
+        mainWindow.webContents.setAudioMuted(false);
+    });
+
+    mainWindow.maximize();
+
+    // Load the local wrapper HTML
+    mainWindow.loadFile(path.join(__dirname, 'index.html'));
+
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show();
+    });
+
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+    });
+}
+
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
+app.whenReady().then(() => {
+    createPyProc();
+    createWindow();
+
+    // Automatically check for updates and notify the user to install them when ready
+    autoUpdater.checkForUpdatesAndNotify();
+
+    app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow();
+        }
+    });
+});
+
+app.on('will-quit', exitPyProc);
+
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+        app.quit();
+    }
+});
+
+// IPC handler to send the bridge config to the renderer
+ipcMain.handle('get-bridge-info', () => {
+    return {
+        ip: localIp,
+        port: pyPort,
+        url: `http://${localIp}:${pyPort}`,
+        appUrl: process.env.LOCAL_DEV ? 'http://localhost:3000' : 'https://ezdine.ezbillify.com'
+    };
+});
