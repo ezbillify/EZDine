@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import { AuthGate } from "../../components/auth/AuthGate";
@@ -44,12 +44,12 @@ export default function SelectBranchPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [router]);
 
-  const handleSelect = async (branchId: string) => {
+  const handleSelect = useCallback(async (branchId: string) => {
     await setActiveBranch(branchId);
     router.replace("/dashboard");
-  };
+  }, [router]);
 
   const content = useMemo(() => {
     if (status === "loading") {
@@ -68,7 +68,7 @@ export default function SelectBranchPage() {
         ))}
       </div>
     );
-  }, [branches, error, status]);
+  }, [branches, error, status, handleSelect]);
 
   return (
     <AuthGate enforceContext={false}>

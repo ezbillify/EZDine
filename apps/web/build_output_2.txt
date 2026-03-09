@@ -1,0 +1,239 @@
+
+> @ezdine/web@1.13.1 build
+> next build
+
+   ▲ Next.js 15.1.9
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+Failed to compile.
+
+./src/app/customers/page.tsx
+13:3  Error: 'MoreVertical' is defined but never used.  @typescript-eslint/no-unused-vars
+29:10  Error: 'Section' is defined but never used.  @typescript-eslint/no-unused-vars
+34:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+102:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+122:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/app/dashboard/page.tsx
+7:3  Error: 'Clock' is defined but never used.  @typescript-eslint/no-unused-vars
+8:3  Error: 'CircleDollarSign' is defined but never used.  @typescript-eslint/no-unused-vars
+9:3  Error: 'ArrowRight' is defined but never used.  @typescript-eslint/no-unused-vars
+13:3  Error: 'ShoppingBag' is defined but never used.  @typescript-eslint/no-unused-vars
+14:3  Error: 'ArrowUpRight' is defined but never used.  @typescript-eslint/no-unused-vars
+16:3  Error: 'LayoutDashboard' is defined but never used.  @typescript-eslint/no-unused-vars
+17:3  Error: 'AlertTriangle' is defined but never used.  @typescript-eslint/no-unused-vars
+21:3  Error: 'Layers' is defined but never used.  @typescript-eslint/no-unused-vars
+37:10  Error: 'kdsReady' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+41:10  Error: 'loading' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+62:67  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+63:61  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+148:108  Error: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  react/no-unescaped-entities
+
+./src/app/inventory/page.tsx
+10:3  Error: 'ArrowUpRight' is defined but never used.  @typescript-eslint/no-unused-vars
+11:3  Error: 'ArrowDownRight' is defined but never used.  @typescript-eslint/no-unused-vars
+12:3  Error: 'Filter' is defined but never used.  @typescript-eslint/no-unused-vars
+27:38  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+91:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/app/login/page.tsx
+35:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/menu/page.tsx
+17:48  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+18:38  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+19:44  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+21:10  Error: 'role' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+74:6  Warning: React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+221:58  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+291:87  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/app/pos/page.tsx
+4:10  Error: 'PosHistory' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/app/purchase/page.tsx
+9:5  Error: 'ArrowRight' is defined but never used.  @typescript-eslint/no-unused-vars
+38:42  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+39:44  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+40:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+106:8  Warning: React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+258:43  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+277:44  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+278:40  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+281:50  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+308:65  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/app/q/[branchId]/page.tsx
+8:41  Error: 'Star' is defined but never used.  @typescript-eslint/no-unused-vars
+9:30  Error: 'Info' is defined but never used.  @typescript-eslint/no-unused-vars
+10:5  Error: 'Heart' is defined but never used.  @typescript-eslint/no-unused-vars
+10:20  Error: 'Timer' is defined but never used.  @typescript-eslint/no-unused-vars
+10:27  Error: 'Sparkles' is defined but never used.  @typescript-eslint/no-unused-vars
+18:10  Error: 'Input' is defined but never used.  @typescript-eslint/no-unused-vars
+24:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+46:63  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+125:61  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+126:36  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+209:48  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+210:50  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+211:50  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+228:56  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+249:61  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+315:56  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+340:30  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+438:11  Error: 'handleOnboardingComplete' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+488:56  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+495:34  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+520:23  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+703:115  Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.  react/no-unescaped-entities
+703:121  Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.  react/no-unescaped-entities
+763:113  Error: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  react/no-unescaped-entities
+764:100  Error: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  react/no-unescaped-entities
+764:122  Error: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  react/no-unescaped-entities
+
+./src/app/reports/page.tsx
+25:10  Error: 'FileText' is defined but never used.  @typescript-eslint/no-unused-vars
+34:13  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+110:6  Warning: React Hook useEffect has a missing dependency: 'loadData'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+116:6  Warning: React Hook useEffect has missing dependencies: 'loadData' and 'timeframe'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+148:27  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/app/reservations/page.tsx
+9:5  Error: 'Search' is defined but never used.  @typescript-eslint/no-unused-vars
+13:5  Error: 'ArrowRight' is defined but never used.  @typescript-eslint/no-unused-vars
+17:5  Error: 'User' is defined but never used.  @typescript-eslint/no-unused-vars
+18:5  Error: 'History' is defined but never used.  @typescript-eslint/no-unused-vars
+19:5  Error: 'Printer' is defined but never used.  @typescript-eslint/no-unused-vars
+20:5  Error: 'RotateCcw' is defined but never used.  @typescript-eslint/no-unused-vars
+39:54  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+40:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+123:29  Error: 'error' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+123:29  Error: 'error' is never reassigned. Use 'const' instead.  prefer-const
+223:18  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/app/select-branch/page.tsx
+47:6  Warning: React Hook useEffect has a missing dependency: 'router'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+71:6  Warning: React Hook useMemo has a missing dependency: 'handleSelect'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/select-restaurant/page.tsx
+55:6  Warning: React Hook useEffect has a missing dependency: 'router'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+84:6  Warning: React Hook useMemo has a missing dependency: 'handleSelect'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/tables/page.tsx
+3:21  Error: 'useMemo' is defined but never used.  @typescript-eslint/no-unused-vars
+16:40  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+17:44  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+21:10  Error: 'role' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+55:6  Warning: React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+59:6  Warning: React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/auth/AuthGate.tsx
+77:21  Error: 'userData' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+100:37  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+124:37  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+175:6  Warning: React Hook useEffect has missing dependencies: 'enforceContext' and 'pathname'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/auth/NewLoginForm.tsx
+50:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+84:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+106:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+128:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+150:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+173:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+214:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/kds/KdsBoard.tsx
+8:10  Error: 'updateOrderItemsStatus' is defined but never used.  @typescript-eslint/no-unused-vars
+78:25  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+89:64  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+136:43  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+169:31  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+169:103  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+221:15  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+221:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+341:158  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/kds/KotHistory.tsx
+10:10  Error: 'Input' is defined but never used.  @typescript-eslint/no-unused-vars
+14:40  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+37:6  Warning: React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+56:31  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+57:32  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/layout/AppShell.tsx
+7:10  Error: 'Button' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/layout/Sidebar.tsx
+95:25  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/layout/UserMenu.tsx
+9:10  Error: 'RoleBadge' is defined but never used.  @typescript-eslint/no-unused-vars
+13:10  Error: 'branchRole' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+14:10  Error: 'restaurantRole' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/owner/BranchManager.tsx
+8:10  Error: 'getPrintingSettings' is defined but never used.  @typescript-eslint/no-unused-vars
+53:6  Warning: React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+85:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+110:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/owner/OwnershipTransfer.tsx
+4:37  Error: 'CheckCircle' is defined but never used.  @typescript-eslint/no-unused-vars
+47:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/owner/RestaurantManager.tsx
+38:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+52:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+63:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+145:25  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/owner/StaffManager.tsx
+23:44  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+49:50  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+51:34  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+57:6  Warning: React Hook useEffect has missing dependencies: 'branchId' and 'restaurantId'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+121:50  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+123:34  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+185:57  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/pos/OrderBoard.tsx
+9:3  Error: 'Timer' is defined but never used.  @typescript-eslint/no-unused-vars
+12:3  Error: 'Play' is defined but never used.  @typescript-eslint/no-unused-vars
+13:3  Error: 'Check' is defined but never used.  @typescript-eslint/no-unused-vars
+14:3  Error: 'Flag' is defined but never used.  @typescript-eslint/no-unused-vars
+33:40  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+151:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+246:50  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+254:95  Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.  react/no-unescaped-entities
+254:108  Error: `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`.  react/no-unescaped-entities
+
+./src/components/pos/PaymentModal.tsx
+4:35  Error: 'Smartphone' is defined but never used.  @typescript-eslint/no-unused-vars
+85:71  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+113:8  Warning: React Hook useEffect has missing dependencies: 'handleConfirm', 'handleQuickFill', and 'onClose'. Either include them or remove the dependency array. If 'onClose' changes too often, find the parent component that defines it and wrap that definition in useCallback.  react-hooks/exhaustive-deps
+122:31  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+128:28  Error: '_' is defined but never used.  @typescript-eslint/no-unused-vars
+146:28  Error: '_' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/pos/PosHistory.tsx
+16:53  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+58:6  Warning: React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+80:46  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+81:47  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+166:48  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/restaurant/RestaurantCard.tsx
+17:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+npm error Lifecycle script `build` failed with error:
+npm error code 1
+npm error path /Users/devacc/EZDinePro/apps/web
+npm error workspace @ezdine/web@1.13.1
+npm error location /Users/devacc/EZDinePro/apps/web
+npm error command failed
+npm error command sh -c next build

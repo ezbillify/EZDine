@@ -1,0 +1,116 @@
+
+> @ezdine/web@1.13.1 build
+> next build
+
+   ▲ Next.js 15.1.9
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+Failed to compile.
+
+./src/app/customers/page.tsx
+63:29  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/app/dashboard/page.tsx
+50:67  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+51:61  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/app/inventory/page.tsx
+57:25  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/app/login/page.tsx
+35:17  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/app/purchase/page.tsx
+91:36  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+98:37  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+279:43  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+298:44  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+299:40  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+302:50  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+329:65  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/app/q/[branchId]/page.tsx
+825:113  Error: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  react/no-unescaped-entities
+826:100  Error: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  react/no-unescaped-entities
+826:122  Error: `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`.  react/no-unescaped-entities
+
+./src/app/reservations/page.tsx
+15:5  Error: 'History' is defined but never used.  @typescript-eslint/no-unused-vars
+16:5  Error: 'RotateCcw' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/app/select-branch/page.tsx
+47:6  Warning: React Hook useEffect has a missing dependency: 'router'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+71:6  Warning: React Hook useMemo has a missing dependency: 'handleSelect'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/app/select-restaurant/page.tsx
+55:6  Warning: React Hook useEffect has a missing dependency: 'router'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+84:6  Warning: React Hook useMemo has a missing dependency: 'handleSelect'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./src/components/auth/AuthGate.tsx
+56:43  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+80:43  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/auth/NewLoginForm.tsx
+50:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+84:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+106:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+128:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+150:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+173:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+214:21  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/kds/KdsBoard.tsx
+89:64  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/kds/KotHistory.tsx
+10:10  Error: 'Input' is defined but never used.  @typescript-eslint/no-unused-vars
+14:40  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+37:6  Warning: React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+56:31  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+57:32  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/layout/AppShell.tsx
+7:10  Error: 'Button' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/layout/Sidebar.tsx
+95:25  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/layout/UserMenu.tsx
+9:10  Error: 'RoleBadge' is defined but never used.  @typescript-eslint/no-unused-vars
+13:10  Error: 'branchRole' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+14:10  Error: 'restaurantRole' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/owner/OwnershipTransfer.tsx
+4:37  Error: 'CheckCircle' is defined but never used.  @typescript-eslint/no-unused-vars
+47:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/owner/RestaurantManager.tsx
+38:19  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+52:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+63:14  Error: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+145:25  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./src/components/owner/StaffManager.tsx
+23:44  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+49:50  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+51:34  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+57:6  Warning: React Hook useEffect has missing dependencies: 'branchId' and 'restaurantId'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+121:50  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+123:34  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+185:57  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/components/restaurant/RestaurantCard.tsx
+17:11  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+npm error Lifecycle script `build` failed with error:
+npm error code 1
+npm error path /Users/devacc/EZDinePro/apps/web
+npm error workspace @ezdine/web@1.13.1
+npm error location /Users/devacc/EZDinePro/apps/web
+npm error command failed
+npm error command sh -c next build

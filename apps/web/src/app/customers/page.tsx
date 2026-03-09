@@ -10,7 +10,6 @@ import {
   Trophy,
   Calendar,
   Trash2,
-  MoreVertical,
   ChevronRight,
   Filter,
   Plus,
@@ -26,12 +25,20 @@ import { AppShell } from "../../components/layout/AppShell";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { Input } from "../../components/ui/Input";
-import { Section } from "../../components/ui/Section";
 import { supabase } from "../../lib/supabaseClient";
 import { getCurrentUserProfile } from "../../lib/tenant";
 
+type Customer = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  created_at: string;
+  branches?: { name: string };
+};
+
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -53,8 +60,8 @@ export default function CustomersPage() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setCustomers(data ?? []);
-    } catch (err) {
+      setCustomers((data as unknown as Customer[]) ?? []);
+    } catch (err: unknown) {
       console.error("Load customers error:", err);
       toast.error("Failed to load customers");
     } finally {
@@ -99,9 +106,10 @@ export default function CustomersPage() {
       setPhone("");
       setEmail("");
       loadCustomers();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Save customer error:", err);
-      toast.error(err.message || "Failed to save customer");
+      const msg = err instanceof Error ? err.message : "Failed to save customer";
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -119,7 +127,8 @@ export default function CustomersPage() {
       if (error) throw error;
       toast.success("Customer deleted");
       loadCustomers();
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error("Delete customer error:", err);
       toast.error("Delete failed");
     }
   };

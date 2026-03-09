@@ -5,6 +5,8 @@ export type PrintLine = {
   text: string;
   align?: "left" | "center" | "right";
   bold?: boolean;
+  height?: number;
+  width?: number;
 };
 
 export type PrintJob = {
@@ -12,6 +14,7 @@ export type PrintJob = {
   width: 58 | 80;
   type: "kot" | "invoice" | "token";
   lines: PrintLine[];
+  font?: "font-a" | "font-b";
 };
 
 const PRINTING_KEY = "printing";
@@ -19,12 +22,13 @@ const DOC_NUMBERING_KEY = "doc_numbering";
 
 export async function getPrintingSettings() {
   const DEFAULT_SETTINGS = {
-    bridgeUrl: 'http://localhost:8080',
-    printerIdInvoice: 'default-printer',
-    printerIdKot: 'default-printer',
+    bridgeUrl: 'http://localhost:4000',
+    printerIdInvoice: '127.0.0.1',
+    printerIdKot: '127.0.0.1',
     widthInvoice: 80,
-    widthKot: 58,
-    connectionType: 'browser', // Default to browser print for web
+    widthKot: 80,
+    connectionType: 'network', // Use Print Bridge automatically for silent printing
+    printFont: 'font-a',     // Add print font to settings
   };
 
   try {
@@ -46,12 +50,12 @@ export async function getPrintingSettings() {
     }
 
     return DEFAULT_SETTINGS;
-  } catch (err) {
+  } catch {
     return DEFAULT_SETTINGS;
   }
 }
 
-export async function savePrintingSettings(value: any) {
+export async function savePrintingSettings(value: Record<string, unknown>) {
   // TEMPORARY: Save to localStorage for immediate testing
   try {
     localStorage.setItem('ezdine_printer_settings', JSON.stringify(value));
@@ -99,7 +103,7 @@ export async function getDocNumberingSettings(restaurantId: string, branchId: st
 export async function saveDocNumberingSettings(
   restaurantId: string,
   branchId: string | null,
-  value: any
+  value: Record<string, unknown>
 ) {
   const { error } = await supabase.from("settings").upsert({
     restaurant_id: restaurantId,
@@ -111,14 +115,14 @@ export async function saveDocNumberingSettings(
 }
 
 export async function sendPrintJob(job: PrintJob) {
-  let baseUrl = 'http://localhost:8080';
+  let baseUrl = 'http://localhost:4000';
   try {
     const settings = await getPrintingSettings();
 
     // Direct Browser HTML Thermal Printing
     if (settings?.connectionType === 'browser') {
       console.log('Using direct browser HTML thermal printing', job);
-      const html = generateThermalHtml(job.lines, job.width);
+      const html = generateThermalHtml(job.lines, job.width, job.font);
 
       const iframe = document.createElement('iframe');
       iframe.style.display = 'none';
@@ -137,7 +141,7 @@ export async function sendPrintJob(job: PrintJob) {
       return true;
     }
 
-    baseUrl = settings?.bridgeUrl || process.env.NEXT_PUBLIC_PRINT_SERVER_URL || 'http://localhost:8080';
+    baseUrl = settings?.bridgeUrl || process.env.NEXT_PUBLIC_PRINT_SERVER_URL || 'http://localhost:4000';
 
     if (!baseUrl) {
       throw new Error("No print server URL configured. Please set up printer settings first.");
@@ -167,13 +171,14 @@ export async function sendPrintJob(job: PrintJob) {
     const result = await response.text();
     console.log('Print server response:', result);
     return true;
-  } catch (err: any) {
-    if (err.name === 'AbortError') {
+  } catch (err: unknown) {
+    const error = err as Error;
+    if (error.name === 'AbortError') {
       throw new Error("Print server timeout - check if server is running on the configured URL");
-    } else if (err.message?.includes('fetch')) {
+    } else if (error.message?.includes('fetch')) {
       throw new Error(`Cannot connect to print server at ${baseUrl}. Make sure the print server is running.`);
     } else {
-      throw new Error(`Print failed: ${err.message}`);
+      throw new Error(`Print failed: ${error.message}`);
     }
   }
 }
@@ -183,39 +188,60 @@ export function buildKotLines(input: {
   branchName: string;
   tableName?: string | null;
   orderId: string;
-  tokenNumber?: string | null;
+  tokenNumber?: string | number | null;
+  orderType?: string;
   items: { name: string; qty: number; notes?: string | null }[];
   paperWidth?: 58 | 80;
 }) {
-  const charCount = input.paperWidth === 80 ? 48 : 32;
-  const separator = "-".repeat(charCount);
+  const paperWidth = input.paperWidth || 58;
+  const charCount = paperWidth === 80 ? 48 : 32;
+  const singleDivider = "-".repeat(charCount);
+  const lines: PrintLine[] = [];
 
-  const lines: PrintLine[] = [
-    { text: input.restaurantName, align: "center", bold: true },
-    { text: `Branch: ${input.branchName}`, align: "center" },
-    { text: separator, align: "center" as const },
-  ];
-
+  // Ultra-compact header for ALL paper sizes - no company names to save space
+  lines.push({ text: "KITCHEN ORDER", align: 'center', bold: true });
   if (input.tokenNumber) {
-    lines.push({ text: `TOKEN: ${input.tokenNumber}`, align: "center" as const, bold: true });
-    lines.push({ text: separator, align: "center" as const });
+    lines.push({ text: `TOKEN: ${input.tokenNumber}`, align: 'center', bold: true, height: 2, width: 2 });
   }
 
-  lines.push({ text: "KITCHEN ORDER TICKET", align: "center", bold: true });
-  lines.push({ text: separator, align: "center" });
-  lines.push({ text: `Order: ${input.orderId.slice(0, 8).toUpperCase()}`, align: "center" });
-  lines.push({ text: `Table: ${input.tableName || "N/A"}`, align: "center", bold: true });
-  lines.push({ text: `Date: ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')}`, align: "center" });
-  lines.push({ text: separator, align: "center" });
+  // Combine table and time in one line for all paper sizes
+  const now = new Date();
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
 
+  if (input.tableName) {
+    const tableTimeLine = `TBL:${input.tableName.toUpperCase()} | ${timeStr}`;
+    // For smaller papers, split if too long
+    if (paperWidth < 80 && tableTimeLine.length > charCount) {
+      lines.push({ text: `TBL: ${input.tableName.toUpperCase()}`, align: 'center', bold: true });
+      lines.push({ text: `TIME: ${timeStr}`, align: 'center', bold: true });
+    } else {
+      lines.push({ text: tableTimeLine, align: 'center', bold: true });
+    }
+  } else {
+    lines.push({ text: timeStr, align: 'center', bold: true });
+  }
+  lines.push({ text: singleDivider, align: 'center' });
+
+  // Ultra-compact items list for ALL paper sizes
   input.items.forEach((item) => {
-    lines.push({ text: `${item.qty} x ${item.name}`, align: "left", bold: true });
-    if (item.notes) {
-      lines.push({ text: `  * ${item.notes}`, align: "left" });
+    const name = (item.name || "Item").toUpperCase();
+    const qty = item.qty || 1;
+
+    // Compact format for all paper sizes
+    const shortName = name.length > (paperWidth === 80 ? 25 : 20) ?
+      name.substring(0, paperWidth === 80 ? 23 : 18) + ".." : name;
+    lines.push({ text: `${qty}x ${shortName}`, align: 'left', bold: true });
+
+    // Only add notes if they exist and are short
+    const notes = item.notes || "";
+    if (notes.trim().length > 0 && notes.trim().length <= 20) {
+      lines.push({ text: `  ${notes.trim().toUpperCase()}`, align: 'left' });
     }
   });
 
-  lines.push({ text: separator, align: "center" });
+  // Minimal footer - no extra spacing
+  lines.push({ text: singleDivider, align: 'center' });
+
   return lines;
 }
 
@@ -247,48 +273,102 @@ export function buildTokenSlipLines(input: {
 export function buildInvoiceLines(input: {
   restaurantName: string;
   branchName: string;
+  branchAddress?: string;
+  gstin?: string;
+  fssai?: string;
+  phone?: string;
   billId: string;
   tokenNumber?: string | number | null;
-  items: { name: string; qty: number; price: number }[];
+  customerName?: string | null;
+  tableName?: string | null;
+  orderType?: string;
+  items: { name: string; qty: number; price: number; hsn_code?: string }[];
   subtotal: number;
   tax: number;
   total: number;
   paperWidth?: 58 | 80;
 }) {
-  const charCount = input.paperWidth === 80 ? 48 : 32;
-  const separator = "-".repeat(charCount);
+  const paperWidth = input.paperWidth || 58;
+  const charCount = paperWidth === 80 ? 48 : 32;
+  const singleDivider = "-".repeat(charCount);
+  const lines: PrintLine[] = [];
 
-  const lines: PrintLine[] = [
-    { text: input.restaurantName, align: "center", bold: true },
-    { text: input.branchName, align: "center" },
-    { text: separator, align: "center" },
-  ];
+  // Restaurant Name
+  lines.push({ text: input.restaurantName.toUpperCase(), align: 'center', bold: true });
 
-  if (input.tokenNumber) {
-    lines.push({ text: `TOKEN: ${input.tokenNumber}`, align: "center" as const, bold: true });
-    lines.push({ text: separator, align: "center" as const });
+  // Branch
+  if (input.branchName) {
+    lines.push({ text: input.branchName, align: 'center' });
   }
 
-  lines.push({ text: `INVOICE: ${input.billId.toUpperCase()}`, align: "center", bold: true });
-  lines.push({ text: `Date: ${new Date().toLocaleDateString()} ${new Date().getHours().toString().padStart(2, '0')}:${new Date().getMinutes().toString().padStart(2, '0')}`, align: "center" });
-  lines.push({ text: separator, align: "center" });
+  // Address
+  if (input.branchAddress && input.branchAddress.length > 0) {
+    lines.push({ text: input.branchAddress, align: 'center' });
+  }
+
+  // Mobile Number
+  if (input.phone && input.phone.length > 0) {
+    lines.push({ text: `PH: ${input.phone}`, align: 'center' });
+  }
+
+  lines.push({ text: singleDivider, align: 'center' });
+
+  // Bill Number and Time
+  const now = new Date();
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+  lines.push({ text: `BILL NO: ${input.billId.toUpperCase()} | TIME: ${timeStr}`, align: 'center', bold: true });
+
+  // Token Number
+  if (input.tokenNumber) {
+    lines.push({ text: `TOKEN NO: ${input.tokenNumber}`, align: 'center', bold: true });
+  }
+
+  lines.push({ text: singleDivider, align: 'center' });
+
+  // Item Name Qty and Price
+  const headerItem = "ITEM".padEnd(paperWidth === 80 ? 24 : 14);
+  const headerQty = "QTY".padStart(paperWidth === 80 ? 4 : 3);
+  const headerPrice = "PRICE".padStart(paperWidth === 80 ? 8 : 6);
+  const headerTotal = "TOTAL".padStart(paperWidth === 80 ? 9 : 6);
+  const headerStr = `${headerItem} ${headerQty} ${headerPrice} ${headerTotal}`;
+  lines.push({ text: headerStr, align: 'left', bold: true });
+  lines.push({ text: singleDivider, align: 'center' });
 
   input.items.forEach((item) => {
-    const qtyTotal = (item.qty * item.price).toFixed(2);
-    let row = `${item.qty} x ${item.name}`;
-    const maxRowLen = charCount - qtyTotal.length - 1;
-    if (row.length > maxRowLen) row = row.slice(0, maxRowLen - 3) + "...";
-    const padding = " ".repeat(Math.max(1, charCount - row.length - qtyTotal.length));
-    lines.push({ text: `${row}${padding}${qtyTotal}`, align: "left" });
+    const name = (item.name || "Item").toUpperCase();
+    const qty = item.qty || 1;
+    const price = item.price || 0.0;
+    const amt = price * qty;
+
+    if (paperWidth === 80) {
+      const shortName = name.length > 24 ? name.substring(0, 22) + ".." : name.padEnd(24);
+      const qtyStr = qty.toString().padStart(4);
+      const priceStr = price.toFixed(2).padStart(8);
+      const totalStr = amt.toFixed(2).padStart(9);
+
+      const itemLine = `${shortName} ${qtyStr} ${priceStr} ${totalStr}`;
+      lines.push({ text: itemLine, align: 'left' });
+    } else {
+      const shortName = name.length > 14 ? name.substring(0, 12) + ".." : name.padEnd(14);
+      const qtyStr = qty.toString().padStart(3);
+      const priceStr = price.toFixed(2).padStart(6);
+      const totalStr = amt.toFixed(2).padStart(6);
+
+      const itemLine = `${shortName} ${qtyStr} ${priceStr} ${totalStr}`;
+      lines.push({ text: itemLine, align: 'left' });
+    }
   });
 
-  lines.push({ text: separator, align: "center" });
-  lines.push({ text: `Subtotal: ${input.subtotal.toFixed(2)}`, align: "right" });
-  if (input.tax > 0) lines.push({ text: `Tax: ${input.tax.toFixed(2)}`, align: "right" });
-  lines.push({ text: separator, align: "center" });
-  lines.push({ text: `TOTAL: ${input.total.toFixed(2)}`, align: "center", bold: true });
-  lines.push({ text: separator, align: "center" });
-  lines.push({ text: "Thank you for dining with us!", align: "center" });
+  lines.push({ text: singleDivider, align: 'center' });
+
+  // Grand Total
+  const totalLabel = "GRAND TOTAL";
+  const totalVal = `Rs. ${input.total.toFixed(2)}`;
+  const totalPad = Math.max(1, charCount - totalLabel.length - totalVal.length);
+  lines.push({ text: `${totalLabel}${" ".repeat(totalPad)}${totalVal}`, align: 'left', bold: true });
+
+  lines.push({ text: singleDivider, align: 'center' });
+  lines.push({ text: "THANK YOU", align: 'center', bold: true });
 
   return lines;
 }
@@ -296,62 +376,84 @@ export function buildInvoiceLines(input: {
 export function buildConsolidatedReceiptLines(input: {
   restaurantName: string;
   branchName: string;
+  branchAddress?: string;
+  gstin?: string;
+  fssai?: string;
+  phone?: string;
   tableName?: string | null;
   orderId: string;
-  tokenNumber?: string | null;
+  tokenNumber?: string | number | null;
+  customerName?: string | null;
   orderType: string;
-  items: { name: string; qty: number; price: number; notes?: string | null }[];
+  items: { name: string; qty: number; price: number; hsn_code?: string; notes?: string | null }[];
   subtotal: number;
   tax: number;
   total: number;
   paperWidth?: 58 | 80;
 }) {
-  const charCount = input.paperWidth === 80 ? 48 : 32;
-  const separator = "-".repeat(charCount);
+  const invoiceLines = buildInvoiceLines({
+    restaurantName: input.restaurantName,
+    branchName: input.branchName,
+    branchAddress: input.branchAddress,
+    gstin: input.gstin,
+    fssai: input.fssai,
+    phone: input.phone,
+    billId: input.orderId,
+    tokenNumber: input.tokenNumber,
+    customerName: input.customerName,
+    tableName: input.tableName,
+    orderType: input.orderType,
+    items: input.items,
+    subtotal: input.subtotal,
+    tax: input.tax,
+    total: input.total,
+    paperWidth: input.paperWidth,
+  });
+
+  const kotLines = buildKotLines({
+    restaurantName: input.restaurantName,
+    branchName: input.branchName,
+    orderId: input.orderId,
+    tableName: input.tableName,
+    tokenNumber: input.tokenNumber,
+    items: input.items,
+    orderType: input.orderType,
+    paperWidth: input.paperWidth,
+  });
+
   const lines: PrintLine[] = [];
+  lines.push(...invoiceLines);
 
-  // --- SECTION 1: KOT ---
-  lines.push({ text: "KITCHEN ORDER (COPY)", align: "center", bold: true });
-  if (input.tokenNumber) lines.push({ text: `TOKEN: ${input.tokenNumber}`, align: "center", bold: true });
-  if (input.tableName) lines.push({ text: `TABLE: ${input.tableName}`, align: "center", bold: true });
-  lines.push({ text: `Order: ${input.orderId.slice(0, 8).toUpperCase()} | ${new Date().getHours()}:${new Date().getMinutes()}`, align: "center" });
+  const charCount = input.paperWidth === 80 ? 48 : 32;
+  lines.push({ text: "-".repeat(charCount), align: "center" });
 
-  input.items.forEach((item) => {
-    lines.push({ text: `${item.qty} x ${item.name}`, align: "left", bold: true });
-  });
-
-  // --- DIVIDER LINE ---
-  lines.push({ text: separator, align: "center" });
-
-  // --- SECTION 2: BILL ---
-  lines.push({ text: input.restaurantName, align: "center", bold: true });
-  lines.push({ text: "CUSTOMER INVOICE", align: "center" });
-
-  input.items.forEach((item) => {
-    const qtyTotal = (item.qty * item.price).toFixed(2);
-    let row = `${item.qty} x ${item.name}`;
-    const maxRowLen = charCount - qtyTotal.length - 1;
-    if (row.length > maxRowLen) row = row.slice(0, maxRowLen - 3) + "...";
-    const padding = " ".repeat(Math.max(1, charCount - row.length - qtyTotal.length));
-    lines.push({ text: `${row}${padding}${qtyTotal}`, align: "left" });
-  });
-
-  lines.push({ text: separator, align: "center" });
-  lines.push({ text: `TOTAL: ${input.total.toFixed(2)}`, align: "center", bold: true });
-  lines.push({ text: "Thank you!", align: "center" });
+  lines.push(...kotLines);
 
   return lines;
 }
 
-export function generateThermalHtml(lines: PrintLine[], width: 58 | 80 = 80) {
-  const pixelWidth = width === 58 ? 240 : 320;
+export function generateThermalHtml(lines: PrintLine[], width: 58 | 80 = 80, font?: "font-a" | "font-b") {
+  const isFontB = font === 'font-b';
 
   const content = lines.map(line => {
+    // Detect if line is a divider
+    const isDivider = line.text && /^[-=]{3,}$/.test(line.text.trim());
+
+    if (isDivider) {
+      return `<div style="border-top: 1px dashed #000; margin: 4px 0; width: 100%;"></div>`;
+    }
+
     const alignClass = line.align === 'center' ? 'text-center' : line.align === 'right' ? 'text-right' : 'text-left';
     const weightClass = line.bold ? 'font-bold' : 'font-normal';
-    const fontSize = line.bold ? '12px' : '11px';
 
-    return `<div class="${alignClass} ${weightClass}" style="font-size: ${fontSize}; line-height: 1.2; letter-spacing: -0.5px;">${line.text || '&nbsp;'}</div>`;
+    // Scale font based on bold/width and font preference
+    const baseSize = isFontB ? 9 : 11;
+    const boldSize = isFontB ? 11 : 13;
+    const fontSize = line.bold ? `${boldSize}px` : `${baseSize}px`;
+    const lineHeight = line.bold ? '1.4' : '1.2';
+    const letterSpacing = isFontB ? '-0.5px' : 'normal';
+
+    return `<div class="${alignClass} ${weightClass}" style="font-size: ${fontSize}; line-height: ${lineHeight}; letter-spacing: ${letterSpacing}; white-space: pre-wrap; word-break: break-word;">${line.text || '&nbsp;'}</div>`;
   }).join('');
 
   return `
@@ -360,14 +462,23 @@ export function generateThermalHtml(lines: PrintLine[], width: 58 | 80 = 80) {
       <head>
         <meta charset="UTF-8">
         <style>
-          @page { margin: 0; }
+          @page { 
+            margin: 0; 
+            size: ${width}mm auto;
+          }
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
           body {
             font-family: 'Courier New', Courier, monospace;
             margin: 0;
-            padding: 20px;
-            width: ${pixelWidth}px;
+            padding: 4mm;
+            width: ${width}mm;
             background: white;
             color: black;
+            -webkit-print-color-adjust: exact;
           }
           .text-center { text-align: center; }
           .text-right { text-align: right; }
@@ -375,23 +486,24 @@ export function generateThermalHtml(lines: PrintLine[], width: 58 | 80 = 80) {
           .font-bold { font-weight: bold; }
           .font-normal { font-weight: normal; }
           
-          hr.divider {
-            border: none;
-            border-top: 1px dashed black;
-            margin: 4px 0;
-            width: 100%;
-          }
-
           @media print {
-            body { padding: 0; }
+            body { 
+              padding: 0;
+              width: ${width}mm;
+            }
+            .no-print { display: none; }
           }
         </style>
       </head>
       <body>
-        ${content}
+        <div style="width: 100%;">
+          ${content}
+        </div>
         <script>
           window.onload = () => {
-            window.print();
+            setTimeout(() => {
+              window.print();
+            }, 500);
           };
         </script>
       </body>

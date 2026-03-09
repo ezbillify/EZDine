@@ -11,24 +11,24 @@ app.use(bodyParser.json());
 const PORT = 4000;
 
 function getLocalIPs() {
-    const interfaces = os.networkInterfaces();
-    const addresses = [];
-    for (const name of Object.keys(interfaces)) {
-        for (const iface of interfaces[name]) {
-            // Skip internal (i.e. 127.0.0.1) and non-ipv4 addresses
-            if (iface.family === 'IPv4' && !iface.internal) {
-                addresses.push(iface.address);
-            }
-        }
+  const interfaces = os.networkInterfaces();
+  const addresses = [];
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Skip internal (i.e. 127.0.0.1) and non-ipv4 addresses
+      if (iface.family === 'IPv4' && !iface.internal) {
+        addresses.push(iface.address);
+      }
     }
-    return addresses;
+  }
+  return addresses;
 }
 
 app.get('/', (req, res) => {
-    const ips = getLocalIPs();
-    const ipList = ips.map(ip => `<li><strong>${ip}</strong></li>`).join('');
+  const ips = getLocalIPs();
+  const ipList = ips.map(ip => `<li><strong>${ip}</strong></li>`).join('');
 
-    res.send(`
+  res.send(`
     <html>
       <body style="font-family: sans-serif; padding: 2rem; text-align: center;">
         <div style="border: 2px solid #000; padding: 20px; display: inline-block; border-radius: 10px;">
@@ -47,53 +47,59 @@ app.get('/', (req, res) => {
 });
 
 app.post('/print', (req, res) => {
-    const { printerId, lines } = req.body;
-    console.log(`Print Job Received for: ${printerId}`);
+  const { printerId, lines, font } = req.body;
+  console.log(`Print Job Received for: ${printerId} using font: ${font || 'default'}`);
 
-    let targetHost = printerId;
-    if (!targetHost || targetHost.indexOf('.') === -1) {
-        if (targetHost === 'usb' || targetHost === 'localhost') {
-            targetHost = '127.0.0.1';
-        } else {
-            console.log("Invalid IP, defaulting to localhost simulation.");
-            targetHost = '127.0.0.1';
-        }
+  let targetHost = printerId || '127.0.0.1';
+
+  // If it's a logical name (no dots), default to 127.0.0.1 for local USB bridge
+  // Unless it's 'usb' or 'localhost' specifically.
+  if (targetHost.indexOf('.') === -1 && targetHost !== 'localhost') {
+    console.log(`Logical Printer Name Detected: ${targetHost}. Mapping to local bridge listener.`);
+    targetHost = '127.0.0.1';
+  }
+
+  const client = new net.Socket();
+  const PRINTER_PORT = 9100;
+
+  client.connect(PRINTER_PORT, targetHost, () => {
+    console.log(`Connected to Printer at ${targetHost}:${PRINTER_PORT}`);
+    client.write(Buffer.from([0x1B, 0x40])); // Init
+
+    // Set global font A or B
+    if (font === 'font-b') {
+      client.write(Buffer.from([0x1B, 0x4D, 1])); // Select Font B (condensed)
+    } else {
+      client.write(Buffer.from([0x1B, 0x4D, 0])); // Select Font A (standard)
     }
 
-    const client = new net.Socket();
-    const PRINTER_PORT = 9100;
+    lines.forEach(line => {
+      let mode = 0;
+      if (line.bold) mode += 8;
+      client.write(Buffer.from([0x1B, 0x21, mode]));
 
-    client.connect(PRINTER_PORT, targetHost, () => {
-        console.log(`Connected to Printer at ${targetHost}:${PRINTER_PORT}`);
-        client.write(Buffer.from([0x1B, 0x40])); // Init
+      let align = 0;
+      if (line.align === 'center') align = 1;
+      if (line.align === 'right') align = 2;
+      client.write(Buffer.from([0x1B, 0x61, align]));
 
-        lines.forEach(line => {
-            let mode = 0;
-            if (line.bold) mode += 8;
-            client.write(Buffer.from([0x1B, 0x21, mode]));
-
-            let align = 0;
-            if (line.align === 'center') align = 1;
-            if (line.align === 'right') align = 2;
-            client.write(Buffer.from([0x1B, 0x61, align]));
-
-            client.write(line.text + '\n');
-        });
-
-        client.write(Buffer.from([0x1D, 0x56, 66, 0])); // Cut
-        client.end();
-        res.json({ success: true });
+      client.write(line.text + '\n');
     });
 
-    client.on('error', (err) => {
-        console.error(`Printer Connection Failed (${targetHost}):`, err.message);
-        res.status(500).json({ error: "Printer Connection Failed: " + err.message });
-    });
+    client.write(Buffer.from([0x1D, 0x56, 66, 0])); // Cut
+    client.end();
+    res.json({ success: true });
+  });
+
+  client.on('error', (err) => {
+    console.error(`Printer Connection Failed (${targetHost}):`, err.message);
+    res.status(500).json({ error: "Printer Connection Failed: " + err.message });
+  });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-    const ips = getLocalIPs();
-    console.log(`
+  const ips = getLocalIPs();
+  console.log(`
   ▒█▀▀▀ ▒█▀▀▀█ ▒█▀▀▄ ▒█▀▀▀█ ▒█▄░▒█ ▒█▀▀▀
   ▒█▀▀▀ ░▄▄▄▀▀ ▒█░▒█ ░▀▀▀▄▄ ▒█▒█▒█ ▒█▀▀▀
   ▒█▄▄▄ ▒█▄▄▄█ ▒█▄▄▀ ▒█▄▄▄█ ▒█░░▀█ ▒█▄▄▄

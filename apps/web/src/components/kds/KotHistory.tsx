@@ -1,22 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import { buildKotLines, getPrintingSettings, sendPrintJob } from "../../lib/printing";
 import { getCurrentUserProfile } from "../../lib/tenant";
 import { supabase } from "../../lib/supabaseClient";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
-import { Input } from "../ui/Input";
 import { DatePicker } from "../ui/DatePicker";
 
+interface Order {
+  id: string;
+  order_number: string;
+  table_id: string | null;
+  created_at: string;
+}
+
+interface OrderItem {
+  item_id: string;
+  quantity: number;
+  notes?: string;
+}
+
+interface MenuItem {
+  id: string;
+  name: string;
+}
+
 export function KotHistory() {
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const today = new Date().toISOString().slice(0, 10);
   const [from, setFrom] = useState<string>(today);
   const [to, setTo] = useState<string>(today);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const profile = await getCurrentUserProfile();
     if (!profile?.active_branch_id) return;
 
@@ -29,35 +46,37 @@ export function KotHistory() {
       .order("created_at", { ascending: false })
       .limit(50);
 
-    setOrders(data ?? []);
-  };
+    setOrders((data as unknown as Order[]) ?? []);
+  }, [from, to]);
 
   useEffect(() => {
     load();
-  }, [from, to]);
+  }, [load]);
 
   const reprint = async (orderId: string, orderNumber: string) => {
     const settings = await getPrintingSettings();
     if (!settings) return;
 
-    const { data: items } = await supabase
+    const { data: itemsData } = await supabase
       .from("order_items")
       .select("item_id,quantity,notes")
       .eq("order_id", orderId);
 
-    const { data: menu } = await supabase.from("menu_items").select("id,name");
+    const items = (itemsData as unknown as OrderItem[]) || [];
+
+    const { data: menuData } = await supabase.from("menu_items").select("id,name");
+    const menu = (menuData as unknown as MenuItem[]) || [];
 
     const lines = buildKotLines({
       restaurantName: "EZDine",
       branchName: "Branch",
       tableName: "--",
       orderId: orderNumber,
-      items:
-        (items ?? []).map((i: any) => ({
-          name: menu?.find((m: any) => m.id === i.item_id)?.name ?? "Item",
-          qty: i.quantity,
-          note: i.notes
-        })) ?? []
+      items: items.map(i => ({
+        name: menu?.find(m => m.id === i.item_id)?.name ?? "Item",
+        qty: i.quantity,
+        note: i.notes
+      })) ?? []
     });
 
     await sendPrintJob({

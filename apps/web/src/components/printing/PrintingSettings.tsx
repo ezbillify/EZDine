@@ -9,77 +9,23 @@ import { toast } from "sonner";
 const PrintingSettings: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [userContext, setUserContext] = useState<{
-    restaurantId?: string;
-    branchId?: string;
-    restaurantName?: string;
-    branchName?: string;
-  }>({});
   const [settings, setSettings] = useState({
-    bridgeUrl: 'http://localhost:8080',
-    printerIdInvoice: 'default-printer',
-    printerIdKot: 'default-printer',
+    bridgeUrl: 'http://localhost:4000',
+    printerIdInvoice: '127.0.0.1',
+    printerIdKot: '127.0.0.1',
     widthInvoice: 80,
     widthKot: 80,
     connectionType: 'network',
     printerName: '',
     ipAddress: '',
-    bluetoothAddress: ''
+    bluetoothAddress: '',
+    consolidatedPrinting: true,
+    printFont: 'font-a'
   });
 
   useEffect(() => {
-    loadUserContext();
     loadSettings();
   }, []);
-
-  const loadUserContext = async () => {
-    try {
-      const { getCurrentUserProfile, getAccessibleRestaurants, getAccessibleBranches } = await import("../../lib/tenant");
-      const profile = await getCurrentUserProfile();
-
-      if (profile) {
-        let restaurantName = '';
-        let branchName = '';
-
-        // Get restaurant name if active_restaurant_id exists
-        if (profile.active_restaurant_id) {
-          try {
-            const restaurants = await getAccessibleRestaurants();
-            const restaurant = restaurants.find(r => r.id === profile.active_restaurant_id);
-            restaurantName = restaurant?.name || '';
-          } catch (err) {
-            if (typeof window !== 'undefined' && window.console) {
-              window.console.warn('Failed to load restaurant name:', err);
-            }
-          }
-        }
-
-        // Get branch name if active_branch_id exists
-        if (profile.active_branch_id) {
-          try {
-            const branches = await getAccessibleBranches(profile.active_restaurant_id || undefined);
-            const branch = branches.find(b => b.id === profile.active_branch_id);
-            branchName = branch?.name || '';
-          } catch (err) {
-            if (typeof window !== 'undefined' && window.console) {
-              window.console.warn('Failed to load branch name:', err);
-            }
-          }
-        }
-
-        setUserContext({
-          restaurantId: profile.active_restaurant_id || undefined,
-          branchId: profile.active_branch_id || undefined,
-          restaurantName,
-          branchName
-        });
-      }
-    } catch (err) {
-      if (typeof window !== 'undefined' && window.console) {
-        window.console.error('Failed to load user context:', err);
-      }
-    }
-  };
 
   const loadSettings = async () => {
     try {
@@ -94,15 +40,17 @@ const PrintingSettings: React.FC = () => {
 
       if (saved) {
         setSettings({
-          bridgeUrl: saved.bridgeUrl || 'http://localhost:8080',
-          printerIdInvoice: saved.printerIdInvoice || 'default-printer',
-          printerIdKot: saved.printerIdKot || 'default-printer',
+          bridgeUrl: saved.bridgeUrl || 'http://localhost:4000',
+          printerIdInvoice: saved.printerIdInvoice || '127.0.0.1',
+          printerIdKot: saved.printerIdKot || '127.0.0.1',
           widthInvoice: saved.widthInvoice || 80,
           widthKot: saved.widthKot || 80,
           connectionType: saved.connectionType || 'network',
           printerName: saved.printerName || '',
           ipAddress: saved.ipAddress || '',
-          bluetoothAddress: saved.bluetoothAddress || ''
+          bluetoothAddress: saved.bluetoothAddress || '',
+          consolidatedPrinting: saved.consolidatedPrinting !== false,
+          printFont: saved.printFont || 'font-a'
         });
       }
     } catch (err) {
@@ -121,8 +69,7 @@ const PrintingSettings: React.FC = () => {
         window.console.log('Attempting to save settings:', settings);
       }
 
-      // Save directly - no user context required for localStorage
-      const result = await savePrintingSettings(settings);
+      await savePrintingSettings(settings);
       if (typeof window !== 'undefined' && window.console) {
         window.console.log('Settings saved successfully');
       }
@@ -130,36 +77,11 @@ const PrintingSettings: React.FC = () => {
       setSaveSuccess(true);
       toast.success('Printer settings saved successfully!');
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (err: any) {
-      // Log error details for debugging
+    } catch (err) {
       if (typeof window !== 'undefined' && window.console) {
-        window.console.error('Failed to save settings - Full error object:', err);
-        window.console.error('Error name:', err?.constructor?.name);
-        window.console.error('Error message:', err?.message);
-        window.console.error('Error stack:', err?.stack);
+        window.console.error('Failed to save settings:', err);
       }
-
-      let errorMessage = 'Unknown error occurred';
-      if (err instanceof Error) {
-        errorMessage = err.message;
-      } else if (typeof err === 'string') {
-        errorMessage = err;
-      } else if (err && typeof err === 'object') {
-        // Handle Supabase errors which might have nested error structures
-        if ('message' in err) {
-          errorMessage = String(err.message);
-        } else if ('error' in err && typeof err.error === 'string') {
-          errorMessage = err.error;
-        } else if ('details' in err && typeof err.details === 'string') {
-          errorMessage = err.details;
-        } else {
-          errorMessage = JSON.stringify(err);
-        }
-      }
-
-      if (typeof window !== 'undefined' && window.console) {
-        window.console.error('Final error message to show user:', errorMessage);
-      }
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
       toast.error('Failed to save settings: ' + errorMessage);
     } finally {
       setIsLoading(false);
@@ -169,15 +91,14 @@ const PrintingSettings: React.FC = () => {
   const testPrintServer = async () => {
     try {
       const currentSettings = await getPrintingSettings();
-      const serverUrl = currentSettings?.bridgeUrl || 'http://localhost:8080';
+      const serverUrl = currentSettings?.bridgeUrl || 'http://localhost:4000';
 
       if (typeof window !== 'undefined' && window.console) {
         window.console.log('Testing print server at:', serverUrl);
       }
 
-      // Test print server connectivity with timeout
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
       const response = await fetch(`${serverUrl}/health`, {
         signal: controller.signal
@@ -190,17 +111,12 @@ const PrintingSettings: React.FC = () => {
       } else {
         toast.error(`Print server responded with error: ${response.status}`);
       }
-    } catch (err: any) {
-      if (typeof window !== 'undefined' && window.console) {
-        window.console.error('Print server test failed:', err);
-      }
-
-      if (err.name === 'AbortError') {
+    } catch (err) {
+      const error = err as Error;
+      if (error.name === 'AbortError') {
         toast.error('Print server timeout - server may not be running');
-      } else if (err.message?.includes('fetch') || err.message?.includes('Failed to fetch')) {
-        toast.error(`Cannot connect to print server. Make sure it's running at ${settings.bridgeUrl}`);
       } else {
-        toast.error(`Print server test failed: ${err.message}`);
+        toast.error(`Print server test failed: ${error.message}`);
       }
     }
   };
@@ -208,14 +124,11 @@ const PrintingSettings: React.FC = () => {
   const testPrint = async () => {
     try {
       const currentSettings = await getPrintingSettings();
-      console.log('Current printing settings:', currentSettings);
-
       if (!currentSettings) {
         toast.error('No printer settings configured');
         return;
       }
 
-      // Test print job
       const testLines = [
         { text: "=== TEST PRINT ===", align: "center" as const, bold: true },
         { text: "EZDine POS System", align: "center" as const },
@@ -225,10 +138,11 @@ const PrintingSettings: React.FC = () => {
       ];
 
       const success = await sendPrintJob({
-        printerId: currentSettings.printerIdInvoice || 'default-printer',
+        printerId: currentSettings.printerIdInvoice || '127.0.0.1',
         width: currentSettings.widthInvoice || 80,
         type: 'invoice',
-        lines: testLines
+        lines: testLines,
+        font: settings.printFont as "font-a" | "font-b" | undefined
       });
 
       if (success) {
@@ -237,7 +151,6 @@ const PrintingSettings: React.FC = () => {
         toast.error('Test print failed - check printer connection');
       }
     } catch (err) {
-      console.error('Test print failed:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       toast.error('Test print failed: ' + errorMessage);
     }
@@ -250,87 +163,60 @@ const PrintingSettings: React.FC = () => {
           <div>
             <h2 className="text-xl font-black mb-2">Printer Setup</h2>
             <p className="text-slate-300 text-sm">Configure your thermal printers for POS system</p>
-            <div className="mt-2 px-2 py-1 bg-orange-500 text-white text-xs font-bold rounded">
-              TEMPORARY: Using localStorage (Supabase setup not required)
-            </div>
-          </div>
-          <div className="text-right text-xs text-slate-400">
-            <div>Mode: Local Storage</div>
-            <div className="mt-1 px-2 py-1 rounded text-xs font-bold bg-green-500 text-white">
-              Ready to Test
-            </div>
           </div>
         </div>
       </div>
 
       <div className="p-6 space-y-6">
-        <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-              <span className="text-white text-sm font-bold">✓</span>
-            </div>
-            <div>
-              <h4 className="font-bold text-green-900 text-sm">Ready to Test</h4>
-              <p className="text-green-700 text-sm mt-1">
-                Settings are now saved locally. Configure your printer and test immediately!
-              </p>
-            </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">Billing Printer (IP or Name)</label>
+            <input
+              type="text"
+              value={settings.printerIdInvoice}
+              onChange={(e) => setSettings(prev => ({ ...prev, printerIdInvoice: e.target.value }))}
+              placeholder="127.0.0.1 or 'billing'"
+              className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">Kitchen Printer (IP or Name)</label>
+            <input
+              type="text"
+              value={settings.printerIdKot}
+              onChange={(e) => setSettings(prev => ({ ...prev, printerIdKot: e.target.value }))}
+              placeholder="127.0.0.1 or 'kitchen'"
+              className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            />
           </div>
         </div>
 
-        {settings.connectionType !== 'browser' && (
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2">Print Server URL</label>
-            <input
-              type="text"
-              value={settings.bridgeUrl}
-              onChange={(e) => setSettings(prev => ({ ...prev, bridgeUrl: e.target.value }))}
-              placeholder="http://localhost:8080"
-              className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-            />
-            <p className="text-xs text-slate-500 mt-1">URL of your print server or bridge application</p>
-          </div>
-        )}
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-2">Print Server (Bridge) URL</label>
+          <input
+            type="text"
+            value={settings.bridgeUrl}
+            onChange={(e) => setSettings(prev => ({ ...prev, bridgeUrl: e.target.value }))}
+            placeholder="http://localhost:4000"
+            className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+          />
+        </div>
 
         <div>
           <label className="block text-sm font-bold text-slate-700 mb-3">Connection Method</label>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <button
-              onClick={() => setSettings(prev => ({ ...prev, connectionType: 'browser' }))}
-              className={`p-4 rounded-xl border-2 text-center transition-all ${settings.connectionType === 'browser'
-                ? 'border-brand-300 bg-brand-50'
-                : 'border-slate-200 hover:border-slate-300'
-                }`}
-            >
-              <div className="font-bold">Browser Print</div>
-            </button>
-            <button
-              onClick={() => setSettings(prev => ({ ...prev, connectionType: 'network' }))}
-              className={`p-4 rounded-xl border-2 text-center transition-all ${settings.connectionType === 'network'
-                ? 'border-brand-300 bg-brand-50'
-                : 'border-slate-200 hover:border-slate-300'
-                }`}
-            >
-              <div className="font-bold">Network</div>
-            </button>
-            <button
-              onClick={() => setSettings(prev => ({ ...prev, connectionType: 'bluetooth' }))}
-              className={`p-4 rounded-xl border-2 text-center transition-all ${settings.connectionType === 'bluetooth'
-                ? 'border-brand-300 bg-brand-50'
-                : 'border-slate-200 hover:border-slate-300'
-                }`}
-            >
-              <div className="font-bold">Bluetooth</div>
-            </button>
-            <button
-              onClick={() => setSettings(prev => ({ ...prev, connectionType: 'ip' }))}
-              className={`p-4 rounded-xl border-2 text-center transition-all ${settings.connectionType === 'ip'
-                ? 'border-brand-300 bg-brand-50'
-                : 'border-slate-200 hover:border-slate-300'
-                }`}
-            >
-              <div className="font-bold">IP Address</div>
-            </button>
+            {['browser', 'network', 'bluetooth', 'ip'].map((type) => (
+              <button
+                key={type}
+                onClick={() => setSettings(prev => ({ ...prev, connectionType: type }))}
+                className={`p-4 rounded-xl border-2 text-center capitalize transition-all ${settings.connectionType === type
+                  ? 'border-brand-300 bg-brand-50 font-bold'
+                  : 'border-slate-200 hover:border-slate-300 font-medium'
+                  }`}
+              >
+                {type}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -346,65 +232,39 @@ const PrintingSettings: React.FC = () => {
               }))}
               className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
             >
-              <option value={56}>56mm (Small)</option>
-              <option value={58}>58mm (Standard)</option>
-              <option value={80}>80mm (Wide)</option>
+              <option value={58}>58mm</option>
+              <option value={80}>80mm</option>
             </select>
           </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-2">Print Font</label>
+            <select
+              value={settings.printFont}
+              onChange={(e) => setSettings(prev => ({
+                ...prev,
+                printFont: e.target.value
+              }))}
+              className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+            >
+              <option value="font-a">Font A (Standard - Default)</option>
+              <option value="font-b">Font B (Condensed - Smaller)</option>
+            </select>
+          </div>
+        </div>
 
-          {settings.connectionType === 'network' && (
+        <div className="pt-2">
+          <label className="flex items-center gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+            <input
+              type="checkbox"
+              checked={settings.consolidatedPrinting}
+              onChange={(e) => setSettings(prev => ({ ...prev, consolidatedPrinting: e.target.checked }))}
+              className="w-5 h-5 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+            />
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Printer Name</label>
-              <input
-                type="text"
-                value={settings.printerName}
-                onChange={(e) => setSettings(prev => ({
-                  ...prev,
-                  printerName: e.target.value,
-                  printerIdInvoice: e.target.value,
-                  printerIdKot: e.target.value
-                }))}
-                placeholder="e.g., Kitchen_Printer_1"
-                className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
+              <div className="font-bold text-slate-900">Consolidated Printing (Recommended)</div>
+              <div className="text-sm text-slate-500">Combines KOT, Invoice, and Token into a single continuous receipt. Uncheck to print separate tickets (May cause multiple browser popups if using Browser connection).</div>
             </div>
-          )}
-
-          {settings.connectionType === 'ip' && (
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">IP Address</label>
-              <input
-                type="text"
-                value={settings.ipAddress}
-                onChange={(e) => setSettings(prev => ({
-                  ...prev,
-                  ipAddress: e.target.value,
-                  printerIdInvoice: e.target.value,
-                  printerIdKot: e.target.value
-                }))}
-                placeholder="192.168.1.100"
-                className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-            </div>
-          )}
-
-          {settings.connectionType === 'bluetooth' && (
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Bluetooth Address</label>
-              <input
-                type="text"
-                value={settings.bluetoothAddress}
-                onChange={(e) => setSettings(prev => ({
-                  ...prev,
-                  bluetoothAddress: e.target.value,
-                  printerIdInvoice: e.target.value,
-                  printerIdKot: e.target.value
-                }))}
-                placeholder="00:11:22:33:44:55"
-                className="w-full p-3 border border-slate-200 rounded-xl font-medium focus:ring-2 focus:ring-brand-500 focus:border-transparent"
-              />
-            </div>
-          )}
+          </label>
         </div>
       </div>
 
@@ -429,24 +289,10 @@ const PrintingSettings: React.FC = () => {
         <button
           onClick={saveSettings}
           disabled={isLoading}
-          className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 flex items-center gap-2"
         >
-          {isLoading ? (
-            <>
-              <Loader2 size={16} className="animate-spin" />
-              Saving...
-            </>
-          ) : saveSuccess ? (
-            <>
-              <Check size={16} />
-              Saved!
-            </>
-          ) : (
-            <>
-              <Save size={16} />
-              Save Settings
-            </>
-          )}
+          {isLoading ? <Loader2 size={16} className="animate-spin" /> : saveSuccess ? <Check size={16} /> : <Save size={16} />}
+          {isLoading ? "Saving..." : saveSuccess ? "Saved!" : "Save Settings"}
         </button>
       </div>
 
@@ -454,14 +300,12 @@ const PrintingSettings: React.FC = () => {
         <div className="flex items-start gap-3">
           <HelpCircle size={20} className="text-blue-600 mt-0.5" />
           <div>
-            <h4 className="font-bold text-blue-900 text-sm">Troubleshooting</h4>
-            <p className="text-blue-700 text-sm mt-1">
-              1. Make sure your print server is running on the specified URL<br />
-              2. Use "Test Server" to check connectivity<br />
-              3. Use "Test Print" to verify printer setup<br />
-              4. Check browser console for detailed error messages<br />
-              5. Ensure you have selected a restaurant and branch
-            </p>
+            <h4 className="font-bold text-blue-900 text-sm">How to use</h4>
+            <ul className="text-blue-700 text-sm mt-1 list-disc ml-4 space-y-1">
+              <li>Use &quot;browser&quot; mode for simple direct printing from Chrome.</li>
+              <li>Use &quot;network/ip&quot; for direct communication with thermal printers via a print bridge.</li>
+              <li>Check browser console if the print dialog doesn&apos;t appear.</li>
+            </ul>
           </div>
         </div>
       </div>

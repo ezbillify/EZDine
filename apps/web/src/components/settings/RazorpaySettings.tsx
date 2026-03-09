@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,12 +7,13 @@ import { toast } from "sonner";
 
 import { saveRazorpaySettings } from "../../lib/pos";
 import { getAccessibleBranches } from "../../lib/tenant";
+import type { Branch } from "../../lib/supabaseTypes";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
 
 export function RazorpaySettings() {
-    const [branches, setBranches] = useState<any[]>([]);
+    const [branches, setBranches] = useState<Branch[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -32,7 +34,7 @@ export function RazorpaySettings() {
                     setSecret(branchesData[0].razorpay_secret || "");
                     setEnabled(branchesData[0].razorpay_enabled || false);
                 }
-            } catch (err) {
+            } catch {
                 toast.error("Failed to load branches");
             } finally {
                 setLoading(false);
@@ -63,7 +65,7 @@ export function RazorpaySettings() {
                     ? { ...b, razorpay_key: key, razorpay_secret: secret, razorpay_enabled: enabled }
                     : b
             ));
-        } catch (err) {
+        } catch {
             toast.error("Failed to save settings");
         } finally {
             setSaving(false);
@@ -95,8 +97,8 @@ export function RazorpaySettings() {
                                 key={b.id}
                                 onClick={() => setSelectedBranchId(b.id)}
                                 className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${selectedBranchId === b.id
-                                        ? "bg-white text-brand-600 shadow-sm ring-1 ring-slate-100"
-                                        : "text-slate-400 hover:text-slate-600"
+                                    ? "bg-white text-brand-600 shadow-sm ring-1 ring-slate-100"
+                                    : "text-slate-400 hover:text-slate-600"
                                     }`}
                             >
                                 {b.name}
@@ -183,7 +185,7 @@ export function RazorpaySettings() {
                             <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100">
                                 <h4 className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-2">Test Mode</h4>
                                 <p className="text-[11px] font-bold text-amber-600 leading-relaxed italic">
-                                    "For testing, use Razorpay Test Keys. You can use any test amount and standard test cards to verify the full flow safely."
+                                    &quot;For testing, use Razorpay Test Keys. You can use any test amount and standard test cards to verify the full flow safely.&quot;
                                 </p>
                             </div>
                         </div>

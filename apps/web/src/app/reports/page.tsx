@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   TrendingUp,
   ShoppingBag,
@@ -10,7 +10,9 @@ import {
   Banknote,
   RefreshCw,
   BarChart3,
-  Calendar
+  Calendar,
+  Download,
+  Printer
 } from "lucide-react";
 
 import { AuthGate } from "../../components/auth/AuthGate";
@@ -22,16 +24,33 @@ import { supabase } from "../../lib/supabaseClient";
 import { getCurrentUserProfile } from "../../lib/tenant";
 import { Button } from "../../components/ui/Button";
 import { DatePicker } from "../../components/ui/DatePicker";
-import { FileText, Download, Printer } from "lucide-react";
 
 type TimeFrame = "today" | "month" | "year" | "custom";
+
+interface BillPayment {
+  mode: string;
+  amount: number;
+}
+
+interface Bill {
+  id: string;
+  created_at: string;
+  subtotal: number;
+  tax: number;
+  discount: number;
+  total: number;
+  payments?: BillPayment[];
+  order?: {
+    order_number: string;
+  };
+}
 
 type ReportData = {
   sales: number;
   orders: number;
   tax: number;
   paymentModes: Record<string, number>;
-  rawBills: any[];
+  rawBills: Bill[];
 };
 
 export default function ReportsPage() {
@@ -40,7 +59,7 @@ export default function ReportsPage() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadData = async (frame: TimeFrame) => {
+  const loadData = useCallback(async (frame: TimeFrame) => {
     setLoading(true);
     const profile = await getCurrentUserProfile();
     if (!profile?.active_restaurant_id || !profile.active_branch_id) return;
@@ -74,12 +93,10 @@ export default function ReportsPage() {
 
     if (rpcError) {
       console.error('RPC Error:', rpcError);
-      // Fallback or handle error
     }
 
     // 2. Fetch raw bills for export
-    // Fetch bills with payment info
-    const { data: bills } = await supabase
+    const { data: billsData } = await supabase
       .from("bills")
       .select("*, payments(mode, amount), order:orders(order_number)")
       .eq("branch_id", profile.active_branch_id)
@@ -87,33 +104,35 @@ export default function ReportsPage() {
       .lte("created_at", end.toISOString())
       .order("created_at", { ascending: false });
 
+    const bills = (billsData as unknown as Bill[]) || [];
+
     // Parse data from RPC
     const totalSales = summary?.gross_sales || 0;
     const totalTax = summary?.total_tax || 0;
     const orderCount = summary?.order_count || 0;
-    const modes = summary?.payment_modes || {};
+    const modes = (summary?.payment_modes as Record<string, number>) || {};
 
     setData({
       sales: totalSales,
       orders: orderCount,
       tax: totalTax,
       paymentModes: modes,
-      rawBills: bills ?? []
+      rawBills: bills
     });
     setLoading(false);
-  };
+  }, [customRange.start, customRange.end]);
 
   useEffect(() => {
     if (timeframe !== "custom") {
       loadData(timeframe);
     }
-  }, [timeframe]);
+  }, [timeframe, loadData]);
 
   useEffect(() => {
     if (timeframe === "custom" && customRange.start && customRange.end) {
       loadData("custom");
     }
-  }, [customRange]);
+  }, [customRange, timeframe, loadData]);
 
   const getModeIcon = (mode: string) => {
     switch (mode.toLowerCase()) {
@@ -145,7 +164,7 @@ export default function ReportsPage() {
       b.tax,
       b.discount,
       b.total,
-      b.payments?.map((p: any) => `${p.mode}: ${p.amount}`).join(" | ") || "N/A"
+      b.payments?.map(p => `${p.mode}: ${p.amount}`).join(" | ") || "N/A"
     ]);
 
     const csvContent = [

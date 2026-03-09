@@ -10,7 +10,7 @@ type StatCardProps = {
     value: number;
     type: "up" | "down" | "neutral";
   };
-  icon?: any;
+  icon?: React.ElementType;
   color?: string;
   description?: string;
 };

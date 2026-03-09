@@ -6,19 +6,11 @@ import {
   Clock,
   CheckCircle2,
   ChefHat,
-  Timer,
   MoreVertical,
   Utensils,
-  Play,
-  Check,
-  Flag,
-  RotateCcw,
-  XCircle,
-  Printer,
-  History
+  RotateCcw
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
-import { formatDistanceToNow } from "date-fns";
 
 import { supabase } from "../../lib/supabaseClient";
 import { getCurrentUserProfile } from "../../lib/tenant";
@@ -29,8 +21,32 @@ interface OrderBoardProps {
   selectedDate?: string; // YYYY-MM-DD
 }
 
+interface OrderItem {
+  id: string;
+  quantity: number;
+  status: string;
+  notes?: string;
+  menu_item?: {
+    name: string;
+    is_veg: boolean;
+  };
+}
+
+interface Order {
+  id: string;
+  order_number: string;
+  token_number?: number;
+  status: string;
+  table_id?: string;
+  created_at: string;
+  table?: {
+    name: string;
+  };
+  order_items: OrderItem[];
+}
+
 export function OrderBoard({ selectedDate }: OrderBoardProps) {
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
@@ -79,7 +95,7 @@ export function OrderBoard({ selectedDate }: OrderBoardProps) {
         .limit(100);
 
       if (error) throw error;
-      setOrders(data ?? []);
+      setOrders((data as unknown as Order[]) ?? []);
     } catch (err) {
       console.error("Fetch orders error:", err);
     } finally {
@@ -148,182 +164,152 @@ export function OrderBoard({ selectedDate }: OrderBoardProps) {
 
       setActiveMenu(null);
       toast.success(`Order marked as ${newStatus}`);
-    } catch (err) {
-      toast.error("Failed to update status");
+    } catch (err: unknown) {
+      console.error("Update status error:", err);
+      toast.error("Failed to update order");
     }
   };
 
-  const cancelOrder = async (orderId: string) => {
-    if (!confirm("Are you sure you want to cancel this entire order?")) return;
-    updateStatus(orderId, "cancelled");
-  };
-
-  const getStatusConfig = (status: string) => {
+  const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending":
-        return { color: "text-amber-600", bg: "bg-amber-50", icon: Clock, label: "Pending" };
-      case "preparing":
-        return { color: "text-blue-600", bg: "bg-blue-50", icon: ChefHat, label: "Preparing" };
-      case "ready":
-        return { color: "text-emerald-600", bg: "bg-emerald-50", icon: CheckCircle2, label: "Ready" };
-      case "served":
-        return { color: "text-slate-500", bg: "bg-slate-100", icon: Utensils, label: "Served" };
-      case "cancelled":
-        return { color: "text-rose-600", bg: "bg-rose-50", icon: XCircle, label: "Cancelled" };
-      default:
-        return { color: "text-slate-400", bg: "bg-slate-50", icon: Package, label: status };
+      case "pending": return "text-amber-500 bg-amber-50 border-amber-100";
+      case "preparing": return "text-blue-500 bg-blue-50 border-blue-100";
+      case "ready": return "text-emerald-500 bg-emerald-50 border-emerald-100";
+      case "served": return "text-slate-500 bg-slate-50 border-slate-100";
+      default: return "text-slate-500 bg-slate-50 border-slate-100";
     }
   };
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600" />
-          <p className="text-sm font-medium text-slate-500">Loading live orders...</p>
-        </div>
+      <div className="flex h-96 items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <Toaster richColors position="bottom-right" />
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {orders.length === 0 ? (
-          <div className="col-span-full flex h-64 flex-col items-center justify-center rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50/50">
-            <Package className="mb-4 text-slate-300" size={48} />
-            <p className="text-lg font-bold text-slate-400">No orders found</p>
-            <p className="text-sm text-slate-400">Try selecting a different date or wait for new orders.</p>
-          </div>
-        ) : (
-          orders.map((order) => {
-            const config = getStatusConfig(order.status);
-            const StatusIcon = config.icon;
-            const isMenuOpen = activeMenu === order.id;
-
-            return (
-              <Card key={order.id} className="group relative flex flex-col overflow-hidden border-slate-100 p-0 transition-all hover:border-brand-200 hover:shadow-xl hover:shadow-brand-500/5">
-                {/* Header */}
-                <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/30 p-4">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                      {order.order_number || `#${order.id.slice(0, 6)}`}
-                    </span>
-                    <h3 className="text-lg font-black text-slate-900 leading-tight">
-                      {order.table?.name || "Takeaway"}
-                    </h3>
-                  </div>
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${config.bg} ${config.color} shadow-inner`}>
-                    <StatusIcon size={20} />
-                  </div>
-                </div>
-
-                {order.token_number && (
-                  <div className="absolute top-20 right-4 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white shadow-lg ring-4 ring-white">
-                    <span className="text-lg font-black">{order.token_number}</span>
-                  </div>
-                )}
-
-                {/* Status Bar */}
-                <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-50">
-                  <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-widest ${config.bg} ${config.color}`}>
-                    {config.label}
-                  </span>
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-1 text-[11px] font-black text-slate-900">
-                      <Clock size={12} className="text-brand-600" />
-                      {formatIST(order.created_at)}
-                    </div>
-                    <span className="text-[10px] font-medium text-slate-400">
-                      {formatDistanceToNow(new Date(order.created_at), { addSuffix: true })}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Items List */}
-                <div className="flex-1 space-y-1.5 p-4 bg-white">
-                  {order.order_items?.map((item: any) => (
-                    <div key={item.id} className="flex items-start justify-between gap-3 rounded-lg bg-slate-50/50 p-2 text-sm border border-transparent hover:border-slate-100">
-                      <div className="flex gap-2">
-                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-brand-50 text-[10px] font-bold text-brand-600">
-                          {item.quantity}
-                        </span>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-700 leading-tight">{item.menu_item?.name}</span>
-                          {item.notes && <span className="text-[10px] text-orange-600 italic">"{item.notes}"</span>}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {(!order.order_items || order.order_items.length === 0) && (
-                    <p className="text-xs text-slate-400 italic py-4 text-center">No items listed</p>
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <Toaster position="top-center" />
+      {orders.length === 0 ? (
+        <div className="col-span-full py-20 text-center text-slate-400">
+          <Package className="mx-auto mb-4 h-12 w-12 opacity-20" />
+          <p className="font-bold">No orders found for this date</p>
+        </div>
+      ) : (
+        orders.map((order) => (
+          <Card key={order.id} className="relative overflow-hidden border-slate-100 bg-white p-6 shadow-sm shadow-slate-200/50">
+            {/* Header */}
+            <div className="mb-4 flex items-start justify-between">
+              <div>
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-widest text-slate-400">#{order.order_number}</span>
+                  {order.token_number && (
+                    <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-black text-white">TOKEN {order.token_number}</span>
                   )}
                 </div>
+                <h4 className="text-lg font-black text-slate-900">
+                  {order.table?.name || "Takeaway"}
+                </h4>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400">
+                  <Clock size={12} />
+                  {formatIST(order.created_at)}
+                </div>
+              </div>
 
-                {/* Actions Footer */}
-                <div className="relative mt-auto">
-                  {/* Options Menu Dropdown */}
-                  {isMenuOpen && (
-                    <div className="absolute bottom-full left-0 right-0 z-10 border-t border-slate-100 bg-white p-2 shadow-2xl animate-slide-up">
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button variant="ghost" className="h-10 text-[10px] uppercase font-bold text-slate-600 justify-start gap-2" onClick={() => updateStatus(order.id, "pending")}>
-                          <RotateCcw size={14} /> Move to Pending
-                        </Button>
-                        <Button variant="ghost" className="h-10 text-[10px] uppercase font-bold text-slate-600 justify-start gap-2" onClick={() => toast.info("Printing KOT...")}>
-                          <Printer size={14} /> Reprint KOT
-                        </Button>
-                        <Button variant="ghost" className="h-10 text-[10px] uppercase font-bold text-rose-600 justify-start gap-2" onClick={() => cancelOrder(order.id)}>
-                          <XCircle size={14} /> Cancel Order
-                        </Button>
-                        <Button variant="ghost" className="h-10 text-[10px] uppercase font-bold text-slate-600 justify-start gap-2" onClick={() => setActiveMenu(null)}>
-                          <History size={14} /> View History
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+              <div className="relative">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setActiveMenu(activeMenu === order.id ? null : order.id)}
+                >
+                  <MoreVertical size={18} />
+                </Button>
 
-                  <div className="flex bg-slate-100 divide-x divide-slate-200 border-t border-slate-200">
-                    {/* Primary Action Button */}
-                    {order.status !== "served" && order.status !== "cancelled" && (
-                      <button
-                        onClick={() => {
-                          if (order.status === "pending") updateStatus(order.id, "preparing");
-                          else if (order.status === "preparing") updateStatus(order.id, "ready");
-                          else if (order.status === "ready") updateStatus(order.id, "served");
-                        }}
-                        className={`flex flex-1 items-center justify-center gap-2 bg-white py-4 text-xs font-black uppercase tracking-widest transition-colors ${order.status === "pending" ? "text-blue-600 hover:bg-blue-50" :
-                          order.status === "preparing" ? "text-emerald-600 hover:bg-emerald-50" :
-                            "text-slate-900 hover:bg-slate-50"
-                          }`}
-                      >
-                        {order.status === "pending" && <><ChefHat size={14} /> Start Prep</>}
-                        {order.status === "preparing" && <><CheckCircle2 size={14} /> Ready</>}
-                        {order.status === "ready" && <><Utensils size={14} /> Served</>}
-                      </button>
-                    )}
-
-                    {/* Full width options for final states */}
-                    {(order.status === "served" || order.status === "cancelled") && (
-                      <div className="flex-1 py-4 bg-slate-50/50 flex items-center justify-center text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        {order.status} Order
-                      </div>
-                    )}
-
-                    {/* Options Toggle Button */}
+                {activeMenu === order.id && (
+                  <div className="absolute right-0 top-10 z-10 w-48 rounded-2xl border border-slate-100 bg-white p-2 shadow-xl shadow-slate-200/50">
                     <button
-                      onClick={() => setActiveMenu(isMenuOpen ? null : order.id)}
-                      className={`flex w-20 items-center justify-center gap-2 py-4 text-xs font-black uppercase tracking-widest transition-colors ${isMenuOpen ? 'bg-slate-200 text-slate-900' : 'bg-white text-slate-400 hover:bg-slate-50 hover:text-slate-600'}`}
+                      onClick={() => updateStatus(order.id, "pending")}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold text-slate-600 hover:bg-slate-50"
                     >
-                      <MoreVertical size={14} />
+                      <RotateCcw size={14} /> Mark Pending
+                    </button>
+                    <button
+                      onClick={() => updateStatus(order.id, "preparing")}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold text-blue-600 hover:bg-blue-50"
+                    >
+                      <ChefHat size={14} /> Start Preparing
+                    </button>
+                    <button
+                      onClick={() => updateStatus(order.id, "ready")}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold text-emerald-600 hover:bg-emerald-50"
+                    >
+                      <CheckCircle2 size={14} /> Mark Ready
+                    </button>
+                    <button
+                      onClick={() => updateStatus(order.id, "served")}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-[11px] font-bold text-slate-900 hover:bg-slate-50"
+                    >
+                      <Utensils size={14} /> Mark Served
                     </button>
                   </div>
+                )}
+              </div>
+            </div>
+
+            {/* Items */}
+            <div className="mb-6 space-y-3">
+              {order.order_items?.map((item) => (
+                <div key={item.id} className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-2">
+                    <div className={`mt-1 h-3 w-3 rounded-sm border ${item.menu_item?.is_veg ? 'border-emerald-500' : 'border-red-500'} flex items-center justify-center p-0.5`}>
+                      <div className={`h-full w-full rounded-full ${item.menu_item?.is_veg ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-slate-900">
+                        {item.quantity}x {item.menu_item?.name}
+                      </p>
+                      {item.notes && <p className="text-[10px] italic text-slate-400 font-medium">&quot;{item.notes}&quot;</p>}
+                    </div>
+                  </div>
+                  <span className={`rounded-lg px-2 py-0.5 text-[9px] font-black uppercase tracking-widest ${getStatusColor(item.status)}`}>
+                    {item.status}
+                  </span>
                 </div>
-              </Card>
-            );
-          })
-        )}
-      </div>
+              ))}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 border-t border-slate-50 pt-4">
+              {order.status === "pending" && (
+                <Button
+                  className="flex-1 rounded-xl bg-blue-600 text-[10px] font-black uppercase tracking-widest h-10 hover:bg-blue-700"
+                  onClick={() => updateStatus(order.id, "preparing")}
+                >
+                  Start Preparing
+                </Button>
+              )}
+              {order.status === "preparing" && (
+                <Button
+                  className="flex-1 rounded-xl bg-emerald-600 text-[10px] font-black uppercase tracking-widest h-10 hover:bg-emerald-700"
+                  onClick={() => updateStatus(order.id, "ready")}
+                >
+                  Mark Ready
+                </Button>
+              )}
+              {order.status === "ready" && (
+                <Button
+                  className="flex-1 rounded-xl bg-slate-900 text-[10px] font-black uppercase tracking-widest h-10 hover:bg-slate-800"
+                  onClick={() => updateStatus(order.id, "served")}
+                >
+                  Mark Served
+                </Button>
+              )}
+            </div>
+          </Card>
+        ))
+      )}
     </div>
   );
 }

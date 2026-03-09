@@ -33,7 +33,7 @@ export function GeneralSettings() {
       const current = (await getPrintingSettings()) ?? {};
       await savePrintingSettings({ ...current, ...payload });
       toast.success("System configurations updated");
-    } catch (err) {
+    } catch {
       toast.error("Failed to save settings");
     } finally {
       setStatus("idle");

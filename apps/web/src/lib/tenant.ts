@@ -1,7 +1,16 @@
 import { supabase } from "./supabaseClient";
 import type { Branch, Restaurant, UserProfile } from "./supabaseTypes";
 
+let cachedProfile: UserProfile | null = null;
+let profileCacheTime = 0;
+const CACHE_DURATION = 30000; // 30 seconds
+
 export async function getCurrentUserProfile(): Promise<UserProfile | null> {
+  const now = Date.now();
+  if (cachedProfile && (now - profileCacheTime < CACHE_DURATION)) {
+    return cachedProfile;
+  }
+
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) {
     return null;
@@ -14,12 +23,13 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
     .single();
 
   if (error) {
-    // If profile not found, return null (it might be created lazily)
     if (error.code === "PGRST116") return null;
     throw error;
   }
 
-  return data as UserProfile;
+  cachedProfile = data as UserProfile;
+  profileCacheTime = now;
+  return cachedProfile;
 }
 
 export async function setActiveBranch(branchId: string): Promise<void> {

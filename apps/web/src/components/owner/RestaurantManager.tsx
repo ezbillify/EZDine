@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Plus, Store, Trash2, Edit3, Image as ImageIcon, Search } from "lucide-react";
 import { toast } from "sonner";
+import NextImage from "next/image";
 
 import { createRestaurant, deleteRestaurant, updateRestaurant } from "../../lib/owner";
 import { getAccessibleRestaurants } from "../../lib/tenant";
@@ -17,14 +18,14 @@ export function RestaurantManager() {
   const [logo, setLogo] = useState("");
   const [status, setStatus] = useState<"idle" | "saving" | "error">("idle");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const data = await getAccessibleRestaurants();
     setRestaurants(data);
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const handleCreate = async () => {
     if (!name) return;
@@ -35,8 +36,9 @@ export function RestaurantManager() {
       setName("");
       setLogo("");
       await load();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create restaurant");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to create restaurant";
+      toast.error(message);
     } finally {
       setStatus("idle");
     }
@@ -49,7 +51,8 @@ export function RestaurantManager() {
       await updateRestaurant(restaurant.id, { name: updatedName, logo: restaurant.logo });
       toast.success("Updated successfully");
       await load();
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error(err);
       toast.error("Operation failed");
     }
   };
@@ -60,7 +63,8 @@ export function RestaurantManager() {
       await deleteRestaurant(restaurant.id);
       toast.success("Restaurant removed");
       await load();
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error(err);
       toast.error("Delete operation restricted");
     }
   };
@@ -140,9 +144,9 @@ export function RestaurantManager() {
               restaurants.map((restaurant) => (
                 <div key={restaurant.id} className="group flex items-center justify-between p-4 rounded-2xl border border-transparent hover:border-slate-100 hover:bg-slate-50/50 transition-all">
                   <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center shadow-sm overflow-hidden">
+                    <div className="h-12 w-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center shadow-sm overflow-hidden relative">
                       {restaurant.logo ? (
-                        <img src={restaurant.logo} alt="" className="h-full w-full object-cover" />
+                        <NextImage src={restaurant.logo} alt="" fill className="h-full w-full object-cover" />
                       ) : (
                         <Store size={20} className="text-slate-300" />
                       )}

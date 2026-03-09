@@ -5,13 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { supabase } from "../../lib/supabaseClient";
-import { getActiveBranchRole, getActiveRestaurantRole, getCurrentUserProfile } from "../../lib/tenant";
-import { RoleBadge } from "./RoleBadge";
+import { getCurrentUserProfile } from "../../lib/tenant";
 
 export function UserMenu() {
   const [email, setEmail] = useState<string | null>(null);
-  const [branchRole, setBranchRole] = useState<string | null>(null);
-  const [restaurantRole, setRestaurantRole] = useState<string | null>(null);
   const [restaurantName, setRestaurantName] = useState<string | null>(null);
   const [branchName, setBranchName] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -22,9 +19,7 @@ export function UserMenu() {
       const { data } = await supabase.auth.getUser();
       setEmail(data.user?.email ?? null);
       const profile = await getCurrentUserProfile();
-      const [rr, br] = await Promise.all([getActiveRestaurantRole(), getActiveBranchRole()]);
-      setRestaurantRole(rr);
-      setBranchRole(br);
+
       if (profile?.active_restaurant_id) {
         const { data: restaurant } = await supabase
           .from("restaurants")

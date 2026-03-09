@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 import { supabase } from "../../lib/supabaseClient";
@@ -14,6 +14,12 @@ import {
   setActiveRestaurant
 } from "../../lib/tenant";
 
+interface Profile {
+  active_restaurant_id: string | null;
+  active_branch_id: string | null;
+  id?: string;
+}
+
 type AuthGateProps = {
   children: React.ReactNode;
   enforceContext?: boolean;
@@ -24,6 +30,98 @@ export function AuthGate({ children, enforceContext = true }: AuthGateProps) {
   const pathname = usePathname();
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const initFullCheck = useCallback(async (mounted: boolean) => {
+    const { data } = await supabase.auth.getSession();
+    if (!mounted) return;
+
+    if (!data.session) {
+      router.replace("/login");
+      return;
+    }
+
+    if (!enforceContext) {
+      setReady(true);
+      return;
+    }
+
+    const [profileData, restaurants] = await Promise.all([
+      getCurrentUserProfile(),
+      getAccessibleRestaurants()
+    ]);
+    let profile = profileData as unknown as Profile;
+
+    if (restaurants.length === 0) {
+      router.replace("/onboarding");
+      return;
+    }
+
+    if (!profile?.active_restaurant_id) {
+      if (restaurants.length === 1 && restaurants[0]) {
+        await setActiveRestaurant(restaurants[0].id);
+        profile = { ...((profile || {}) as Profile), active_restaurant_id: restaurants[0].id, active_branch_id: null };
+      } else {
+        router.replace("/select-restaurant");
+        return;
+      }
+    } else if (!restaurants.find((r) => r.id === profile?.active_restaurant_id)) {
+      router.replace("/select-restaurant");
+      return;
+    }
+
+    const branches = await getAccessibleBranches(profile?.active_restaurant_id ?? undefined);
+
+    if (!profile?.active_branch_id) {
+      if (branches.length === 0) {
+        const restaurantRole = await getActiveRestaurantRole();
+        if (restaurantRole === "owner") {
+          router.replace("/owner");
+          return;
+        }
+        router.replace("/select-branch");
+        return;
+      }
+      if (branches.length === 1 && branches[0]) {
+        await setActiveBranch(branches[0].id);
+        profile = { ...((profile || {}) as Profile), active_branch_id: branches[0].id };
+      } else {
+        router.replace("/select-branch");
+        return;
+      }
+    } else if (!branches.find((b) => b.id === profile?.active_branch_id)) {
+      router.replace("/select-branch");
+      return;
+    }
+
+    const cacheKey = "ezdine_ctx";
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          ts: Date.now(),
+          restaurantId: profile?.active_restaurant_id ?? null,
+          branchId: profile?.active_branch_id ?? null
+        })
+      );
+    }
+
+    // Role-based landing logic (only trigger once per session or on root)
+    const landed = typeof window !== 'undefined' && window.sessionStorage.getItem('ez_landed') === 'true';
+    if (!landed && (pathname === "/dashboard" || pathname === "/")) {
+      const branchRole = await getActiveBranchRole();
+      if (typeof window !== 'undefined') window.sessionStorage.setItem('ez_landed', 'true');
+
+      if (branchRole === "kitchen") {
+        router.replace("/kds");
+        return;
+      }
+      // Redirect to POS by default as requested
+      router.replace("/pos");
+      return;
+    }
+
+    setReady(true);
+  }, [router, enforceContext, pathname]);
 
   useEffect(() => {
     let mounted = true;
@@ -41,7 +139,7 @@ export function AuthGate({ children, enforceContext = true }: AuthGateProps) {
                 setReady(true);
                 // Validate in background without blocking navigation
                 setTimeout(() => {
-                  initFullCheck().catch(() => { });
+                  if (mounted) initFullCheck(mounted).catch(() => { });
                 }, 0);
                 return;
               }
@@ -51,7 +149,7 @@ export function AuthGate({ children, enforceContext = true }: AuthGateProps) {
           }
         }
 
-        await initFullCheck();
+        await initFullCheck(mounted);
       } catch (err) {
         if (!mounted) return;
         const message =
@@ -63,101 +161,6 @@ export function AuthGate({ children, enforceContext = true }: AuthGateProps) {
         console.error("AuthGate init failed:", err);
         setError(message);
       }
-    };
-
-    const initFullCheck = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-
-      if (!data.session) {
-        router.replace("/login");
-        return;
-      }
-
-      const { data: userData } = await supabase.auth.getUser();
-      // Relaxed check: trust the session for now. 
-      // OTP login verifies email implicitly.
-
-      if (!enforceContext) {
-        setReady(true);
-        return;
-      }
-
-      const [profileData, restaurants] = await Promise.all([
-        getCurrentUserProfile(),
-        getAccessibleRestaurants()
-      ]);
-      let profile = profileData;
-
-      if (restaurants.length === 0) {
-        router.replace("/onboarding");
-        return;
-      }
-
-      if (!profile?.active_restaurant_id) {
-        if (restaurants.length === 1 && restaurants[0]) {
-          await setActiveRestaurant(restaurants[0].id);
-          profile = { ...profile as any, active_restaurant_id: restaurants[0].id, active_branch_id: null };
-        } else {
-          router.replace("/select-restaurant");
-          return;
-        }
-      } else if (!restaurants.find((r) => r.id === profile?.active_restaurant_id)) {
-        router.replace("/select-restaurant");
-        return;
-      }
-
-      const branches = await getAccessibleBranches(profile?.active_restaurant_id ?? undefined);
-
-      if (!profile?.active_branch_id) {
-        if (branches.length === 0) {
-          const restaurantRole = await getActiveRestaurantRole();
-          if (restaurantRole === "owner") {
-            router.replace("/owner");
-            return;
-          }
-          router.replace("/select-branch");
-          return;
-        }
-        if (branches.length === 1 && branches[0]) {
-          await setActiveBranch(branches[0].id);
-          profile = { ...profile as any, active_branch_id: branches[0].id };
-        } else {
-          router.replace("/select-branch");
-          return;
-        }
-      } else if (!branches.find((b) => b.id === profile?.active_branch_id)) {
-        router.replace("/select-branch");
-        return;
-      }
-
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem(
-          cacheKey,
-          JSON.stringify({
-            ts: Date.now(),
-            restaurantId: profile?.active_restaurant_id ?? null,
-            branchId: profile?.active_branch_id ?? null
-          })
-        );
-      }
-
-      // Role-based landing logic (only trigger once per session or on root)
-      const landed = typeof window !== 'undefined' && window.sessionStorage.getItem('ez_landed') === 'true';
-      if (!landed && (pathname === "/dashboard" || pathname === "/")) {
-        const branchRole = await getActiveBranchRole();
-        if (typeof window !== 'undefined') window.sessionStorage.setItem('ez_landed', 'true');
-
-        if (branchRole === "kitchen") {
-          router.replace("/kds");
-          return;
-        }
-        // Redirect to POS by default as requested
-        router.replace("/pos");
-        return;
-      }
-
-      setReady(true);
     };
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -172,7 +175,7 @@ export function AuthGate({ children, enforceContext = true }: AuthGateProps) {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, enforceContext, initFullCheck]);
 
   // Handle Idle Timeout to POS (10 mins)
   useEffect(() => {
@@ -188,13 +191,15 @@ export function AuthGate({ children, enforceContext = true }: AuthGateProps) {
     };
 
     const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
-    events.forEach((name) => document.addEventListener(name, resetTimer));
+    const addListeners = () => events.forEach((name) => document.addEventListener(name, resetTimer));
+    const removeListeners = () => events.forEach((name) => document.removeEventListener(name, resetTimer));
 
+    addListeners();
     resetTimer();
 
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
-      events.forEach((name) => document.removeEventListener(name, resetTimer));
+      removeListeners();
     };
   }, [ready, pathname, router]);
 

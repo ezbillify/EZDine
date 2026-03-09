@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ShieldAlert, Share2, Mail, CheckCircle, AlertTriangle } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { ShieldAlert, Share2, Mail, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 import { findUserByEmail, transferRestaurantOwnership } from "../../lib/owner";
@@ -18,14 +18,15 @@ export function OwnershipTransfer() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "saving">("idle");
 
+  const load = useCallback(async () => {
+    const data = await getAccessibleRestaurants();
+    setRestaurants(data);
+    if (data[0] && !restaurantId) setRestaurantId(data[0].id);
+  }, [restaurantId]);
+
   useEffect(() => {
-    const load = async () => {
-      const data = await getAccessibleRestaurants();
-      setRestaurants(data);
-      if (data[0]) setRestaurantId(data[0].id);
-    };
     load();
-  }, []);
+  }, [load]);
 
   const handleTransfer = async () => {
     if (!restaurantId || !email) return;
@@ -44,8 +45,9 @@ export function OwnershipTransfer() {
       await transferRestaurantOwnership({ restaurant_id: restaurantId, new_owner_user_id: user.id });
       toast.success("Ownership successfully transferred");
       setEmail("");
-    } catch (err: any) {
-      toast.error(err.message || "Transfer protocol failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Transfer protocol failed";
+      toast.error(message);
     } finally {
       setStatus("idle");
     }

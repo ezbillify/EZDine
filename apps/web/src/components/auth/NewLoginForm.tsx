@@ -33,6 +33,12 @@ export function NewLoginForm() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
+  const getErrorMessage = (err: unknown) => {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "object" && err !== null && "message" in err) return (err as { message: string }).message;
+    return "Operation failed";
+  };
+
   // Password Login
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,8 +53,8 @@ export function NewLoginForm() {
 
       if (error) throw error;
       router.replace("/dashboard");
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Login failed" });
+    } catch (error: unknown) {
+      setMessage({ type: "error", text: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
@@ -72,17 +78,14 @@ export function NewLoginForm() {
 
       if (error) throw error;
 
-      // Some simple handling: if successful, they are logged in or sent a confirm email.
-      // We will assume auto-login or they need to verify:
       setMessage({ type: "success", text: "Account created! You may need to verify your email." });
 
-      // Wait briefly then push them to dashboard (if auto logged in, AuthGate handles onboarding redirect)
       setTimeout(() => {
         router.replace("/dashboard");
       }, 2000);
 
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Registration failed" });
+    } catch (error: unknown) {
+      setMessage({ type: "error", text: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
@@ -103,8 +106,8 @@ export function NewLoginForm() {
       if (error) throw error;
       setOtpSent(true);
       setMessage({ type: "success", text: "OTP sent to your email" });
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Failed to send OTP" });
+    } catch (error: unknown) {
+      setMessage({ type: "error", text: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
@@ -125,8 +128,8 @@ export function NewLoginForm() {
 
       if (error) throw error;
       router.replace("/dashboard");
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Invalid OTP" });
+    } catch (error: unknown) {
+      setMessage({ type: "error", text: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
@@ -147,8 +150,8 @@ export function NewLoginForm() {
       if (error) throw error;
       setForgotStep("verify-otp");
       setMessage({ type: "success", text: "OTP sent to your email" });
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Failed to send OTP" });
+    } catch (error: unknown) {
+      setMessage({ type: "error", text: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
@@ -170,8 +173,8 @@ export function NewLoginForm() {
       if (error) throw error;
       setForgotStep("new-password");
       setMessage({ type: "success", text: "OTP verified! Set your new password" });
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Invalid OTP" });
+    } catch (error: unknown) {
+      setMessage({ type: "error", text: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
@@ -211,8 +214,8 @@ export function NewLoginForm() {
         setConfirmPassword("");
         router.replace("/dashboard");
       }, 1500);
-    } catch (error: any) {
-      setMessage({ type: "error", text: error.message || "Failed to update password" });
+    } catch (error: unknown) {
+      setMessage({ type: "error", text: getErrorMessage(error) });
     } finally {
       setLoading(false);
     }
@@ -341,8 +344,8 @@ export function NewLoginForm() {
         {message && (
           <div
             className={`rounded-lg p-3 text-sm ${message.type === "error"
-                ? "bg-red-50 text-red-700"
-                : "bg-green-50 text-green-700"
+              ? "bg-red-50 text-red-700"
+              : "bg-green-50 text-green-700"
               }`}
           >
             {message.text}
@@ -366,8 +369,8 @@ export function NewLoginForm() {
               setMessage(null);
             }}
             className={`flex-1 rounded-lg px-2 py-2.5 text-xs sm:text-sm font-semibold transition-all ${loginMode === "password"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-600 hover:text-slate-900"
               }`}
           >
             <Lock className="inline h-4 w-4 mr-1 sm:mr-2" />
@@ -381,8 +384,8 @@ export function NewLoginForm() {
               setMessage(null);
             }}
             className={`flex-1 rounded-lg px-2 py-2.5 text-xs sm:text-sm font-semibold transition-all ${loginMode === "otp"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-600 hover:text-slate-900"
               }`}
           >
             <Mail className="inline h-4 w-4 mr-1 sm:mr-2" />
@@ -396,8 +399,8 @@ export function NewLoginForm() {
               setMessage(null);
             }}
             className={`flex-1 rounded-lg px-2 py-2.5 text-xs sm:text-sm font-semibold transition-all ${loginMode === "register"
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
+              ? "bg-white text-slate-900 shadow-sm"
+              : "text-slate-600 hover:text-slate-900"
               }`}
           >
             <ShieldCheck className="inline h-4 w-4 mr-1 sm:mr-2" />
@@ -576,8 +579,8 @@ export function NewLoginForm() {
       {message && (
         <div
           className={`rounded-lg p-3 text-sm ${message.type === "error"
-              ? "bg-red-50 text-red-700"
-              : "bg-green-50 text-green-700"
+            ? "bg-red-50 text-red-700"
+            : "bg-green-50 text-green-700"
             }`}
         >
           {message.text}

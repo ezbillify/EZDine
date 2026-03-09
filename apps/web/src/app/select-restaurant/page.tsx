@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import { AuthGate } from "../../components/auth/AuthGate";
@@ -52,12 +52,12 @@ export default function SelectRestaurantPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [router]);
 
-  const handleSelect = async (restaurantId: string) => {
+  const handleSelect = useCallback(async (restaurantId: string) => {
     await setActiveRestaurant(restaurantId);
     router.replace("/select-branch");
-  };
+  }, [router]);
 
   const content = useMemo(() => {
     if (status === "loading") {
@@ -81,7 +81,7 @@ export default function SelectRestaurantPage() {
         ))}
       </div>
     );
-  }, [error, restaurants, status, branchesByRestaurant]);
+  }, [error, restaurants, status, branchesByRestaurant, handleSelect]);
 
   return (
     <AuthGate enforceContext={false}>

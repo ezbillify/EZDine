@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { Restaurant } from "../../lib/supabaseTypes";
 
 type RestaurantCardProps = {
@@ -14,11 +15,14 @@ export function RestaurantCard({ restaurant, branchCount, onSelect }: Restaurant
     >
       <div className="flex items-center gap-4">
         {restaurant.logo ? (
-          <img
-            src={restaurant.logo}
-            alt={restaurant.name}
-            className="h-12 w-12 rounded-2xl object-cover"
-          />
+          <div className="h-12 w-12 rounded-2xl overflow-hidden relative">
+            <Image
+              src={restaurant.logo}
+              alt={restaurant.name}
+              fill
+              className="object-cover"
+            />
+          </div>
         ) : (
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-100 text-brand-700">
             {restaurant.name.slice(0, 1).toUpperCase()}

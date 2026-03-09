@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, ReactNode } from "react";
 import { Clock, CheckCircle2, ChefHat, Flame, Leaf, Egg } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
-import { updateOrderItemsStatus } from "../../lib/pos";
 import { supabase } from "../../lib/supabaseClient";
 import { getCurrentUserProfile } from "../../lib/tenant";
 import { Button } from "../ui/Button";
@@ -31,6 +30,7 @@ type Order = {
   status: "pending" | "preparing" | "ready" | "served";
   created_at: string;
   source: string;
+  payment_status?: string;
   order_type?: "dine_in" | "takeaway";
   table?: {
     name: string;
@@ -42,7 +42,7 @@ export function KdsBoard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const profile = await getCurrentUserProfile();
       if (!profile?.active_branch_id) return;
@@ -75,18 +75,18 @@ export function KdsBoard() {
         .order("created_at", { ascending: true }); // Oldest first for kitchen
 
       if (error) throw error;
-      setOrders(data as any);
+      setOrders((data as unknown as Order[]) ?? []);
     } catch (err) {
       console.error("KDS Load Error", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const playBuzzer = () => {
+  const playBuzzer = useCallback(() => {
     try {
       console.log("🔊 Playing Loud KDS Buzzer...");
-      const AudioCtxClass = (window.AudioContext || (window as any).webkitAudioContext);
+      const AudioCtxClass = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
       if (!AudioCtxClass) return;
 
       const audioCtx = new AudioCtxClass();
@@ -120,7 +120,7 @@ export function KdsBoard() {
     } catch (e) {
       console.error("Audio buzzer failed", e);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
@@ -133,7 +133,7 @@ export function KdsBoard() {
         { event: '*', schema: 'public', table: 'orders' },
         (payload) => {
           console.log("🔔 KDS Realtime Event:", payload.eventType, payload.new);
-          const newOrder = payload.new as any;
+          const newOrder = payload.new as Order;
           const eventType = payload.eventType;
 
           // Sound Trigger: Play if it's a new or updated order that kitchen needs to see
@@ -143,7 +143,7 @@ export function KdsBoard() {
             console.log("🔥 Triggering Buzzer for Order:", newOrder.order_number);
             playBuzzer();
             toast.info(`New Kitchen Order: #${newOrder.order_number}`, {
-              description: `Table: ${newOrder.table_id || 'Quick Bill'}`,
+              description: `View on board`,
               duration: 5000
             });
           }
@@ -159,23 +159,24 @@ export function KdsBoard() {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) supabase.removeChannel(channel);
     };
-  }, []);
+  }, [load, playBuzzer]);
 
   const advance = async (orderId: string, currentStatus: string, nextStatus: string, batchId?: string) => {
     try {
       const isLegacy = batchId === "legacy";
-      const queryFilter = (q: any) => isLegacy ? q.is("batch_id", null) : q.eq("batch_id", batchId as any);
+
+      const updateOrderItems = async (status: string) => {
+        const query = supabase.from("order_items").update({ status }).eq("order_id", orderId);
+        if (isLegacy) {
+          return query.is("batch_id", null);
+        }
+        return query.eq("batch_id", batchId!);
+      };
 
       if (nextStatus === "served") {
-        const { error: itemsError } = await queryFilter(
-          supabase
-            .from("order_items")
-            .update({ status: "served" })
-            .eq("order_id", orderId)
-        );
-
+        const { error: itemsError } = await updateOrderItems("served");
         if (itemsError) throw itemsError;
 
         const { data: remainingItems } = await supabase
@@ -188,13 +189,7 @@ export function KdsBoard() {
           await supabase.from("orders").update({ status: "served" }).eq("id", orderId);
         }
       } else {
-        await queryFilter(
-          supabase
-            .from("order_items")
-            .update({ status: nextStatus })
-            .eq("order_id", orderId)
-        );
-
+        await updateOrderItems(nextStatus);
         await supabase.from("orders").update({ status: nextStatus }).eq("id", orderId);
       }
       toast.success(`Batch marked ${nextStatus}`);
@@ -218,7 +213,7 @@ export function KdsBoard() {
   }
 
   const validOrders = orders.filter(o => {
-    if ((o as any).source !== 'pos' && (o as any).payment_status !== 'paid') {
+    if (o.source !== 'pos' && o.payment_status !== 'paid') {
       return false;
     }
     return true;
@@ -338,7 +333,7 @@ export function KdsBoard() {
   );
 }
 
-function KdsCard({ order, onAdvance, actionLabel, actionIcon, variant = "default" }: { order: Order; onAdvance: () => void; actionLabel: string; actionIcon: any; variant?: "default" | "blue" | "emerald" }) {
+function KdsCard({ order, onAdvance, actionLabel, actionIcon, variant = "default" }: { order: Order & { batch_id: string }; onAdvance: () => void; actionLabel: string; actionIcon: ReactNode; variant?: "default" | "blue" | "emerald" }) {
   const elapsed = formatDistanceToNow(new Date(order.created_at), { addSuffix: true }).replace("about ", "");
 
   return (

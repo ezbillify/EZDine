@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Hash, Save, Info, Building, MapPin, Braces } from "lucide-react";
+import { Hash, Save, Building, MapPin, Braces } from "lucide-react";
 import { toast } from "sonner";
 
 import { getDocNumberingSettings, saveDocNumberingSettings } from "../../lib/printing";
@@ -41,6 +41,7 @@ export function NumberingSettings() {
       }
     };
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSave = async () => {
@@ -49,7 +50,7 @@ export function NumberingSettings() {
       if (!restaurantId) return;
       await saveDocNumberingSettings(restaurantId, branchId ?? null, { format });
       toast.success("Document numbering logic updated");
-    } catch (err) {
+    } catch {
       toast.error("Failed to update numbering");
     } finally {
       setStatus("idle");

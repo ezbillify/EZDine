@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import { AuthGate } from "../../components/auth/AuthGate";
 import { AppShell } from "../../components/layout/AppShell";
@@ -10,15 +10,35 @@ import { Input } from "../../components/ui/Input";
 import { Dropdown } from "../../components/ui/Dropdown";
 import { toast, Toaster } from "sonner";
 import { supabase } from "../../lib/supabaseClient";
-import { getAccessibleBranches, getActiveRestaurantRole, getCurrentUserProfile } from "../../lib/tenant";
+import { getAccessibleBranches, getCurrentUserProfile } from "../../lib/tenant";
 import { Leaf, Flame, Egg } from "lucide-react";
 
+type Category = {
+  id: string;
+  name: string;
+};
+
+type MenuItem = {
+  id: string;
+  name: string;
+  base_price: number;
+  gst_rate: number;
+  category_id: string | null;
+  is_veg: boolean;
+  is_egg: boolean;
+  menu_categories?: { name: string };
+};
+
+type Branch = {
+  id: string;
+  name: string;
+};
+
 export default function MenuPage() {
-  const [categories, setCategories] = useState<any[]>([]);
-  const [items, setItems] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [items, setItems] = useState<MenuItem[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState<string | null>(null);
-  const [role, setRole] = useState<string | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [itemName, setItemName] = useState("");
   const [itemPrice, setItemPrice] = useState("0");
@@ -28,19 +48,16 @@ export default function MenuPage() {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [dietary, setDietary] = useState<"veg" | "non-veg" | "egg">("veg");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const profile = await getCurrentUserProfile();
       if (!profile?.active_restaurant_id) return;
 
       const branchesData = await getAccessibleBranches(profile.active_restaurant_id);
-      setBranches(branchesData ?? []);
+      setBranches((branchesData as Branch[]) ?? []);
 
       const active = branchId ?? profile.active_branch_id ?? branchesData?.[0]?.id ?? null;
       if (active !== branchId) setBranchId(active);
-
-      const roleData = await getActiveRestaurantRole();
-      setRole(roleData);
 
       if (!active) return;
 
@@ -60,18 +77,18 @@ export default function MenuPage() {
 
       if (itError) throw itError;
 
-      setCategories(cat ?? []);
-      setItems(it ?? []);
+      setCategories((cat as Category[]) ?? []);
+      setItems((it as MenuItem[]) ?? []);
       if (!categoryId && cat && cat[0]) setCategoryId(cat[0].id);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Menu load error:", error);
       toast.error("Failed to load menu data. Ensure database schema is updated.");
     }
-  };
+  }, [branchId, categoryId]);
 
   useEffect(() => {
     load();
-  }, [branchId]);
+  }, [load]);
 
   const createCategory = async () => {
     try {
@@ -99,7 +116,7 @@ export default function MenuPage() {
       }
       setCategoryName("");
       load();
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(editingCategoryId ? "Failed to update category" : "Failed to create category");
       console.error(error);
     }
@@ -145,7 +162,7 @@ export default function MenuPage() {
       setItemPrice("0");
       setDietary("veg");
       load();
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error(editingItemId ? "Failed to update item" : "Failed to create item");
       console.error(error);
     }
@@ -218,7 +235,7 @@ export default function MenuPage() {
                 ].map((type) => (
                   <button
                     key={type.id}
-                    onClick={() => setDietary(type.id as any)}
+                    onClick={() => setDietary(type.id as "veg" | "non-veg" | "egg")}
                     className={`flex flex-1 items-center justify-center gap-1 rounded-lg border p-2 text-[10px] font-bold uppercase transition-all ${dietary === type.id ? `${type.bg} ${type.border} ${type.color}` : "bg-white text-slate-400 border-slate-100 hover:border-slate-300"
                       }`}
                   >
@@ -288,7 +305,7 @@ export default function MenuPage() {
                       setItemPrice(i.base_price.toString());
                       setCategoryId(i.category_id || "");
                       setGstRate(i.gst_rate?.toString() || "0");
-                      setDietary(i.is_egg ? "egg" : (i.is_veg ? "veg" : "non-veg") as any);
+                      setDietary(i.is_egg ? "egg" : (i.is_veg ? "veg" : "non-veg"));
                       window.scrollTo({ top: 0, behavior: 'smooth' });
                     }}>
                       Edit

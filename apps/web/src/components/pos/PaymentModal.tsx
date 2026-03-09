@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { X, CreditCard, Banknote, Smartphone, QrCode } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { X, CreditCard, Banknote, QrCode } from "lucide-react";
 import { Button } from "../ui/Button";
 import { NumericKeypad } from "./NumericKeypad";
 
 type PaymentModalProps = {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (payments: any[]) => void;
+    onConfirm: (payments: { method: string; amount: number }[]) => void;
     totalAmount: number;
 };
 
@@ -25,8 +25,15 @@ export function PaymentModal({
     });
 
     const [activeField, setActiveField] = useState<string>("cash");
-    const [useKeyboard, setUseKeyboard] = useState(true); // Toggle between keyboard and keypad
+    const [useKeyboard] = useState(true); // Toggle between keyboard and keypad
     const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+    const formatAmount = (amount: number): string => {
+        if (amount === Math.floor(amount)) {
+            return amount.toString();
+        }
+        return amount.toFixed(2);
+    };
 
     // Reset & Auto-fill Logic
     useEffect(() => {
@@ -46,13 +53,6 @@ export function PaymentModal({
         }
     }, [isOpen, totalAmount]);
 
-    const formatAmount = (amount: number): string => {
-        if (amount === Math.floor(amount)) {
-            return amount.toString();
-        }
-        return amount.toFixed(2);
-    };
-
     const methods = [
         { id: 'cash', label: 'CASH', icon: Banknote, color: 'bg-emerald-500', shortcut: 'Ctrl+1' },
         { id: 'upi', label: 'UPI/SCAN', icon: QrCode, color: 'bg-brand-500', shortcut: 'Ctrl+2' },
@@ -60,8 +60,32 @@ export function PaymentModal({
     ] as const;
 
     const currentTotal = Object.values(amounts).reduce((sum, val) => sum + (parseFloat(val) || 0), 0);
-    const remaining = Math.max(0, totalAmount - currentTotal);
     const isPaid = currentTotal >= totalAmount - 0.01; // Tolerance
+
+    const handleConfirm = useCallback(() => {
+        const payments = Object.entries(amounts)
+            .map(([method, amount]) => ({ method, amount: parseFloat(amount) || 0 }))
+            .filter(p => p.amount > 0);
+
+        if (payments.length === 0 && totalAmount > 0) return;
+
+        onConfirm(payments as { method: string; amount: number }[]);
+    }, [amounts, onConfirm, totalAmount]);
+
+    const handleQuickFill = useCallback((methodId: string) => {
+        const otherTotal = Object.entries(amounts)
+            .filter(([key]) => key !== methodId)
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            .reduce((sum, [_, val]) => sum + (parseFloat(val) || 0), 0);
+
+        const toFill = Math.max(0, totalAmount - otherTotal);
+        setAmounts(prev => ({ ...prev, [methodId]: formatAmount(toFill) }));
+        setActiveField(methodId);
+        setTimeout(() => {
+            inputRefs.current[methodId]?.focus();
+            inputRefs.current[methodId]?.select();
+        }, 0);
+    }, [amounts, totalAmount]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -82,7 +106,7 @@ export function PaymentModal({
             if (e.key === 'Tab') {
                 e.preventDefault();
                 const methodIds: ('cash' | 'upi' | 'card')[] = ['cash', 'upi', 'card'];
-                const currentIndex = methodIds.indexOf(activeField as any);
+                const currentIndex = methodIds.indexOf(activeField as 'cash' | 'upi' | 'card');
                 const nextIndex = e.shiftKey
                     ? (currentIndex - 1 + methodIds.length) % methodIds.length
                     : (currentIndex + 1) % methodIds.length;
@@ -110,31 +134,7 @@ export function PaymentModal({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen, activeField, isPaid, amounts, totalAmount]);
-
-    const handleConfirm = () => {
-        const payments = Object.entries(amounts)
-            .map(([method, amount]) => ({ method, amount: parseFloat(amount) || 0 }))
-            .filter(p => p.amount > 0);
-
-        if (payments.length === 0 && totalAmount > 0) return;
-
-        onConfirm(payments as any);
-    };
-
-    const handleQuickFill = (methodId: string) => {
-        const otherTotal = Object.entries(amounts)
-            .filter(([key]) => key !== methodId)
-            .reduce((sum, [_, val]) => sum + (parseFloat(val) || 0), 0);
-
-        const toFill = Math.max(0, totalAmount - otherTotal);
-        setAmounts(prev => ({ ...prev, [methodId]: formatAmount(toFill) }));
-        setActiveField(methodId);
-        setTimeout(() => {
-            inputRefs.current[methodId]?.focus();
-            inputRefs.current[methodId]?.select();
-        }, 0);
-    };
+    }, [isOpen, activeField, isPaid, handleConfirm, handleQuickFill, onClose]);
 
     const handleInputChange = (methodId: string, value: string) => {
         // Allow only numbers and one decimal point
@@ -143,6 +143,7 @@ export function PaymentModal({
         const newAmount = parseFloat(value) || 0;
         const otherTotal = Object.entries(amounts)
             .filter(([k]) => k !== methodId)
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             .reduce((sum, [_, val]) => sum + (parseFloat(val) || 0), 0);
 
         if (otherTotal + newAmount > totalAmount + 0.01) {
@@ -208,116 +209,156 @@ export function PaymentModal({
                             {/* Total Amount Display */}
                             <div className="bg-slate-50 rounded-3xl p-6 text-center">
                                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-2">Total Payable</p>
-                                <div className="text-5xl font-black text-slate-900 tracking-tighter mb-4">
-                                    ₹{formatAmount(totalAmount)}
-                                </div>
-                                <div className="flex items-center justify-center gap-3">
-                                    <div className="h-px w-10 bg-slate-200" />
-                                    <p className={`text-sm font-black uppercase tracking-tight ${remaining <= 0.01 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                        {remaining <= 0.01 ? 'PAID IN FULL' : `DUE: ₹${formatAmount(remaining)}`}
-                                    </p>
-                                    <div className="h-px w-10 bg-slate-200" />
+                                <div className="text-4xl font-black text-slate-900">
+                                    <span className="text-xl mr-1 opacity-20">₹</span>
+                                    {totalAmount.toFixed(2)}
                                 </div>
                             </div>
 
-                            {/* Payment Method Inputs */}
-                            <div className="space-y-3">
-                                {methods.map((method) => {
-                                    const isActive = activeField === method.id;
-                                    const hasValue = (parseFloat(amounts[method.id] || "") || 0) > 0;
-
-                                    return (
-                                        <div key={method.id} className="relative">
-                                            <div className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all ${isActive
-                                                    ? 'border-slate-900 bg-slate-50'
-                                                    : 'border-slate-100 bg-white hover:border-slate-200'
-                                                }`}>
-                                                <button
-                                                    onClick={() => handleQuickFill(method.id)}
-                                                    className={`flex h-12 w-12 flex-none items-center justify-center rounded-xl text-white shadow-md transition-all hover:scale-105 active:scale-95 ${method.color}`}
-                                                    title={`Quick fill (${method.shortcut})`}
-                                                >
-                                                    <method.icon size={20} />
-                                                </button>
-                                                <div className="flex-1">
-                                                    <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1 block">
-                                                        {method.label}
-                                                    </label>
-                                                    <input
-                                                        ref={el => { inputRefs.current[method.id] = el; }}
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        placeholder="0.00"
-                                                        value={amounts[method.id]}
-                                                        onChange={e => handleInputChange(method.id, e.target.value)}
-                                                        onFocus={() => setActiveField(method.id)}
-                                                        className="w-full h-10 px-3 rounded-xl border-none bg-transparent font-mono font-bold text-2xl text-slate-900 placeholder:text-slate-300 focus:outline-none"
-                                                    />
-                                                </div>
-                                                {hasValue && (
-                                                    <div className={`px-3 py-1 rounded-lg text-xs font-black ${method.color.replace('bg-', 'text-')} bg-opacity-10`}>
-                                                        ₹{amounts[method.id]}
-                                                    </div>
-                                                )}
+                            {/* Inputs */}
+                            <div className="space-y-2">
+                                {methods.map((m) => (
+                                    <div
+                                        key={m.id}
+                                        onClick={() => {
+                                            setActiveField(m.id);
+                                            inputRefs.current[m.id]?.focus();
+                                        }}
+                                        className={`group relative flex items-center gap-4 rounded-2xl border-2 p-3 transition-all cursor-pointer ${activeField === m.id
+                                            ? "border-blue-500 bg-blue-50"
+                                            : "border-slate-100 bg-white hover:border-slate-200"
+                                            }`}
+                                    >
+                                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-white shadow-lg ${m.color}`}>
+                                            <m.icon size={20} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{m.label}</span>
+                                                <span className="text-[10px] font-bold text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity">{m.shortcut}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-sm font-bold text-slate-300">₹</span>
+                                                <input
+                                                    ref={el => { inputRefs.current[m.id] = el; }}
+                                                    type="text"
+                                                    value={amounts[m.id]}
+                                                    onChange={(e) => handleInputChange(m.id, e.target.value)}
+                                                    onFocus={() => setActiveField(m.id)}
+                                                    className="w-full bg-transparent text-lg font-black text-slate-900 outline-none placeholder:text-slate-200"
+                                                    placeholder="0.00"
+                                                />
                                             </div>
                                         </div>
-                                    );
-                                })}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleQuickFill(m.id);
+                                            }}
+                                            className={`rounded-lg px-2 py-1 text-[9px] font-black uppercase tracking-tighter transition-all ${activeField === m.id
+                                                ? "bg-blue-500 text-white shadow-md shadow-blue-200"
+                                                : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                                                }`}
+                                        >
+                                            FILL
+                                        </button>
+                                    </div>
+                                ))}
                             </div>
                         </div>
 
-                        {/* Right: Numeric Keypad (Optional) */}
-                        <div className="space-y-4">
-                            <div className="flex items-center justify-between mb-2">
-                                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Quick Entry</p>
-                                <button
-                                    onClick={() => setUseKeyboard(!useKeyboard)}
-                                    className="text-[10px] font-bold text-brand-600 hover:text-brand-700"
-                                >
-                                    {useKeyboard ? 'Show Keypad' : 'Use Keyboard'}
-                                </button>
-                            </div>
-
-                            {!useKeyboard && (
+                        {/* Right: Keypad */}
+                        <div className="flex flex-col">
+                            <div className="flex-1 rounded-3xl bg-slate-50 p-4">
                                 <NumericKeypad
-                                    onKeyPress={handleKeyPress}
+                                    onPress={handleKeyPress}
                                     onDelete={handleDelete}
                                     onClear={handleClear}
+                                    onEnter={handleConfirm}
+                                    disabled={!useKeyboard}
                                 />
-                            )}
+                            </div>
 
-                            {useKeyboard && (
-                                <div className="bg-slate-50 rounded-2xl p-6 h-full flex items-center justify-center">
-                                    <div className="text-center space-y-4">
-                                        <div className="text-6xl">⌨️</div>
-                                        <p className="text-sm font-bold text-slate-600">Use your keyboard</p>
-                                        <div className="space-y-2 text-xs text-slate-500">
-                                            <p><kbd className="px-2 py-1 bg-white rounded border border-slate-200">Tab</kbd> Switch fields</p>
-                                            <p><kbd className="px-2 py-1 bg-white rounded border border-slate-200">Ctrl+1/2/3</kbd> Quick fill</p>
-                                            <p><kbd className="px-2 py-1 bg-white rounded border border-slate-200">Enter</kbd> Confirm</p>
-                                        </div>
-                                    </div>
+                            {/* Summary Footer Area */}
+                            <div className="mt-4 space-y-3">
+                                <div className="flex items-center justify-between px-2">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Charged</span>
+                                    <span className={`text-sm font-bold ${currentTotal > totalAmount + 0.01 ? 'text-blue-600' : 'text-slate-900'}`}>
+                                        ₹{currentTotal.toFixed(2)}
+                                    </span>
                                 </div>
-                            )}
+                                {currentTotal < totalAmount - 0.01 ? (
+                                    <div className="flex items-center justify-between px-2 text-rose-500">
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Left to Pay</span>
+                                        <span className="text-sm font-black italic animate-pulse">
+                                            ₹{(totalAmount - currentTotal).toFixed(2)}
+                                        </span>
+                                    </div>
+                                ) : currentTotal > totalAmount + 0.01 ? (
+                                    <div className="flex items-center justify-between px-2 text-blue-500 bg-blue-50 rounded-xl p-2">
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Return Change</span>
+                                        <span className="text-sm font-black">
+                                            ₹{(currentTotal - totalAmount).toFixed(2)}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 px-2 text-emerald-500 bg-emerald-50 rounded-xl p-2 justify-center">
+                                        <CheckCircle2 size={14} />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Exact Amount Paid</span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Footer */}
-                <div className="border-t border-slate-100 bg-slate-50 p-6 space-y-3 flex-none">
-                    <Button
-                        id="btn-confirm-payment"
-                        onClick={handleConfirm}
-                        disabled={!isPaid && totalAmount > 0}
-                        className={`w-full h-16 text-sm rounded-2xl shadow-xl transition-all font-black uppercase tracking-[0.2em] ${isPaid
-                            ? "bg-slate-900 hover:bg-black text-white shadow-slate-900/10 hover:shadow-slate-900/20"
-                            : "bg-slate-100 text-slate-300 cursor-not-allowed"
-                            }`}
-                    >
-                        {isPaid ? '✓ Confirm & Settle' : `Remaining: ₹${formatAmount(remaining)}`}
-                    </Button>
+                {/* Footer Actions */}
+                <div className="border-t border-slate-100 bg-slate-50/50 p-6 flex-none">
+                    <div className="flex gap-3">
+                        <Button
+                            variant="ghost"
+                            onClick={onClose}
+                            className="flex-1 h-14 rounded-2xl border-2 border-slate-200 bg-white text-slate-600 font-black uppercase tracking-widest text-[11px] hover:bg-slate-50 hover:border-slate-300"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleConfirm}
+                            disabled={!isPaid}
+                            className={`flex-[2] h-14 rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-xl transition-all ${isPaid
+                                ? "bg-slate-900 text-white hover:bg-black shadow-slate-200/50"
+                                : "bg-slate-100 text-slate-300 cursor-not-allowed shadow-none"
+                                }`}
+                        >
+                            Complete Payment & Print
+                        </Button>
+                        <button
+                            className="w-14 h-14 rounded-2xl bg-white border-2 border-slate-200 flex items-center justify-center text-slate-400 hover:text-blue-500 transition-all shadow-sm"
+                            title="Print Test Slip"
+                        >
+                            <QrCode size={20} />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
+    );
+}
+
+function CheckCircle2({ size }: { size: number }) {
+    return (
+        <svg
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+            <path d="m9 12 2 2 4-4" />
+        </svg>
     );
 }

@@ -5,7 +5,7 @@ interface GlassCardProps extends HTMLAttributes<HTMLDivElement> {
     gradient?: boolean;
 }
 
-export function GlassCard({ children, className = "", gradient = false, onClick, ...props }: GlassCardProps) {
+export function GlassCard({ children, className = "", onClick, ...props }: GlassCardProps) {
     return (
         <div
             className={`

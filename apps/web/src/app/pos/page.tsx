@@ -1,7 +1,6 @@
 import { AuthGate } from "../../components/auth/AuthGate";
 import { AppShell } from "../../components/layout/AppShell";
 import { PosShell } from "../../components/pos/PosShell";
-import { PosHistory } from "../../components/pos/PosHistory";
 
 export default function PosPage() {
   return (

@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+import Image from "next/image";
 import { NewLoginForm } from "../../components/auth/NewLoginForm";
 import { AppShell } from "../../components/layout/AppShell";
 import { supabase } from "../../lib/supabaseClient";
@@ -31,11 +32,12 @@ export default function LoginPage() {
         <div className="rounded-3xl bg-white p-10 shadow-sm">
           <div className="max-w-md space-y-4">
             <div className="flex items-center gap-4 mb-6">
-              <div className="h-16 w-16 rounded-2xl bg-white shadow-md p-2 flex items-center justify-center">
-                <img 
-                  src="/images/EZDineLOGO.png" 
-                  alt="EZDine Logo" 
-                  className="h-full w-full object-contain"
+              <div className="h-16 w-16 rounded-2xl bg-white shadow-md p-2 flex items-center justify-center relative">
+                <Image
+                  src="/images/EZDineLOGO.png"
+                  alt="EZDine Logo"
+                  fill
+                  className="object-contain p-2"
                 />
               </div>
               <div>

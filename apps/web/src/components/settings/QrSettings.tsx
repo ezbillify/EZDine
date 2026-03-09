@@ -6,14 +6,14 @@ import { toast } from "sonner";
 
 import { getTables } from "../../lib/pos";
 import { getAccessibleBranches } from "../../lib/tenant";
+import type { Branch } from "../../lib/supabaseTypes";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 
 export function QrSettings() {
-    const [branches, setBranches] = useState<any[]>([]);
+    const [branches, setBranches] = useState<Branch[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
-    const [tables, setTables] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [tables, setTables] = useState<Record<string, unknown>[]>([]);
 
     useEffect(() => {
         const load = async () => {
@@ -21,10 +21,8 @@ export function QrSettings() {
                 const branchesData = await getAccessibleBranches();
                 setBranches(branchesData);
                 if (branchesData[0]) setSelectedBranchId(branchesData[0].id);
-            } catch (err) {
+            } catch {
                 toast.error("Failed to load branches");
-            } finally {
-                setLoading(false);
             }
         };
         load();
@@ -35,7 +33,7 @@ export function QrSettings() {
         const loadTables = async () => {
             try {
                 const tablesData = await getTables(selectedBranchId);
-                setTables(tablesData);
+                setTables(tablesData as Record<string, unknown>[]);
             } catch (err) {
                 console.error("Failed to load tables", err);
             }
@@ -155,15 +153,15 @@ export function QrSettings() {
                     />
 
                     {/* Table Specific QRs */}
-                    {tables.map(table => (
+                    {tables.map((table: Record<string, unknown>) => (
                         <QrItem
-                            key={table.id}
+                            key={table.id as string}
                             title={`Table ${table.name}`}
                             subtitle="Dine-in Order"
-                            url={generateQrUrl(selectedBranchId, table.id)}
-                            onCopy={() => handleCopy(generateQrUrl(selectedBranchId, table.id))}
-                            onDownload={() => handleDownload(generateQrUrl(selectedBranchId, table.id), `EZDine_Table_${table.name}`)}
-                            onPrint={() => handlePrint(generateQrUrl(selectedBranchId, table.id), `Table ${table.name}`)}
+                            url={generateQrUrl(selectedBranchId, table.id as string)}
+                            onCopy={() => handleCopy(generateQrUrl(selectedBranchId, table.id as string))}
+                            onDownload={() => handleDownload(generateQrUrl(selectedBranchId, table.id as string), `EZDine_Table_${table.name}`)}
+                            onPrint={() => handlePrint(generateQrUrl(selectedBranchId, table.id as string), `Table ${table.name}`)}
                             icon={<Utensils size={18} />}
                         />
                     ))}
@@ -173,7 +171,7 @@ export function QrSettings() {
     );
 }
 
-function QrItem({ title, subtitle, url, onCopy, onDownload, onPrint, icon = <Zap size={18} /> }: any) {
+function QrItem({ title, subtitle, url, onCopy, onDownload, onPrint, icon = <Zap size={18} /> }: { title: string, subtitle: string, url: string, onCopy: () => void, onDownload: () => void, onPrint: () => void, icon?: React.ReactNode }) {
     const qrImage = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`;
 
     return (
@@ -188,13 +186,14 @@ function QrItem({ title, subtitle, url, onCopy, onDownload, onPrint, icon = <Zap
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{subtitle}</p>
                     </div>
                 </div>
-                <a href={url} target="_blank" className="text-slate-300 hover:text-brand-600 transition-colors">
+                <a href={url} target="_blank" className="text-slate-300 hover:text-brand-600 transition-colors" rel="noreferrer">
                     <ExternalLink size={16} />
                 </a>
             </div>
 
             <div className="flex flex-col items-center justify-center py-6 bg-slate-50/50 rounded-2xl border border-slate-50 mb-6">
                 <div className="relative group/qr">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={qrImage} alt="QR Code" className="h-40 w-40 rounded-lg shadow-sm" />
                     <div className="absolute inset-0 bg-white/0 group-hover/qr:bg-white/10 transition-all rounded-lg" />
                 </div>

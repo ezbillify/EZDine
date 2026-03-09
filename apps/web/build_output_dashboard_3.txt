@@ -1,0 +1,55 @@
+
+> @ezdine/web@1.13.1 build
+> next build
+
+   ▲ Next.js 15.1.9
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+(node:58115) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:58116) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:58124) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+ ⚠ Using edge runtime on a page currently disables static generation for that page
+   Generating static pages (0/3) ...
+ ✓ Generating static pages (3/3)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ƒ /                                    497 B           106 kB
+├ ○ /_not-found                          977 B           106 kB
+├ ƒ /auth/callback                       793 B           140 kB
+├ ƒ /customers                           5.49 kB         176 kB
+├ ƒ /dashboard                           8.07 kB         163 kB
+├ ƒ /inventory                           4.77 kB         169 kB
+├ ƒ /kds                                 6.61 kB         183 kB
+├ ƒ /login                               3.99 kB         159 kB
+├ ƒ /menu                                4.69 kB         169 kB
+├ ƒ /onboarding                          2.74 kB         157 kB
+├ ƒ /orders                              5.58 kB         177 kB
+├ ƒ /owner                               1.44 kB         174 kB
+├ ƒ /pos                                 12.6 kB         184 kB
+├ ƒ /purchase                            6.38 kB         170 kB
+├ ƒ /q/[branchId]                        11.9 kB         160 kB
+├ ƒ /reports                             6.67 kB         169 kB
+├ ƒ /reservations                        6.83 kB         179 kB
+├ ƒ /select-branch                       2.24 kB         157 kB
+├ ƒ /select-restaurant                   2.42 kB         157 kB
+├ ƒ /settings                            12 kB           188 kB
+├ ƒ /staff                               1.67 kB         159 kB
+└ ƒ /tables                              3.34 kB         167 kB
++ First Load JS shared by all            105 kB
+  ├ chunks/59-8ceaf34526f35900.js        50.4 kB
+  ├ chunks/ebf2aea4-b67ae96d6440dc93.js  52.9 kB
+  └ other shared chunks (total)          1.96 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

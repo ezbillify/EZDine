@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 
 import {
   assignBranchRole,
@@ -17,10 +17,27 @@ import { Dropdown } from "../ui/Dropdown";
 
 const branchRoles = ["manager", "cashier", "waiter", "kitchen"] as const;
 
+interface AssignedUser {
+  id: string;
+  user_id: string;
+  branch_id: string;
+  role: string;
+  user?: {
+    full_name: string | null;
+    email: string | null;
+  };
+}
+
+interface Profile {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+}
+
 export function StaffManager() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [assigned, setAssigned] = useState<any[]>([]);
+  const [assigned, setAssigned] = useState<AssignedUser[]>([]);
   const [email, setEmail] = useState("");
   const [restaurantId, setRestaurantId] = useState("");
   const [branchId, setBranchId] = useState("");
@@ -29,32 +46,37 @@ export function StaffManager() {
   const [message, setMessage] = useState<string | null>(null);
   const [foundUser, setFoundUser] = useState<{ id: string; email: string | null; full_name: string | null } | null>(null);
 
+  const loadData = useCallback(async () => {
+    const [restaurantsData, branchesData] = await Promise.all([
+      getAccessibleRestaurants(),
+      getAccessibleBranches()
+    ]);
+    setRestaurants(restaurantsData);
+    setBranches(branchesData);
+    if (!restaurantId && restaurantsData[0]) setRestaurantId(restaurantsData[0].id);
+    if (!branchId && branchesData[0]) setBranchId(branchesData[0].id);
+
+    const { data: rolesData } = await supabase
+      .from("user_branch_roles")
+      .select("id,user_id,branch_id,role");
+
+    const { data: profilesData } = await supabase
+      .from("user_profiles")
+      .select("id,full_name,email");
+
+    const roles = (rolesData as unknown as AssignedUser[]) || [];
+    const profiles = (profilesData as unknown as Profile[]) || [];
+
+    const assignedList = roles.map((r) => ({
+      ...r,
+      user: profiles?.find((p) => p.id === r.user_id)
+    }));
+    setAssigned(assignedList);
+  }, [branchId, restaurantId]);
+
   useEffect(() => {
-    const load = async () => {
-      const [restaurantsData, branchesData] = await Promise.all([
-        getAccessibleRestaurants(),
-        getAccessibleBranches()
-      ]);
-      setRestaurants(restaurantsData);
-      setBranches(branchesData);
-      if (!restaurantId && restaurantsData[0]) setRestaurantId(restaurantsData[0].id);
-      if (!branchId && branchesData[0]) setBranchId(branchesData[0].id);
-
-      const { data: roles } = await supabase
-        .from("user_branch_roles")
-        .select("id,user_id,branch_id,role");
-      const { data: profiles } = await supabase
-        .from("user_profiles")
-        .select("id,full_name,email");
-      const assignedList = (roles ?? []).map((r: any) => ({
-        ...r,
-        user: profiles?.find((p: any) => p.id === r.user_id)
-      }));
-      setAssigned(assignedList);
-    };
-
-    load();
-  }, []);
+    loadData();
+  }, [loadData]);
 
   const branchOptions = useMemo(() => {
     if (!restaurantId) return branches;
@@ -64,7 +86,7 @@ export function StaffManager() {
   useEffect(() => {
     if (!restaurantId) return;
     const firstBranch = branchOptions[0]?.id ?? null;
-    setBranchId(firstBranch ?? "");
+    if (firstBranch) setBranchId(firstBranch);
   }, [restaurantId, branchOptions]);
 
   const handleInvite = async () => {
@@ -75,9 +97,10 @@ export function StaffManager() {
       await sendOtpInvite(email);
       setStatus("idle");
       setMessage("OTP sent. Ask staff to verify email, then assign roles.");
-    } catch (err) {
+    } catch (err: unknown) {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Failed to send OTP");
+      const errorMsg = err instanceof Error ? err.message : "Failed to send OTP";
+      setMessage(errorMsg);
     }
   };
 
@@ -96,9 +119,10 @@ export function StaffManager() {
       setFoundUser(profile);
       setStatus("idle");
       setMessage("User found. Assign roles below.");
-    } catch (err) {
+    } catch (err: unknown) {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Lookup failed");
+      const errorMsg = err instanceof Error ? err.message : "Lookup failed";
+      setMessage(errorMsg);
     }
   };
 
@@ -112,20 +136,11 @@ export function StaffManager() {
       }
       setStatus("idle");
       setMessage("Roles assigned successfully.");
-      const { data: roles } = await supabase
-        .from("user_branch_roles")
-        .select("id,user_id,branch_id,role");
-      const { data: profiles } = await supabase
-        .from("user_profiles")
-        .select("id,full_name,email");
-      const assignedList = (roles ?? []).map((r: any) => ({
-        ...r,
-        user: profiles?.find((p: any) => p.id === r.user_id)
-      }));
-      setAssigned(assignedList);
-    } catch (err) {
+      await loadData();
+    } catch (err: unknown) {
       setStatus("error");
-      setMessage(err instanceof Error ? err.message : "Failed to assign roles");
+      const errorMsg = err instanceof Error ? err.message : "Failed to assign roles";
+      setMessage(errorMsg);
     }
   };
 
@@ -182,7 +197,7 @@ export function StaffManager() {
             value={branchRole}
             options={branchRoles.map((role) => ({ value: role, label: role }))}
             placeholder="Branch role"
-            onChange={(value) => setBranchRole(value as any)}
+            onChange={(value) => setBranchRole(value as (typeof branchRoles)[number])}
           />
         </div>
         <Button className="mt-3" onClick={handleAssign} disabled={!foundUser || status === "saving"}>

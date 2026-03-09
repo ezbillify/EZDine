@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Printer, Download } from "lucide-react";
+import { X, Printer } from "lucide-react";
 import { Button } from "../ui/Button";
 import { PrintLine } from "../../lib/printing";
 

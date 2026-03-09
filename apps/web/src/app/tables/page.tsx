@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import { AuthGate } from "../../components/auth/AuthGate";
 import { AppShell } from "../../components/layout/AppShell";
@@ -10,28 +10,35 @@ import { Dropdown } from "../../components/ui/Dropdown";
 import { Input } from "../../components/ui/Input";
 import { toast, Toaster } from "sonner";
 import { supabase } from "../../lib/supabaseClient";
-import { getAccessibleBranches, getActiveRestaurantRole, getCurrentUserProfile } from "../../lib/tenant";
+import { getAccessibleBranches, getCurrentUserProfile } from "../../lib/tenant";
+
+type Table = {
+  id: string;
+  name: string;
+  capacity: number;
+};
+
+type Branch = {
+  id: string;
+  name: string;
+};
 
 export default function TablesPage() {
-  const [tables, setTables] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [capacity, setCapacity] = useState("4");
-  const [role, setRole] = useState<string | null>(null);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const profile = await getCurrentUserProfile();
       if (!profile?.active_restaurant_id) return;
       const branchesData = await getAccessibleBranches(profile.active_restaurant_id);
-      setBranches(branchesData ?? []);
+      setBranches((branchesData as Branch[]) ?? []);
 
       const active = branchId ?? profile.active_branch_id ?? branchesData?.[0]?.id ?? null;
       if (active !== branchId) setBranchId(active);
-
-      const roleData = await getActiveRestaurantRole();
-      setRole(roleData);
 
       if (!active) return;
 
@@ -43,20 +50,16 @@ export default function TablesPage() {
         .order("name");
 
       if (error) throw error;
-      setTables(data ?? []);
-    } catch (error) {
+      setTables((data as Table[]) ?? []);
+    } catch (error: unknown) {
       console.error("Tables load error:", error);
       toast.error("Failed to load tables");
     }
-  };
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  useEffect(() => {
-    load();
   }, [branchId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const createTable = async () => {
     try {
@@ -77,7 +80,7 @@ export default function TablesPage() {
       setName("");
       setCapacity("4");
       load();
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("Failed to create table");
       console.error(error);
     }
@@ -89,7 +92,7 @@ export default function TablesPage() {
       if (error) throw error;
       toast.success(`Table "${tableName}" deleted`);
       load();
-    } catch (error) {
+    } catch (error: unknown) {
       toast.error("Failed to delete table");
       console.error(error);
     }

@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Package,
   Plus,
   Trash2,
   AlertTriangle,
   History,
-  ArrowUpRight,
-  ArrowDownRight,
-  Filter,
   Search,
   CheckCircle2
 } from "lucide-react";
@@ -23,8 +20,16 @@ import { Input } from "../../components/ui/Input";
 import { supabase } from "../../lib/supabaseClient";
 import { getCurrentUserProfile } from "../../lib/tenant";
 
+type InventoryItem = {
+  id: string;
+  name: string;
+  unit: string;
+  current_stock: number;
+  reorder_level: number;
+};
+
 export default function InventoryPage() {
-  const [items, setItems] = useState<any[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [search, setSearch] = useState("");
@@ -35,7 +40,7 @@ export default function InventoryPage() {
   const [stock, setStock] = useState("");
   const [reorderLevel, setReorderLevel] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const profile = await getCurrentUserProfile();
@@ -49,18 +54,18 @@ export default function InventoryPage() {
         .order("name");
 
       if (error) throw error;
-      setItems(data ?? []);
-    } catch (err) {
+      setItems((data as unknown as InventoryItem[]) ?? []);
+    } catch (err: unknown) {
       console.error("Inventory error:", err);
       toast.error("Failed to load inventory items");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const createItem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +93,8 @@ export default function InventoryPage() {
       setReorderLevel("");
       setShowAddForm(false);
       load();
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error("Create item error:", err);
       toast.error("Failed to add item");
     }
   };

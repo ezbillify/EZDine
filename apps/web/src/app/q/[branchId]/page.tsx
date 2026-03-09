@@ -1,28 +1,88 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useSearchParams, useParams } from "next/navigation";
-import Script from "next/script";
 import {
     Search, Plus, Minus, ShoppingBag, User, Phone,
-    Check, ChevronRight, Utensils, Zap, Star, Clock,
-    ChevronLeft, ArrowRight, Info, Coffee, CheckCircle2,
-    Heart, MapPin, Timer, Sparkles
+    Check, ChevronRight, Utensils, Zap, Clock,
+    ChevronLeft, ArrowRight, Coffee, CheckCircle2,
+    MapPin
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import {
     getPublicBranchMenu, createOrder, CartItem, getPublicBranchDetails,
-    getMenuCategories, checkCustomerExist, createPublicCustomer, getOrdersByPhone
+    getMenuCategories, checkCustomerExist, createPublicCustomer, getOrdersByPhone, verifyPayment
 } from "../../../lib/pos";
 import { Button } from "../../../components/ui/Button";
-import { Input } from "../../../components/ui/Input";
-import { verifyPayment } from "../../../lib/pos";
 import { supabase } from "../../../lib/supabaseClient";
+
+interface RazorpayResponse {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+}
+
+interface RazorpayOptions {
+    key: string;
+    amount: number;
+    currency: string;
+    name: string;
+    description: string;
+    order_id: string;
+    handler: (response: RazorpayResponse) => Promise<void>;
+    prefill: {
+        name: string;
+        contact: string;
+    };
+    theme: {
+        color: string;
+    };
+}
 
 declare global {
     interface Window {
-        Razorpay: any;
+        Razorpay: new (options: RazorpayOptions) => { open: () => void };
     }
+}
+
+interface BranchInfo {
+    id: string;
+    name: string;
+    restaurant_id: string;
+    razorpay_enabled?: boolean;
+    razorpay_key?: string;
+    restaurant?: {
+        name: string;
+    };
+}
+
+interface MenuItem {
+    id: string;
+    name: string;
+    description?: string;
+    base_price: number;
+    is_available: boolean;
+    is_veg: boolean;
+    is_egg: boolean;
+    menu_categories?: {
+        name: string;
+    };
+    category_id?: string;
+    gst_rate?: number;
+}
+
+interface Category {
+    id: string;
+    name: string;
+}
+
+interface Order {
+    id: string;
+    token_number: number;
+    order_number: string;
+    status: string;
+    payment_status: string;
+    created_at: string;
 }
 
 const BrandingFooter = () => (
@@ -43,7 +103,13 @@ const BrandingFooter = () => (
     </footer>
 );
 
-const WelcomeHero = ({ branchInfo, orderType, setOrderType }: any) => (
+interface WelcomeHeroProps {
+    branchInfo: BranchInfo | null;
+    orderType: "dine_in" | "takeaway";
+    setOrderType: (type: "dine_in" | "takeaway") => void;
+}
+
+const WelcomeHero = ({ branchInfo, orderType, setOrderType }: WelcomeHeroProps) => (
     <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
         {/* Background Pattern */}
         <div className="absolute inset-0 opacity-5">
@@ -76,8 +142,8 @@ const WelcomeHero = ({ branchInfo, orderType, setOrderType }: any) => (
                     <button
                         onClick={() => setOrderType("dine_in")}
                         className={`relative p-6 rounded-2xl transition-all duration-300 ${orderType === "dine_in"
-                                ? "bg-white text-slate-900 shadow-2xl scale-105"
-                                : "bg-white/10 text-white/80 hover:bg-white/20"
+                            ? "bg-white text-slate-900 shadow-2xl scale-105"
+                            : "bg-white/10 text-white/80 hover:bg-white/20"
                             }`}
                     >
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 mx-auto ${orderType === "dine_in" ? "bg-slate-100" : "bg-white/20"
@@ -98,8 +164,8 @@ const WelcomeHero = ({ branchInfo, orderType, setOrderType }: any) => (
                     <button
                         onClick={() => setOrderType("takeaway")}
                         className={`relative p-6 rounded-2xl transition-all duration-300 ${orderType === "takeaway"
-                                ? "bg-white text-slate-900 shadow-2xl scale-105"
-                                : "bg-white/10 text-white/80 hover:bg-white/20"
+                            ? "bg-white text-slate-900 shadow-2xl scale-105"
+                            : "bg-white/10 text-white/80 hover:bg-white/20"
                             }`}
                     >
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 mx-auto ${orderType === "takeaway" ? "bg-slate-100" : "bg-white/20"
@@ -122,16 +188,23 @@ const WelcomeHero = ({ branchInfo, orderType, setOrderType }: any) => (
     </div>
 );
 
-const MenuItemCard = ({ item, addToCart, cart, updateQty }: any) => {
-    const cartItem = cart.find((c: any) => c.item_id === item.id);
+interface MenuItemCardProps {
+    item: MenuItem;
+    addToCart: (item: MenuItem) => void;
+    cart: CartItem[];
+    updateQty: (itemId: string, delta: number) => void;
+}
+
+const MenuItemCard = ({ item, addToCart, cart, updateQty }: MenuItemCardProps) => {
+    const cartItem = cart.find((c: CartItem) => c.item_id === item.id);
     const quantity = cartItem?.qty || 0;
 
     return (
         <div className={`bg-white rounded-3xl p-6 border-2 transition-all duration-200 ${!item.is_available
-                ? 'opacity-50 grayscale border-slate-100'
-                : quantity > 0
-                    ? 'border-emerald-200 shadow-lg shadow-emerald-500/5'
-                    : 'border-slate-100 hover:shadow-md hover:border-slate-200'
+            ? 'opacity-50 grayscale border-slate-100'
+            : quantity > 0
+                ? 'border-emerald-200 shadow-lg shadow-emerald-500/5'
+                : 'border-slate-100 hover:shadow-md hover:border-slate-200'
             }`}>
             <div className="flex gap-5">
                 <div className="flex-1">
@@ -186,8 +259,8 @@ const MenuItemCard = ({ item, addToCart, cart, updateQty }: any) => {
                             onClick={() => addToCart(item)}
                             disabled={!item.is_available}
                             className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200 ${item.is_available
-                                    ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 hover:bg-slate-800 active:scale-95'
-                                    : 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                                ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20 hover:bg-slate-800 active:scale-95'
+                                : 'bg-slate-100 text-slate-300 cursor-not-allowed'
                                 }`}
                         >
                             <Plus size={24} strokeWidth={3} />
@@ -206,9 +279,9 @@ export default function QrOrderPage() {
     const initialTableId = searchParams.get("t");
 
     const [loading, setLoading] = useState(true);
-    const [menuItems, setMenuItems] = useState<any[]>([]);
-    const [categories, setCategories] = useState<any[]>([]);
-    const [branchInfo, setBranchInfo] = useState<any>(null);
+    const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [branchInfo, setBranchInfo] = useState<BranchInfo | null>(null);
     const [activeCategory, setActiveCategory] = useState<string>("All");
     const [searchQuery, setSearchQuery] = useState("");
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -225,9 +298,8 @@ export default function QrOrderPage() {
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'online'>('cash');
     const [orderId, setOrderId] = useState<string | null>(null);
     const [tokenNumber, setTokenNumber] = useState<number | null>(null);
-    const [trackedOrders, setTrackedOrders] = useState<any[]>([]);
+    const [trackedOrders, setTrackedOrders] = useState<Order[]>([]);
     const [trackPhone, setTrackPhone] = useState("");
-    const [currentOrderStatus, setCurrentOrderStatus] = useState<string | null>(null);
 
     const categoryRef = useRef<HTMLDivElement>(null);
 
@@ -246,8 +318,7 @@ export default function QrOrderPage() {
                         filter: `id=eq.${orderId}`
                     },
                     (payload) => {
-                        const updatedOrder = payload.new as any;
-                        setCurrentOrderStatus(updatedOrder.status);
+                        const updatedOrder = payload.new as Order;
 
                         // Show toast notification when status changes
                         if (updatedOrder.status === 'preparing') {
@@ -265,39 +336,41 @@ export default function QrOrderPage() {
                 .subscribe();
 
             return () => {
-                supabase.removeChannel(channel);
+                if (channel) supabase.removeChannel(channel);
             };
         }
     }, [step, orderId]);
 
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [items, branchData, cats] = await Promise.all([
+                getPublicBranchMenu(branchId),
+                getPublicBranchDetails(branchId),
+                getMenuCategories(branchId)
+            ]);
+
+            setMenuItems(items as unknown as MenuItem[]);
+            setBranchInfo(branchData as unknown as BranchInfo);
+            setCategories([{ id: 'all', name: 'All' }, ...(cats as Category[])]);
+
+            // Restore customer from local storage
+            const savedName = localStorage.getItem("ezdine_cust_name");
+            const savedPhone = localStorage.getItem("ezdine_cust_phone");
+            if (savedName) setName(savedName);
+            if (savedPhone) setPhone(savedPhone);
+
+            // If we have saved details, we could potentially skip onboarding,
+            // but the user wants to choose Dine In / Takeaway first.
+        } catch (err: unknown) {
+            console.error(err);
+            toast.error("Failed to load restaurant data");
+        } finally {
+            setLoading(false);
+        }
+    }, [branchId]);
+
     useEffect(() => {
-        const load = async () => {
-            try {
-                const [items, branchData, cats] = await Promise.all([
-                    getPublicBranchMenu(branchId),
-                    getPublicBranchDetails(branchId),
-                    getMenuCategories(branchId)
-                ]);
-
-                setMenuItems(items);
-                setBranchInfo(branchData);
-                setCategories([{ id: 'all', name: 'All' }, ...cats]);
-
-                // Restore customer from local storage
-                const savedName = localStorage.getItem("ezdine_cust_name");
-                const savedPhone = localStorage.getItem("ezdine_cust_phone");
-                if (savedName) setName(savedName);
-                if (savedPhone) setPhone(savedPhone);
-
-                // If we have saved details, we could potentially skip onboarding,
-                // but the user wants to choose Dine In / Takeaway first.
-            } catch (err) {
-                console.error(err);
-                toast.error("Failed to load restaurant data");
-            } finally {
-                setLoading(false);
-            }
-        };
         load();
 
         const channel = supabase
@@ -312,32 +385,35 @@ export default function QrOrderPage() {
                 },
                 (payload) => {
                     if (payload.eventType === 'UPDATE') {
-                        const updated = payload.new as any;
+                        const updated = payload.new as MenuItem;
                         setMenuItems(prev => prev.map(item =>
                             item.id === updated.id ? { ...item, ...updated } : item
                         ));
                     } else {
                         // For INSERT/DELETE, just reload the list
-                        getPublicBranchMenu(branchId).then(setMenuItems);
+                        getPublicBranchMenu(branchId).then((items) => setMenuItems(items as unknown as MenuItem[]));
                     }
                 }
             )
             .subscribe();
 
         return () => {
-            supabase.removeChannel(channel);
+            if (channel) supabase.removeChannel(channel);
         };
-    }, [branchId]);
+    }, [branchId, load]);
 
     const filteredItems = useMemo(() => {
         return menuItems.filter(item => {
-            const matchesCategory = activeCategory === "All" || item.menu_categories?.name === activeCategory;
+            const matchesCategory = activeCategory === "All" ||
+                (Array.isArray(item.menu_categories)
+                    ? item.menu_categories[0]?.name === activeCategory
+                    : item.menu_categories?.name === activeCategory);
             const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
             return matchesCategory && matchesSearch;
         });
     }, [menuItems, activeCategory, searchQuery]);
 
-    const addToCart = (item: any) => {
+    const addToCart = (item: MenuItem) => {
         if (!item.is_available) {
             toast.error(`${item.name} is Sold Out!`);
             return;
@@ -370,6 +446,8 @@ export default function QrOrderPage() {
             return;
         }
 
+        if (!branchInfo) return;
+
         setLoading(true);
         try {
             const customer = await checkCustomerExist(branchInfo.restaurant_id, phone);
@@ -383,7 +461,7 @@ export default function QrOrderPage() {
             } else {
                 setStep("onboarding_name");
             }
-        } catch (err) {
+        } catch (err: unknown) {
             console.error(err);
             toast.error("Error checking customer details");
         } finally {
@@ -397,6 +475,8 @@ export default function QrOrderPage() {
             return;
         }
 
+        if (!branchInfo) return;
+
         setLoading(true);
         try {
             const customer = await createPublicCustomer(branchInfo.restaurant_id, name, phone);
@@ -405,7 +485,7 @@ export default function QrOrderPage() {
             localStorage.setItem("ezdine_cust_phone", phone);
             setStep("menu");
             toast.success("Details saved! Enjoy your meal.");
-        } catch (err) {
+        } catch (err: unknown) {
             console.error(err);
             toast.error("Error saving your details");
         } finally {
@@ -424,10 +504,10 @@ export default function QrOrderPage() {
             if (orders.length === 0) {
                 toast.error("No active orders found for this number");
             } else {
-                setTrackedOrders(orders);
+                setTrackedOrders(orders as Order[]);
                 setStep("track_view");
             }
-        } catch (err) {
+        } catch (err: unknown) {
             console.error(err);
             toast.error("Error looking up orders");
         } finally {
@@ -435,22 +515,8 @@ export default function QrOrderPage() {
         }
     };
 
-    const handleOnboardingComplete = () => {
-        if (!name.trim()) {
-            toast.error("Please enter your name");
-            return;
-        }
-        if (phone.length < 10) {
-            toast.error("Please enter a valid phone number");
-            return;
-        }
-        localStorage.setItem("ezdine_cust_name", name);
-        localStorage.setItem("ezdine_cust_phone", phone);
-        setStep("menu");
-        window.scrollTo({ top: 0, behavior: "smooth" });
-    };
-
     const handleCheckout = async () => {
+        if (!branchInfo) return;
         setLoading(true);
         try {
             // 1. Create Order first (status: pending/counter_pending)
@@ -478,21 +544,22 @@ export default function QrOrderPage() {
                     return;
                 }
 
-                const options = {
+                const options: RazorpayOptions = {
                     key: branchInfo.razorpay_key,
                     amount: Math.round(total * 100), // In paise
                     currency: "INR",
                     name: branchInfo.restaurant?.name || "EZDine",
                     description: `Order #${result.order_number}`,
                     order_id: "", // We can use direct capture or pass a Razorpay Order ID if implemented
-                    handler: async function (response: any) {
+                    handler: async function (response: RazorpayResponse) {
                         try {
                             setLoading(true);
                             await verifyPayment(result.id, response.razorpay_payment_id, response.razorpay_signature);
                             setStep("success");
                             setCart([]);
                             window.scrollTo({ top: 0, behavior: 'smooth' });
-                        } catch (err) {
+                        } catch (err: unknown) {
+                            console.error(err);
                             toast.error("Payment verification failed. Please contact staff.");
                         } finally {
                             setLoading(false);
@@ -517,8 +584,9 @@ export default function QrOrderPage() {
             setStep("success");
             setCart([]);
             window.scrollTo({ top: 0, behavior: 'smooth' });
-        } catch (err: any) {
-            toast.error(err.message || "Failed to place order");
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Failed to place order";
+            toast.error(message);
         } finally {
             setLoading(false);
         }
@@ -536,7 +604,7 @@ export default function QrOrderPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 font-outfit select-none">
+        <div className="min-h-screen bg-slate-50 select-none">
             <Toaster position="top-center" richColors />
 
             {/* Premium Header */}
@@ -638,7 +706,6 @@ export default function QrOrderPage() {
                             </div>
 
                             <Button
-                                variant="primary"
                                 className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-widest text-[10px] active:scale-[0.98] transition-all shadow-lg shadow-slate-200"
                                 onClick={handleTrackLookup}
                                 disabled={loading}
@@ -700,7 +767,7 @@ export default function QrOrderPage() {
                     </div>
 
                     <p className="mt-12 text-[10px] font-bold text-slate-400 text-center max-w-[220px] leading-relaxed">
-                        Stay close to the counter if your status is <span className="text-emerald-600 font-black">"Ready"</span>.
+                        Stay close to the counter if your status is <span className="text-emerald-600 font-black">&quot;Ready&quot;</span>.
                     </p>
 
                     <button
@@ -760,8 +827,8 @@ export default function QrOrderPage() {
                             <User size={20} />
                         </div>
                         <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-1">New Guest</h2>
-                        <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-2">What's your name?</h1>
-                        <p className="text-slate-400 font-medium text-[11px] tracking-wide mb-6">We'd love to know who we're serving!</p>
+                        <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none mb-2">What&apos;s your name?</h1>
+                        <p className="text-slate-400 font-medium text-[11px] tracking-wide mb-6">We&apos;d love to know who we&apos;re serving!</p>
 
                         <div className="relative mb-6">
                             <User className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${name ? 'text-slate-900' : 'text-slate-300'}`} size={18} />
@@ -799,18 +866,18 @@ export default function QrOrderPage() {
                                 placeholder="Search delicious food..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full h-14 bg-slate-50 border-2 border-slate-200 rounded-2xl pl-14 pr-5 text-base font-semibold focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 transition-all outline-none placeholder:text-slate-400"
+                                className="w-full h-14 pl-14 pr-6 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-slate-900/10 focus:bg-white transition-all outline-none font-bold text-base text-slate-900 placeholder:text-slate-300"
                             />
                         </div>
 
-                        <div ref={categoryRef} className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
-                            {categories.map(cat => (
+                        <div ref={categoryRef} className="flex gap-2 overflow-x-auto pb-1 no-scrollbar scroll-smooth">
+                            {categories.map((cat) => (
                                 <button
                                     key={cat.id}
                                     onClick={() => setActiveCategory(cat.name)}
-                                    className={`whitespace-nowrap px-6 py-3 rounded-2xl text-sm font-black transition-all duration-200 ${activeCategory === cat.name
-                                            ? "bg-slate-900 text-white shadow-xl shadow-slate-900/20"
-                                            : "bg-white text-slate-600 border-2 border-slate-200 hover:border-slate-300"
+                                    className={`whitespace-nowrap px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeCategory === cat.name
+                                        ? "bg-slate-900 text-white shadow-lg shadow-slate-900/20 scale-105"
+                                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                                         }`}
                                 >
                                     {cat.name}
@@ -820,17 +887,17 @@ export default function QrOrderPage() {
                     </div>
 
                     {/* Menu Items Grid */}
-                    <div className="p-4">
+                    <div className="px-4 py-6 space-y-6">
                         {filteredItems.length === 0 ? (
-                            <div className="py-20 text-center flex flex-col items-center opacity-50">
-                                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
-                                    <Search size={24} className="text-slate-400" />
+                            <div className="py-20 text-center">
+                                <div className="w-20 h-20 bg-slate-100 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6">
+                                    <Search size={32} className="text-slate-300" />
                                 </div>
-                                <h3 className="font-bold text-slate-600 mb-2">No items found</h3>
-                                <p className="text-sm text-slate-400">Try searching for something else</p>
+                                <h3 className="text-xl font-black text-slate-900 mb-2">No items found</h3>
+                                <p className="text-slate-400 font-medium">Try searching for something else</p>
                             </div>
                         ) : (
-                            <div className="space-y-4">
+                            <div className="grid gap-4">
                                 {filteredItems.map(item => (
                                     <MenuItemCard
                                         key={item.id}
@@ -843,256 +910,194 @@ export default function QrOrderPage() {
                             </div>
                         )}
                     </div>
+
+                    {/* Conditional Bottom Bar */}
+                    {cart.length > 0 && (
+                        <div className="fixed bottom-6 left-4 right-4 z-50 animate-in slide-in-from-bottom-10 duration-500">
+                            <button
+                                onClick={() => setStep("cart")}
+                                className="w-full bg-slate-900 p-4 rounded-3xl flex items-center justify-between shadow-2xl shadow-slate-900/40 active:scale-[0.98] transition-all group"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="h-12 w-12 bg-white/10 rounded-2xl flex items-center justify-center text-white ring-1 ring-white/20">
+                                        <ShoppingBag size={22} strokeWidth={2.5} />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-[10px] font-black text-white/50 uppercase tracking-widest mb-0.5">{cart.length} {cart.length === 1 ? 'Item' : 'Items'}</p>
+                                        <p className="text-xl font-black text-white tracking-tight">₹{total}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 bg-white text-slate-900 px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg group-hover:scale-105 transition-transform">
+                                    View Cart <ArrowRight size={16} strokeWidth={3} />
+                                </div>
+                            </button>
+                        </div>
+                    )}
                 </main>
             )}
 
             {/* Cart Screen */}
             {step === "cart" && (
-                <main className="p-4 animate-in slide-in-from-bottom-8 duration-500">
-                    <div className="flex items-center justify-between mb-8">
-                        <button onClick={() => setStep("menu")} className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center border border-slate-100 text-slate-400">
+                <main className="min-h-screen bg-white animate-in slide-in-from-right duration-300">
+                    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 px-4 py-6 flex items-center justify-between">
+                        <button
+                            onClick={() => setStep("menu")}
+                            className="h-12 w-12 rounded-2xl bg-slate-100 text-slate-900 flex items-center justify-center active:scale-90 transition-all"
+                        >
                             <ChevronLeft size={24} />
                         </button>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight text-center flex-1">Your Order</h2>
-                        <div className="w-12" />
-                    </div>
-
-                    <div className="space-y-3 mb-6">
-                        {cart.length === 0 ? (
-                            <div className="py-20 text-center opacity-40">
-                                <ShoppingBag size={40} className="mx-auto mb-4" />
-                                <h3 className="font-black uppercase tracking-widest text-[10px]">Your basket is empty</h3>
-                            </div>
-                        ) : (
-                            cart.map(item => (
-                                <div key={item.item_id} className="bg-white rounded-2xl p-4 flex items-center justify-between border border-slate-100">
-                                    <div className="flex-1">
-                                        <p className="font-black text-slate-900 leading-none mb-1">{item.name}</p>
-                                        <p className="text-[10px] font-bold text-slate-400">₹{item.price}</p>
-                                    </div>
-                                    <div className="flex items-center gap-4 bg-slate-50 rounded-xl p-1 border border-slate-100">
-                                        <button onClick={() => updateQty(item.item_id, -1)} className="h-8 w-8 bg-white rounded-lg flex items-center justify-center text-slate-400 shadow-sm">
-                                            <Minus size={16} strokeWidth={3} />
-                                        </button>
-                                        <span className="font-black text-sm w-4 text-center text-slate-900">{item.qty}</span>
-                                        <button onClick={() => updateQty(item.item_id, 1)} className="h-8 w-8 bg-white rounded-lg flex items-center justify-center text-slate-400 shadow-sm">
-                                            <Plus size={16} strokeWidth={3} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-
-                    {cart.length > 0 && (
-                        <>
-                            <div className="bg-slate-900 rounded-3xl p-6 text-white mb-6">
-                                <div className="space-y-2 mb-4">
-                                    <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                        <span>Subtotal</span>
-                                        <span>₹{total.toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                        <span>Taxes</span>
-                                        <span className="text-emerald-500">Free</span>
-                                    </div>
-                                </div>
-                                <div className="h-px bg-white/10 mb-4" />
-                                <div className="flex justify-between items-end">
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total</span>
-                                    <span className="text-3xl font-black text-brand-500 tracking-tighter italic">₹{total.toFixed(2)}</span>
-                                </div>
-                            </div>
-                            <button
-                                className="w-full h-16 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[12px] shadow-lg shadow-slate-200 active:scale-95 transition-all"
-                                onClick={() => setStep("payment")}
-                                disabled={loading}
-                            >
-                                {loading ? "Processing..." : "Select Payment Method"}
-                            </button>
-                        </>
-                    )}
-                </main>
-            )}
-
-            {/* Payment Screen */}
-            {step === "payment" && (
-                <main className="p-6 animate-in slide-in-from-right duration-500">
-                    <div className="flex items-center justify-between mb-8">
-                        <button onClick={() => setStep("cart")} className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center border border-slate-100 text-slate-400">
-                            <ChevronLeft size={24} />
+                        <h2 className="text-xl font-black text-slate-900 tracking-tight italic">Your Cart</h2>
+                        <button
+                            onClick={() => setCart([])}
+                            className="text-[10px] font-black text-rose-500 uppercase tracking-widest"
+                        >
+                            Clear
                         </button>
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight text-center flex-1">Checkout</h2>
-                        <div className="w-12" />
-                    </div>
+                    </header>
 
-                    <div className="space-y-4 mb-8">
-                        <div className="bg-slate-900 rounded-3xl p-6 text-white text-center shadow-lg shadow-slate-200">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-2">Amount to Pay</p>
-                            <p className="text-4xl font-black tracking-tighter italic">₹{total.toFixed(2)}</p>
+                    <div className="p-6 space-y-6">
+                        {cart.map((item) => (
+                            <div key={item.item_id} className="flex items-center gap-4 group">
+                                <div className="flex-1">
+                                    <h4 className="font-extrabold text-lg text-slate-900 leading-tight mb-1">{item.name}</h4>
+                                    <p className="text-sm font-bold text-slate-400 italic">₹{item.price} per unit</p>
+                                </div>
+                                <div className="flex items-center gap-3 bg-slate-50 rounded-2xl p-1.5 border border-slate-100">
+                                    <button
+                                        onClick={() => updateQty(item.item_id, -1)}
+                                        className="w-10 h-10 rounded-xl bg-white text-slate-600 flex items-center justify-center shadow-sm active:scale-95 transition-all"
+                                    >
+                                        <Minus size={16} strokeWidth={3} />
+                                    </button>
+                                    <span className="font-black text-lg text-slate-900 min-w-[30px] text-center">{item.qty}</span>
+                                    <button
+                                        onClick={() => updateQty(item.item_id, 1)}
+                                        className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-md active:scale-95 transition-all"
+                                    >
+                                        <Plus size={16} strokeWidth={3} />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+
+                        <div className="mt-12 space-y-4 pt-8 border-t-4 border-slate-50 border-dashed">
+                            <div className="flex justify-between items-center px-2">
+                                <span className="text-slate-400 font-bold uppercase tracking-widest text-xs">Subtotal</span>
+                                <span className="font-bold text-slate-900">₹{total}</span>
+                            </div>
+                            <div className="flex justify-between items-center px-2">
+                                <span className="text-slate-400 font-bold uppercase tracking-widest text-xs">Tax (5% GST)</span>
+                                <span className="font-bold text-slate-900">₹{Math.round(total * 0.05)}</span>
+                            </div>
+                            <div className="flex justify-between items-center bg-slate-900 p-6 rounded-[2rem] text-white shadow-xl shadow-slate-900/20">
+                                <span className="font-black uppercase tracking-[0.2em] text-xs opacity-60">Total Amount</span>
+                                <span className="text-3xl font-black italic">₹{Math.round(total * 1.05)}</span>
+                            </div>
                         </div>
 
-                        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 px-2 mt-6 mb-2">Payment Method</p>
-
-                        {branchInfo?.razorpay_enabled && (
-                            <button
-                                onClick={() => setPaymentMethod('online')}
-                                className={`w-full p-5 rounded-3xl flex items-center gap-4 transition-all border-2 ${paymentMethod === 'online' ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-100'}`}
-                            >
-                                <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${paymentMethod === 'online' ? 'bg-emerald-500 text-white' : 'bg-slate-50 text-slate-400'}`}>
+                        <div className="pt-8 mb-40">
+                            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 ml-2">Choose Payment</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <button
+                                    onClick={() => setPaymentMethod('online')}
+                                    className={`relative p-5 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 text-center ${paymentMethod === 'online'
+                                        ? 'bg-slate-900 border-slate-900 text-white shadow-xl scale-105'
+                                        : 'bg-slate-50 border-slate-100 text-slate-400 grayscale hover:grayscale-0'
+                                        }`}
+                                >
                                     <Zap size={24} />
-                                </div>
-                                <div className="text-left flex-1">
-                                    <h3 className={`font-black text-sm uppercase tracking-tight ${paymentMethod === 'online' ? 'text-emerald-900' : 'text-slate-900'}`}>Pay Online</h3>
-                                    <p className="text-[10px] font-bold text-slate-400">UPI, Cards, Netbanking</p>
-                                </div>
-                                {paymentMethod === 'online' && <CheckCircle2 className="text-emerald-500" size={24} />}
-                            </button>
-                        )}
-
-                        <button
-                            onClick={() => setPaymentMethod('cash')}
-                            className={`w-full p-5 rounded-3xl flex items-center gap-4 transition-all border-2 ${paymentMethod === 'cash' ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-100'}`}
-                        >
-                            <div className={`h-12 w-12 rounded-xl flex items-center justify-center ${paymentMethod === 'cash' ? 'bg-white/20 text-white' : 'bg-slate-50 text-slate-400'}`}>
-                                <Utensils size={24} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">Pay Online</span>
+                                    {paymentMethod === 'online' && (
+                                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
+                                            <CheckCircle2 size={16} className="text-white" />
+                                        </div>
+                                    )}
+                                </button>
+                                <button
+                                    onClick={() => setPaymentMethod('cash')}
+                                    className={`relative p-5 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 text-center ${paymentMethod === 'cash'
+                                        ? 'bg-slate-900 border-slate-900 text-white shadow-xl scale-105'
+                                        : 'bg-slate-50 border-slate-100 text-slate-400 grayscale hover:grayscale-0'
+                                        }`}
+                                >
+                                    <Utensils size={24} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">Pay at Counter</span>
+                                    {paymentMethod === 'cash' && (
+                                        <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
+                                            <CheckCircle2 size={16} className="text-white" />
+                                        </div>
+                                    )}
+                                </button>
                             </div>
-                            <div className="text-left flex-1">
-                                <h3 className={`font-black text-sm uppercase tracking-tight ${paymentMethod === 'cash' ? 'text-white' : 'text-slate-900'}`}>Pay at Counter</h3>
-                                <p className={`text-[10px] font-bold ${paymentMethod === 'cash' ? 'text-white/50' : 'text-slate-400'}`}>Cash or Card at desk</p>
-                            </div>
-                            {paymentMethod === 'cash' && <Check size={24} className="text-white" />}
-                        </button>
+                        </div>
                     </div>
 
-                    <button
-                        className="w-full h-16 rounded-2xl bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-[12px] shadow-lg shadow-slate-200 active:scale-95 transition-all"
-                        onClick={handleCheckout}
-                        disabled={loading}
-                    >
-                        {loading ? "Processing..." : paymentMethod === 'online' ? "Proceed to Payment" : "Confirm Order"}
-                    </button>
+                    <div className="fixed bottom-8 left-4 right-4 z-50">
+                        <button
+                            onClick={handleCheckout}
+                            disabled={loading || cart.length === 0}
+                            className="w-full h-16 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white font-black uppercase tracking-[0.3em] text-xs shadow-2xl active:scale-95 transition-all group disabled:opacity-50"
+                        >
+                            {loading ? (
+                                <div className="flex items-center gap-3">
+                                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Placing Order...
+                                </div>
+                            ) : (
+                                <span className="flex items-center gap-3">
+                                    Place Order <ArrowRight size={18} strokeWidth={3} className="group-hover:translate-x-1 transition-transform" />
+                                </span>
+                            )}
+                        </button>
+                    </div>
                 </main>
             )}
 
             {/* Success Screen */}
             {step === "success" && (
-                <main className="p-6 flex flex-col items-center justify-center min-h-[90vh] text-center animate-in zoom-in-95 duration-1000">
-                    <div className="h-24 w-24 bg-emerald-500 rounded-3xl flex items-center justify-center text-white shadow-xl mb-8">
-                        <Check size={48} strokeWidth={4} />
+                <main className="min-h-screen bg-white flex flex-col items-center justify-center p-8 animate-in zoom-in duration-500">
+                    <div className="w-full max-w-[340px] text-center">
+                        <div className="w-24 h-24 bg-emerald-500 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-emerald-500/40 relative">
+                            <Check size={48} className="text-white" strokeWidth={4} />
+                            <div className="absolute -top-4 -right-4 bg-slate-900 text-white w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg animate-bounce">
+                                <Zap size={20} />
+                            </div>
+                        </div>
+
+                        <h2 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mb-2">Order Confirmed</h2>
+                        <h1 className="text-4xl font-black text-slate-900 tracking-tighter leading-none mb-4 italic">Thank You!</h1>
+                        <p className="text-slate-400 font-bold mb-12 text-sm leading-relaxed px-4">
+                            Your order has been received. Sit back and relax!
+                        </p>
+
+                        <div className="bg-slate-50 rounded-[2.5rem] p-8 mb-12 border border-slate-100 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-4 opacity-5">
+                                <Utensils size={100} />
+                            </div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Your Token Number</p>
+                            <h3 className="text-6xl font-black text-slate-900 italic tracking-tighter">#{tokenNumber}</h3>
+                            <div className="mt-6 inline-flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-slate-100 shadow-sm animate-pulse">
+                                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">Sent to Kitchen</span>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => setStep("menu")}
+                            className="w-full h-14 rounded-2xl bg-slate-100 text-slate-900 font-black uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-all active:scale-95 flex items-center justify-center gap-2 mb-4"
+                        >
+                            <Plus size={16} /> Order More
+                        </button>
+
+                        <button
+                            onClick={() => setStep("track_lookup")}
+                            className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors"
+                        >
+                            Track Live Status
+                        </button>
                     </div>
-
-                    <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2 italic">Bravo!</h2>
-                    <p className="text-slate-400 font-bold mb-10 max-w-[240px] text-xs">
-                        {paymentMethod === 'cash'
-                            ? "Please pay at the counter. Your order will start once confirmed."
-                            : "Your order has been placed. Show this ticket at the counter."}
-                    </p>
-
-                    <div className="w-full max-w-[320px] bg-white rounded-3xl border border-slate-100 p-8 shadow-xl relative overflow-hidden">
-                        <div className="flex items-center justify-center gap-2 mb-6 opacity-20">
-                            <span className="h-0.5 w-6 bg-slate-900 rounded-full" />
-                            <span className="text-[10px] font-black uppercase tracking-[0.4em]">Dining Pass</span>
-                            <span className="h-0.5 w-6 bg-slate-900 rounded-full" />
-                        </div>
-
-                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Token Number</p>
-                        <div className="text-7xl font-black text-slate-900 leading-none mb-6 tracking-tighter">
-                            <span className="text-2xl text-slate-200 mr-1 font-bold">#</span>
-                            {tokenNumber ?? '---'}
-                        </div>
-
-                        {currentOrderStatus && (
-                            <div className={`mb-6 p-4 rounded-2xl ${currentOrderStatus === 'ready'
-                                    ? 'bg-emerald-50 border-2 border-emerald-200'
-                                    : 'bg-amber-50 border-2 border-amber-200'
-                                }`}>
-                                <p className={`text-sm font-black uppercase tracking-tight ${currentOrderStatus === 'ready' ? 'text-emerald-900' : 'text-amber-900'
-                                    }`}>
-                                    {currentOrderStatus === 'ready'
-                                        ? '🎉 Your order is ready!'
-                                        : '👨‍🍳 Chef is cooking your meal'}
-                                </p>
-                                <p className={`text-[10px] font-bold mt-1 ${currentOrderStatus === 'ready' ? 'text-emerald-600' : 'text-amber-600'
-                                    }`}>
-                                    {currentOrderStatus === 'ready'
-                                        ? 'Please collect from the counter'
-                                        : 'We\'ll notify you when it\'s ready'}
-                                </p>
-                            </div>
-                        )}
-
-                        <div className="pt-6 border-t-2 border-dashed border-slate-100 space-y-3">
-                            <div className="flex justify-between items-center">
-                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Status</span>
-                                <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${currentOrderStatus === 'ready'
-                                        ? 'text-emerald-600 bg-emerald-50 animate-pulse'
-                                        : currentOrderStatus === 'preparing'
-                                            ? 'text-amber-600 bg-amber-50 animate-pulse'
-                                            : paymentMethod === 'cash'
-                                                ? 'text-amber-600 bg-amber-50'
-                                                : 'text-blue-600 bg-blue-50'
-                                    }`}>
-                                    {currentOrderStatus === 'ready'
-                                        ? '✅ Ready'
-                                        : currentOrderStatus === 'preparing'
-                                            ? '🔥 Preparing'
-                                            : paymentMethod === 'cash'
-                                                ? 'Awaiting Payment'
-                                                : 'Confirmed'}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center text-[9px] font-bold text-slate-300">
-                                <span>Ref ID</span>
-                                <span className="font-mono">{orderId?.slice(0, 8)}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <button
-                        className="mt-12 text-slate-400 font-black uppercase tracking-widest text-[10px] hover:text-slate-900 transition-colors"
-                        onClick={() => setStep("onboarding_type")}
-                    >
-                        Place Another Order
-                    </button>
                 </main>
             )}
-
-            {/* Enhanced Floating Cart */}
-            {cart.length > 0 && step === "menu" && (
-                <div className="fixed bottom-6 left-4 right-4 z-50 animate-in slide-in-from-bottom-10">
-                    <button
-                        onClick={() => setStep("cart")}
-                        className="w-full bg-slate-900 text-white h-16 rounded-2xl px-6 flex items-center justify-between shadow-2xl active:scale-[0.98] transition-all border border-slate-700"
-                    >
-                        <div className="flex items-center gap-4">
-                            <div className="relative">
-                                <ShoppingBag size={20} className="text-white" />
-                                <div className="absolute -top-2 -right-2 w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center">
-                                    <span className="text-[10px] font-black text-white">{cart.length}</span>
-                                </div>
-                            </div>
-                            <div className="text-left">
-                                <p className="font-bold text-sm text-white">View Cart</p>
-                                <p className="text-xs text-white/70">{cart.length} item{cart.length > 1 ? 's' : ''}</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className="text-right">
-                                <p className="font-black text-lg text-white">₹{total.toFixed(0)}</p>
-                                <p className="text-xs text-white/70">Total</p>
-                            </div>
-                            <ArrowRight size={18} className="text-white/80" />
-                        </div>
-                    </button>
-                </div>
-            )}
-
-            {/* SDKs */}
-            <Script src="https://checkout.razorpay.com/v1/checkout.js" />
-
-            {/* Global Branding */}
-            <BrandingFooter />
         </div>
     );
 }

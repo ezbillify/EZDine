@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Plus, MapPin, Trash2, Edit3, Building, Phone, Home, Search, Globe } from "lucide-react";
 import { toast } from "sonner";
 
 import { createBranch, deleteBranch, updateBranch } from "../../lib/owner";
-import { getPrintingSettings } from "../../lib/printing";
 import { getAccessibleBranches, getAccessibleRestaurants } from "../../lib/tenant";
 import type { Branch, Restaurant } from "../../lib/supabaseTypes";
 import { Button } from "../ui/Button";
@@ -36,7 +35,7 @@ export function BranchManager() {
     setEditingBranch(null);
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const [restaurantsData, branchesData] = await Promise.all([
       getAccessibleRestaurants(),
       getAccessibleBranches()
@@ -46,11 +45,11 @@ export function BranchManager() {
     if (!restaurantId && restaurantsData[0]) {
       setRestaurantId(restaurantsData[0].id);
     }
-  };
+  }, [restaurantId]);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const filteredBranches = useMemo(() => {
     if (!restaurantId) return branches;
@@ -82,8 +81,9 @@ export function BranchManager() {
       }
       resetForm();
       await load();
-    } catch (err: any) {
-      toast.error(err.message || "Operation failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Operation failed";
+      toast.error(message);
     } finally {
       setStatus("idle");
     }
@@ -107,7 +107,8 @@ export function BranchManager() {
       await deleteBranch(branch.id);
       toast.success("Branch archived");
       await load();
-    } catch (err) {
+    } catch (err: unknown) {
+      console.error(err);
       toast.error("Access denied");
     }
   };

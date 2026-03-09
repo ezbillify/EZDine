@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
     ShoppingBag,
     Users,
     Plus,
     Search,
-    ArrowRight,
     Building2,
     BadgeIndianRupee,
     Calendar,
@@ -15,7 +14,8 @@ import {
     MoreVertical,
     CheckCircle2,
     Clock,
-    XCircle
+    XCircle,
+    LucideIcon
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 
@@ -30,18 +30,46 @@ import { getAccessibleBranches, getActiveRestaurantRole, getCurrentUserProfile }
 
 type Tab = "orders" | "vendors" | "new-order";
 
+interface PurchaseOrder {
+    id: string;
+    order_number: string;
+    status: string;
+    total_amount: number;
+    order_date: string;
+    branch?: { name: string };
+    vendor?: { name: string };
+}
+
+interface Vendor {
+    id: string;
+    name: string;
+    phone: string | null;
+    address: string | null;
+}
+
+interface Branch {
+    id: string;
+    name: string;
+}
+
+interface OrderItemRow {
+    inventory_item_id: string;
+    quantity: number | string;
+    unit_price: number | string;
+}
+
 export default function PurchasePage() {
     const [activeTab, setActiveTab] = useState<Tab>("orders");
     const [loading, setLoading] = useState(true);
 
     // Data states
-    const [orders, setOrders] = useState<any[]>([]);
-    const [vendors, setVendors] = useState<any[]>([]);
-    const [branches, setBranches] = useState<any[]>([]);
+    const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+    const [vendors, setVendors] = useState<Vendor[]>([]);
+    const [branches, setBranches] = useState<Branch[]>([]);
     const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
     const [role, setRole] = useState<string | null>(null);
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setLoading(true);
         try {
             const profile = await getCurrentUserProfile();
@@ -67,27 +95,27 @@ export default function PurchasePage() {
                 }
 
                 const { data } = await query.order("created_at", { ascending: false });
-                setOrders(data ?? []);
+                setOrders((data as unknown as PurchaseOrder[]) ?? []);
             } else if (activeTab === "vendors") {
                 const { data } = await supabase
                     .from("vendors")
                     .select("*")
                     .eq("restaurant_id", profile.active_restaurant_id)
                     .order("name");
-                setVendors(data ?? []);
+                setVendors((data as unknown as Vendor[]) ?? []);
             }
-        } catch (err) {
+        } catch (err: unknown) {
             console.error("Load error:", err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [activeTab, selectedBranchId]);
 
-    const loadBranches = async () => {
+    const loadBranches = useCallback(async () => {
         const profile = await getCurrentUserProfile();
         if (!profile?.active_restaurant_id) return;
         const data = await getAccessibleBranches(profile.active_restaurant_id);
-        setBranches(data ?? []);
+        setBranches((data as Branch[]) ?? []);
         const currentRole = await getActiveRestaurantRole();
         setRole(currentRole);
 
@@ -95,15 +123,15 @@ export default function PurchasePage() {
         if (currentRole !== 'owner' && currentRole !== 'manager') {
             setSelectedBranchId(profile.active_branch_id || 'all');
         }
-    };
-
-    useEffect(() => {
-        loadBranches();
     }, []);
 
     useEffect(() => {
+        loadBranches();
+    }, [loadBranches]);
+
+    useEffect(() => {
         loadData();
-    }, [activeTab, selectedBranchId]);
+    }, [loadData]);
 
     return (
         <AuthGate>
@@ -255,7 +283,7 @@ export default function PurchasePage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-    const configs: Record<string, { icon: any, class: string, label: string }> = {
+    const configs: Record<string, { icon: LucideIcon, class: string, label: string }> = {
         received: { icon: CheckCircle2, class: "bg-emerald-50 text-emerald-600 ring-emerald-200", label: "Received" },
         ordered: { icon: Truck, class: "bg-blue-50 text-blue-600 ring-blue-200", label: "Ordered" },
         draft: { icon: Clock, class: "bg-slate-50 text-slate-600 ring-slate-200", label: "Draft" },
@@ -274,11 +302,11 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function NewPurchaseOrder({ onCancel, onSuccess }: { onCancel: () => void, onSuccess: () => void }) {
-    const [vendors, setVendors] = useState<any[]>([]);
-    const [items, setItems] = useState<any[]>([]);
+    const [vendors, setVendors] = useState<{ id: string, name: string }[]>([]);
+    const [items, setItems] = useState<{ id: string, name: string, unit: string }[]>([]);
 
     const [vendorId, setVendorId] = useState("");
-    const [orderItems, setOrderItems] = useState<any[]>([]);
+    const [orderItems, setOrderItems] = useState<OrderItemRow[]>([]);
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
@@ -305,13 +333,15 @@ function NewPurchaseOrder({ onCancel, onSuccess }: { onCancel: () => void, onSuc
         setOrderItems(orderItems.filter((_, i) => i !== index));
     };
 
-    const updateItemRow = (index: number, field: string, value: any) => {
+    const updateItemRow = (index: number, field: keyof OrderItemRow, value: string | number) => {
         const newItems = [...orderItems];
-        newItems[index][field] = value;
+        newItems[index] = { ...newItems[index], [field]: value } as OrderItemRow;
         setOrderItems(newItems);
     };
 
-    const total = orderItems.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unit_price)), 0);
+    const total = useMemo(() =>
+        orderItems.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unit_price)), 0)
+        , [orderItems]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -345,8 +375,8 @@ function NewPurchaseOrder({ onCancel, onSuccess }: { onCancel: () => void, onSuc
                     orderItems.map(item => ({
                         purchase_order_id: po.id,
                         inventory_item_id: item.inventory_item_id,
-                        quantity: item.quantity,
-                        unit_price: item.unit_price,
+                        quantity: Number(item.quantity),
+                        unit_price: Number(item.unit_price),
                         total_price: Number(item.quantity) * Number(item.unit_price)
                     }))
                 );
@@ -355,7 +385,7 @@ function NewPurchaseOrder({ onCancel, onSuccess }: { onCancel: () => void, onSuc
 
             toast.success("Purchase order created successfully");
             onSuccess();
-        } catch (err) {
+        } catch (err: unknown) {
             console.error(err);
             toast.error("Failed to create purchase order");
         } finally {

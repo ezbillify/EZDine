@@ -64,7 +64,7 @@ export function PrintTestCard() {
     try {
       await sendPrintJob({ printerId: "billing-1", width: 58, type: "invoice", lines });
       toast.success("Test Consolidated Slip dispatched");
-    } catch (err) {
+    } catch {
       toast.error("Network printer unreachable");
     } finally {
       setStatus("idle");
@@ -98,7 +98,7 @@ export function PrintTestCard() {
     try {
       await sendPrintJob({ printerId: "kitchen-1", width: 58, type: "kot", lines });
       toast.success("Test KOT dispatched to network");
-    } catch (err) {
+    } catch {
       toast.error("Network printer unreachable");
     } finally {
       setStatus("idle");
@@ -134,7 +134,7 @@ export function PrintTestCard() {
     try {
       await sendPrintJob({ printerId: "billing-1", width: 80, type: "invoice", lines });
       toast.success("Test Invoice dispatched to network");
-    } catch (err) {
+    } catch {
       toast.error("Network printer unreachable");
     } finally {
       setStatus("idle");

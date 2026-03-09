@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { AlertCircle, CheckCircle2, Save, Trash2, User, Search, Plus, Phone, X, UserPlus, ArrowRight, Check, Eye, Zap, History, Utensils, ShoppingBag, Printer, Leaf, Flame, Egg } from "lucide-react";
+import { AlertCircle, CheckCircle2, Save, Trash2, User, Search, Plus, X, UserPlus, Eye, Zap, History, Utensils, ShoppingBag, Printer, Leaf, Flame, Egg } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast, Toaster } from "sonner";
 
@@ -19,7 +20,7 @@ import {
   getTables,
   toggleItemAvailability
 } from "../../lib/pos";
-import { buildInvoiceLines, buildKotLines, buildTokenSlipLines, buildConsolidatedReceiptLines, getPrintingSettings, sendPrintJob, PrintLine } from "../../lib/printing";
+import { buildInvoiceLines, buildKotLines, buildConsolidatedReceiptLines, getPrintingSettings, sendPrintJob, PrintLine } from "../../lib/printing";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Input } from "../ui/Input";
@@ -142,7 +143,7 @@ export function PosShell() {
       try {
         const [items, tableData] = await Promise.all([getMenuItems(), getTables()]);
         setMenuItems(items as MenuItem[]);
-        setTables(tableData as any);
+        setTables(tableData as { id: string; name: string }[]);
 
         // Also load categories for the current branch
         const profile = await getCurrentUserProfile();
@@ -153,7 +154,7 @@ export function PosShell() {
             setCategories(cats ?? []);
           }
         }
-      } catch (err) {
+      } catch {
         toast.error("Failed to load menu or tables");
       }
     };
@@ -171,7 +172,7 @@ export function PosShell() {
         "postgres_changes",
         { event: "*", schema: "public", table: "orders" },
         async (payload) => {
-          const newOrder = payload.new as any;
+          const newOrder = payload.new as Record<string, any>;
           const eventType = payload.eventType;
 
           fetchLiveOrders();
@@ -196,7 +197,7 @@ export function PosShell() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "order_items" },
-        (payload) => {
+        () => {
           // If items change, we definitely need to refresh active table if it matches
           // For QR orders list, usually total amount or item count might show, so safe to refresh.
           fetchLiveOrders();
@@ -233,12 +234,11 @@ export function PosShell() {
       });
 
     fetchLiveOrders();
-
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
-  }, [activeTableId]); // Add activeTableId dependency to listener? No, listener should be stable.
+  }, [activeTableId, activeTab, activeOrderId]);
   // We need to handle activeTableId refresh carefully. 
 
 
@@ -254,7 +254,7 @@ export function PosShell() {
     try {
       const data = await getSettledBills();
       setHistory(data);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load order history");
     } finally {
       setLoadingHistory(false);
@@ -265,12 +265,12 @@ export function PosShell() {
     try {
       const orders = await getPendingQrOrders();
       setLiveOrders(orders);
-    } catch (err) {
-      console.error("Failed to fetch QR orders", err);
+    } catch {
+      console.error("Failed to fetch QR orders");
     }
   };
 
-  const loadQrOrder = async (order: any) => {
+  const loadQrOrder = async (order: Record<string, any>) => {
     try {
       setIsOrderSettled(false);
       setActiveTableId(order.table_id);
@@ -296,12 +296,12 @@ export function PosShell() {
       setExistingItems(mappedItems);
       setCart([]); // Clear local cart as we are loading existing order
       toast.info(`Loaded QR Order - Token ${order.token_number}`);
-    } catch (err) {
+    } catch {
       toast.error("Failed to load QR order details");
     }
   };
 
-  const loadSettledBill = async (bill: any) => {
+  const loadSettledBill = async (bill: Record<string, any>) => {
     try {
       if (!bill.order_id) return;
 
@@ -342,8 +342,7 @@ export function PosShell() {
       setIsQuickBill(true); // Visually detached from tables
 
       toast.info(`Loaded Settled Bill #${bill.order?.order_number}`);
-    } catch (err) {
-      console.error(err);
+    } catch {
       toast.error("Failed to load bill details");
     }
   };
@@ -354,7 +353,7 @@ export function PosShell() {
       await toggleItemAvailability(item.id, nextStatus);
       setMenuItems(prev => prev.map(m => m.id === item.id ? { ...m, is_available: nextStatus } : m));
       toast.success(`${item.name} marked ${nextStatus ? 'Available' : 'Out of Stock'}`);
-    } catch (err) {
+    } catch {
       toast.error("Failed to update stock status");
     }
   };
@@ -437,7 +436,7 @@ export function PosShell() {
       }
     };
     loadTableOrder();
-  }, [activeTableId, menuItems, status, lastUpdated]);
+  }, [activeTableId, menuItems, status, lastUpdated, isQuickBill]);
 
   const cartTotal = useMemo(
     () => cart.reduce((sum, item) => sum + item.qty * item.price, 0),
@@ -483,7 +482,7 @@ export function PosShell() {
     if (!profile) return;
 
     // Use active_branch_id if available to scope customer to branch
-    const branchId = profile.active_branch_id || (activeTableId ? tables.find(t => t.id === activeTableId)?.id : null); // Table doesn't allow easy branch lookup from here without extra query/data, so stick to profile active branch
+    // const branchId = profile.active_branch_id || (activeTableId ? tables.find(t => t.id === activeTableId)?.id : null); 
 
     const { data, error } = await supabase
       .from("customers")
@@ -582,19 +581,21 @@ export function PosShell() {
             printerId: settings.printerIdKot ?? "kitchen-1",
             width: settings.widthKot ?? 58,
             type: "kot",
-            lines: kotLines
+            lines: kotLines,
+            font: (settings as any).printFont
           });
         }
-      } catch (printErr: any) {
+      } catch (printErr: unknown) {
         console.error("Printing failed", printErr);
-        toast.error("Order saved, but printing failed: " + printErr.message);
+        const msg = printErr instanceof Error ? printErr.message : String(printErr);
+        toast.error("Order saved, but printing failed: " + msg);
       }
 
       const cacheKey = isQuickBill ? 'ezdine_cart_quick' : `ezdine_cart_${activeTableId}`;
       setCart([]);
       localStorage.removeItem(cacheKey);
       toast.success("Order placed successfully");
-    } catch (err: any) {
+    } catch {
       setStatus("idle");
     }
   };
@@ -622,7 +623,7 @@ export function PosShell() {
           'paid',
           undefined,
           undefined,
-          primaryMethod as any,
+          primaryMethod as "cash" | "card" | "upi",
           orderType
         );
         orderId = order.id;
@@ -645,18 +646,20 @@ export function PosShell() {
             tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
             orderId: orderNumber ?? "--",
             tokenNumber: tokenNumber?.toString(),
-            items: cart.map((c) => ({ name: c.name, qty: c.qty, note: c.notes }))
+            items: cart.map((c) => ({ name: c.name, qty: c.qty, notes: c.notes }))
           });
 
           await sendPrintJob({
             printerId: settings.printerIdKot ?? "kitchen-1",
             width: settings.widthKot ?? 58,
             type: "kot",
-            lines: kotLines
+            lines: kotLines,
+            font: (settings as any).printFont
           });
-        } catch (printErr: any) {
+        } catch (printErr: unknown) {
           console.error("KOT Print failed", printErr);
-          toast.error("KOT printing failed: " + printErr.message);
+          const msg = printErr instanceof Error ? printErr.message : String(printErr);
+          toast.error("KOT printing failed: " + msg);
         }
       }
 
@@ -668,7 +671,7 @@ export function PosShell() {
 
       const totalAmount = fullItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
-      const bill = await createBill(orderId!, fullItems as any);
+      const bill = await createBill(orderId!, fullItems as CartItem[]);
 
       // Add all payments
       for (const p of payments) {
@@ -697,7 +700,7 @@ export function PosShell() {
       // 4. Print Bill & Token
       try {
         if (settings) {
-          const consolidate = (settings as any).consolidatedPrinting === true;
+          const consolidate = (settings as Record<string, any>).consolidatedPrinting === true;
 
           if (consolidate) {
             const consolidatedLines = buildConsolidatedReceiptLines({
@@ -718,7 +721,8 @@ export function PosShell() {
               printerId: settings.printerIdInvoice ?? "billing-1",
               width: settings.widthInvoice ?? 80,
               type: "invoice",
-              lines: consolidatedLines
+              lines: consolidatedLines,
+              font: (settings as any).printFont
             });
           } else {
             // Bill
@@ -738,31 +742,20 @@ export function PosShell() {
               printerId: settings.printerIdInvoice ?? "billing-1",
               width: settings.widthInvoice ?? 80,
               type: "invoice",
-              lines: billLines
+              lines: billLines,
+              font: (settings as any).printFont
             });
 
-            // Separate Token Slip (To same printer as invoice usually, but stripped down)
-            if (tokenNumber) {
-              const tokenLines = buildTokenSlipLines({
-                restaurantName: "EZDine",
-                tokenNumber: tokenNumber,
-                orderType: isQuickBill ? "Takeaway" : "Dine In",
-                itemsCount: fullItems.reduce((acc, i) => acc + i.qty, 0),
-                paperWidth: settings.widthInvoice as 58 | 80 ?? 80
-              });
 
-              await sendPrintJob({
-                printerId: settings.printerIdInvoice ?? "billing-1", // Same printer as invoice for token slip usually
-                width: settings.widthInvoice ?? 80,
-                type: "token",
-                lines: tokenLines
-              });
-            }
+            // The user requested: if consolidated is not selected, only customer invoice needs to come.
+            // So we suppress the token slip here if they chose not to consolidate.
+            // To be exact to their request "if unseleted onyl customer invoice needs to come"
           }
         }
-      } catch (printErr: any) {
+      } catch (printErr: unknown) {
         console.error("Bill Print failed", printErr);
-        toast.error("Bill printing failed: " + printErr.message);
+        const msg = printErr instanceof Error ? printErr.message : String(printErr);
+        toast.error("Bill printing failed: " + msg);
       }
 
       // 5. Reset
@@ -775,15 +768,17 @@ export function PosShell() {
       setSelectedCustomerId(null);
       setSelectedCustomerName(null);
       setBypassKitchen(false);
-      if (isQuickBill) setIsQuickBill(false); // Reset Quick Bill state
+      // if (isQuickBill) setIsQuickBill(false); // Removed to keep Quick Bill as default as per user request
+
 
       // Refresh History & QR List
       const data = await getSettledBills();
       setHistory(data);
       fetchLiveOrders();
       toast.success("Order Settled & Paid!");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to process payment");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to process payment";
+      toast.error(msg);
     } finally {
       setStatus("idle");
     }
@@ -811,11 +806,12 @@ export function PosShell() {
       setExistingItems([]);
       setSelectedCustomerId(null);
       setSelectedCustomerName(null);
-      if (isQuickBill) setIsQuickBill(false);
+      // if (isQuickBill) setIsQuickBill(false);
+
 
       fetchLiveOrders();
       toast.success("Order Cancelled");
-    } catch (err: any) {
+    } catch {
       toast.error("Failed to cancel order");
     } finally {
       setStatus("idle");
@@ -896,10 +892,11 @@ export function PosShell() {
               printerId: settings.printerIdKot ?? "kitchen-1",
               width: settings.widthKot ?? 58,
               type: "kot",
-              lines: kotLines
+              lines: kotLines,
+              font: (settings as any).printFont
             });
           }
-        } catch (e) { console.error("KOT print failed", e); }
+        } catch { console.error("KOT print failed"); }
       }
 
       const billable = [...existingItems];
@@ -952,26 +949,54 @@ export function PosShell() {
       try {
         const settings = await getPrintingSettings();
         if (settings) {
-          const invoiceLines = buildInvoiceLines({
-            restaurantName: "EZDine",
-            branchName: isQuickBill ? "Direct" : "Branch",
-            billId: bill.bill_number,
-            tokenNumber: activeTokenNumber,
-            items: billItems.map((c) => ({ name: c.name, qty: c.qty, price: c.price })),
-            subtotal: billTotal,
-            tax: 0,
-            total: billTotal,
-            paperWidth: settings.widthInvoice as 58 | 80 ?? 80
-          });
-          await sendPrintJob({
-            printerId: settings.printerIdInvoice ?? "billing-1",
-            width: settings.widthInvoice ?? 80,
-            type: "invoice",
-            lines: invoiceLines
-          });
+          const consolidate = (settings as Record<string, any>).consolidatedPrinting === true;
+
+          if (consolidate) {
+            const consolidatedLines = buildConsolidatedReceiptLines({
+              restaurantName: "EZDine",
+              branchName: isQuickBill ? "Direct" : "Branch",
+              tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
+              orderId: bill.bill_number, // using bill number for display
+              tokenNumber: activeTokenNumber?.toString(),
+              orderType: isQuickBill ? "Takeaway" : "Dine In",
+              items: billItems.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
+              subtotal: billTotal,
+              tax: 0,
+              total: billTotal,
+              paperWidth: settings.widthInvoice as 58 | 80 ?? 80
+            });
+
+            await sendPrintJob({
+              printerId: settings.printerIdInvoice ?? "billing-1",
+              width: settings.widthInvoice ?? 80,
+              type: "invoice",
+              lines: consolidatedLines,
+              font: (settings as any).printFont
+            });
+          } else {
+            const invoiceLines = buildInvoiceLines({
+              restaurantName: "EZDine",
+              branchName: isQuickBill ? "Direct" : "Branch",
+              billId: bill.bill_number,
+              tokenNumber: activeTokenNumber,
+              items: billItems.map((c) => ({ name: c.name, qty: c.qty, price: c.price })),
+              subtotal: billTotal,
+              tax: 0,
+              total: billTotal,
+              paperWidth: settings.widthInvoice as 58 | 80 ?? 80
+            });
+            await sendPrintJob({
+              printerId: settings.printerIdInvoice ?? "billing-1",
+              width: settings.widthInvoice ?? 80,
+              type: "invoice",
+              lines: invoiceLines,
+              font: (settings as any).printFont
+            });
+            // User requested: if unselected, only customer invoice needs to come. Suppressing token slip.
+          }
         }
-      } catch (printErr: any) {
-        console.error("Printing failed", printErr);
+      } catch {
+        console.error("Printing failed");
         toast.error("Bill created, but printing failed");
       }
 
@@ -988,12 +1013,14 @@ export function PosShell() {
       setCart([]);
       setSelectedCustomerId(null);
       setSelectedCustomerName(null);
-      if (isQuickBill) setIsQuickBill(false);
+      // if (isQuickBill) setIsQuickBill(false);
+
 
       fetchLiveOrders();
       toast.success("Bill created and settled!");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to create bill");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to create bill";
+      toast.error(msg);
     } finally {
       setStatus("idle");
     }

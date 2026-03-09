@@ -4,7 +4,6 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import { Menu as MenuIcon, Search, Bell, X } from "lucide-react";
 
-import { Button } from "../ui/Button";
 import { Sidebar } from "./Sidebar";
 import { UserMenu } from "./UserMenu";
 

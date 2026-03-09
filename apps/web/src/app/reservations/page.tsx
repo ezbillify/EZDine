@@ -6,18 +6,12 @@ import {
     Users,
     Clock,
     Plus,
-    Search,
     CheckCircle2,
     XCircle,
     UserPlus,
-    ArrowRight,
     Ticket,
     Timer,
-    Phone,
-    User,
-    History,
-    Printer,
-    RotateCcw
+    Phone
 } from "lucide-react";
 import { toast, Toaster } from "sonner";
 import { format } from "date-fns";
@@ -33,11 +27,31 @@ import { getCurrentUserProfile } from "../../lib/tenant";
 
 type Tab = "reservations" | "waitlist";
 
+interface Reservation {
+    id: string;
+    customer_name: string;
+    phone: string;
+    party_size: number;
+    reservation_time: string;
+    status: string;
+    table?: { name: string };
+}
+
+interface WaitlistEntry {
+    id: string;
+    customer_name: string;
+    phone: string;
+    party_size: number;
+    token_number: number;
+    status: string;
+    created_at: string;
+}
+
 export default function GuestManagementPage() {
     const [activeTab, setActiveTab] = useState<Tab>("reservations");
     const [loading, setLoading] = useState(true);
-    const [reservations, setReservations] = useState<any[]>([]);
-    const [waitlist, setWaitlist] = useState<any[]>([]);
+    const [reservations, setReservations] = useState<Reservation[]>([]);
+    const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
 
     // Form states
     const [showAddModal, setShowAddModal] = useState(false);
@@ -62,7 +76,7 @@ export default function GuestManagementPage() {
                     .eq("branch_id", profile.active_branch_id)
                     .gte("reservation_time", new Date().toISOString())
                     .order("reservation_time", { ascending: true });
-                setReservations(data ?? []);
+                setReservations((data as unknown as Reservation[]) ?? []);
             } else {
                 const { data } = await supabase
                     .from("waitlist")
@@ -71,9 +85,9 @@ export default function GuestManagementPage() {
                     .neq("status", "seated")
                     .neq("status", "cancelled")
                     .order("token_number", { ascending: true });
-                setWaitlist(data ?? []);
+                setWaitlist((data as unknown as WaitlistEntry[]) ?? []);
             }
-        } catch (err) {
+        } catch (err: unknown) {
             console.error(err);
         } finally {
             setLoading(false);
@@ -120,7 +134,7 @@ export default function GuestManagementPage() {
                 }
 
                 // Try exact match first
-                let { data, error } = await supabase
+                let { data } = await supabase
                     .from("customers")
                     .select("name")
                     .eq("restaurant_id", profile.active_restaurant_id)
@@ -220,7 +234,8 @@ export default function GuestManagementPage() {
             setPhone("");
             setSize("2");
             loadData();
-        } catch (err) {
+        } catch (err: unknown) {
+            console.error(err);
             toast.error("Process failed");
         }
     };
@@ -345,7 +360,7 @@ export default function GuestManagementPage() {
                                 <div className="space-y-4">
                                     {waitlist.length === 0 ? (
                                         <div className="py-16 text-center border-2 border-dashed border-slate-100 rounded-3xl">
-                                            <Ticket className="mx-auto text-slate-200 mb-4" size={48} />
+                                            < Ticket className="mx-auto text-slate-200 mb-4" size={48} />
                                             <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">Waitlist is currently empty</p>
                                         </div>
                                     ) : waitlist.map(entry => (

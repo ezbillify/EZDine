@@ -392,17 +392,6 @@ export async function verifyPayment(orderId: string, paymentId: string, signatur
 }
 
 export async function getOrdersByPhone(branchId: string, phone: string) {
-  const { data, error } = await supabase
-    .from("orders")
-    .select("id, order_number, token_number, status, created_at, payment_status")
-    .eq("branch_id", branchId)
-    .eq("is_open", true)
-    .neq("status", "cancelled")
-    .filter("customer_id", "in",
-      supabase.from("customers").select("id").eq("phone", phone)
-    )
-    .order("created_at", { ascending: false });
-
   // Actually, subqueries in filter might be tricky with RLS if not careful.
   // Let's do it in two steps for robustness in public QR page.
   const { data: customer } = await supabase.from("customers").select("id").eq("phone", phone).maybeSingle();

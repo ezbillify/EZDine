@@ -1,4 +1,11 @@
 
+## v1.14.0 (2026-03-09)
+
+### Features
+* Refactored dashboard service to provide separate streams for orders count, active tables count, daily volume, and low stock count
+* Improved code organization and readability
+
+
 ## v1.13.1 (2026-03-08)
 
 - Simplified UI styling and layout for better performance and readability

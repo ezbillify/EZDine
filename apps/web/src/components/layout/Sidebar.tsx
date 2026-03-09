@@ -16,6 +16,7 @@ import {
     Search
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
@@ -91,11 +92,12 @@ export function Sidebar({ className = "", onNavigate, isCollapsed = false }: { c
         <aside className={`flex ${isCollapsed ? 'w-20' : 'w-72'} flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out ${className}`}>
             <div className="flex h-20 items-center px-8 border-b border-slate-50">
                 <div className="flex items-center gap-3 group cursor-pointer">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[1.25rem] bg-white shadow-md transition-all group-hover:scale-110 group-hover:rotate-6 p-1">
-                        <img
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[1.25rem] bg-white shadow-md transition-all group-hover:scale-110 group-hover:rotate-6 p-1 relative">
+                        <Image
                             src="/images/EZDineLOGO.png"
                             alt="EZDine Logo"
-                            className="h-full w-full object-contain"
+                            fill
+                            className="object-contain p-1.5"
                         />
                     </div>
                     {!isCollapsed && (
