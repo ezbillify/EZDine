@@ -1,4 +1,10 @@
 
+## v1.19.1 (2026-03-10)
+
+### Fixes
+* Removed unused icon import from lucide-react to improve code maintainability
+
+
 ## v1.19.0 (2026-03-10)
 
 

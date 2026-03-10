@@ -11,7 +11,7 @@ import { Dropdown } from "../../components/ui/Dropdown";
 import { toast, Toaster } from "sonner";
 import { supabase } from "../../lib/supabaseClient";
 import { getAccessibleBranches, getCurrentUserProfile } from "../../lib/tenant";
-import { Leaf, Flame, Egg, Edit3, Trash2, Plus } from "lucide-react";
+import { Leaf, Flame, Egg, Edit3, Trash2 } from "lucide-react";
 
 type Category = {
   id: string;
