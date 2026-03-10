@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const PORT = 4000;
+const PORT = process.env.PORT || process.argv[2] || 4000;
 
 function getLocalIPs() {
   const interfaces = os.networkInterfaces();

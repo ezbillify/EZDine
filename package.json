@@ -10,6 +10,7 @@
     "dev:web": "pnpm --filter @ezdine/web dev",
     "build:web": "pnpm --filter @ezdine/web build",
     "lint:web": "pnpm --filter @ezdine/web lint",
-    "push": "npm run --prefix apps/web push"
+    "push": "npm run --prefix apps/web push",
+    "desktop": "./scripts/release-desktop.sh"
   }
 }

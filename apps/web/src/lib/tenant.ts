@@ -5,15 +5,37 @@ let cachedProfile: UserProfile | null = null;
 let profileCacheTime = 0;
 const CACHE_DURATION = 30000; // 30 seconds
 
+const PROFILE_DISK_CACHE_KEY = 'ezdine_user_profile';
+
 export async function getCurrentUserProfile(): Promise<UserProfile | null> {
   const now = Date.now();
+
+  // 1. Memory Cache
   if (cachedProfile && (now - profileCacheTime < CACHE_DURATION)) {
     return cachedProfile;
   }
 
+  // 2. Disk Cache (LocalStorage)
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(PROFILE_DISK_CACHE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        // Only use disk cache if memory cache is empty
+        if (!cachedProfile) {
+          cachedProfile = parsed;
+          profileCacheTime = now - (CACHE_DURATION / 2); // Set it half-expired to trigger background refresh
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to read profile from disk cache:', e);
+    }
+  }
+
+  // 3. Network Fetch
   const { data: userData, error: userError } = await supabase.auth.getUser();
   if (userError || !userData.user) {
-    return null;
+    return cachedProfile; // Return cached even if fetch fails to keep app usable
   }
 
   const { data, error } = await supabase
@@ -24,11 +46,21 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
 
   if (error) {
     if (error.code === "PGRST116") return null;
-    throw error;
+    return cachedProfile; // Return cached if network fails
   }
 
   cachedProfile = data as UserProfile;
   profileCacheTime = now;
+
+  // Update Disk Cache
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(PROFILE_DISK_CACHE_KEY, JSON.stringify(cachedProfile));
+    } catch (e) {
+      console.warn('Failed to save profile to disk cache:', e);
+    }
+  }
+
   return cachedProfile;
 }
 

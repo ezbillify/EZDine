@@ -1,9 +1,13 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Menu } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const os = require('os');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
+
+// White labeling app metadata
+app.name = 'EZDine POS';
+app.setAppUserModelId('com.ezdine.pos');
 
 app.setName('EZDine POS');
 if (process.platform === 'darwin') {
@@ -53,8 +57,8 @@ function createPyProc() {
         return;
     }
 
-    // Choose a random port between 4000 and 4999
-    pyPort = Math.floor(Math.random() * 1000) + 4000;
+    // Use fixed port 4000 to match Web POS default settings
+    pyPort = 4000;
 
     // Execute the standalone binary directly, passing the port as the first argument
     pyProc = spawn(scriptPath, [pyPort.toString()], {
@@ -131,9 +135,78 @@ function createWindow() {
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
+function createMenu() {
+    const template = [
+        ...(process.platform === 'darwin' ? [{
+            label: 'EZDine POS',
+            submenu: [
+                { role: 'about', label: 'About EZDine POS' },
+                { type: 'separator' },
+                { role: 'services' },
+                { type: 'separator' },
+                { role: 'hide', label: 'Hide EZDine POS' },
+                { role: 'hideothers' },
+                { role: 'unhide' },
+                { type: 'separator' },
+                { role: 'quit', label: 'Quit EZDine POS' }
+            ]
+        }] : []),
+        {
+            label: 'Edit',
+            submenu: [
+                { role: 'undo' },
+                { role: 'redo' },
+                { type: 'separator' },
+                { role: 'cut' },
+                { role: 'copy' },
+                { role: 'paste' },
+                { role: 'delete' },
+                { role: 'selectAll' }
+            ]
+        },
+        {
+            label: 'View',
+            submenu: [
+                { role: 'reload' },
+                { role: 'forcereload' },
+                { role: 'toggledevtools' },
+                { type: 'separator' },
+                { role: 'resetzoom' },
+                { role: 'zoomin' },
+                { role: 'zoomout' },
+                { type: 'separator' },
+                { role: 'togglefullscreen' }
+            ]
+        },
+        {
+            role: 'window',
+            submenu: [
+                { role: 'minimize' },
+                { role: 'close' }
+            ]
+        },
+        {
+            role: 'help',
+            submenu: [
+                {
+                    label: 'Learn More',
+                    click: async () => {
+                        const { shell } = require('electron');
+                        await shell.openExternal('https://ezdine.ezbillify.com');
+                    }
+                }
+            ]
+        }
+    ];
+
+    const menu = Menu.buildFromTemplate(template);
+    Menu.setApplicationMenu(menu);
+}
+
 app.whenReady().then(() => {
     createPyProc();
     createWindow();
+    createMenu();
 
     // Automatically check for updates and notify the user to install them when ready
     autoUpdater.checkForUpdatesAndNotify();
@@ -141,6 +214,7 @@ app.whenReady().then(() => {
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createWindow();
+            createMenu();
         }
     });
 });

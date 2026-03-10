@@ -1,4 +1,14 @@
 
+## v1.17.0 (2026-03-10)
+
+# Features
+* Added menu bar to desktop application
+* Improved user profile caching for better performance
+# Fixes
+* Updated dependencies for web application
+* Improved performance of web application
+
+
 ## v1.16.0 (2026-03-09)
 
 ### Features

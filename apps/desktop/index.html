@@ -66,7 +66,7 @@
   </div>
 
   <!-- Load the Next.js app inside a native webview to preserve local storage safely -->
-  <webview id="app-frame" allowpopups></webview>
+  <webview id="app-frame" partition="persist:ezdine" allowpopups></webview>
 
   <script>
     async function init() {
