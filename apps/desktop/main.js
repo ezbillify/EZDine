@@ -6,10 +6,10 @@ const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
 // White labeling app metadata
-app.name = 'EZDine POS';
+app.name = 'EZDine';
 app.setAppUserModelId('com.ezdine.pos');
 
-app.setName('EZDine POS');
+app.setName('EZDine');
 if (process.platform === 'darwin') {
     app.dock.setIcon(path.join(__dirname, 'assets', 'icon.png'));
 }
@@ -235,4 +235,40 @@ ipcMain.handle('get-bridge-info', () => {
         url: `http://${localIp}:${pyPort}`,
         appUrl: process.env.LOCAL_DEV ? 'http://localhost:3000' : 'https://ezdine.ezbillify.com'
     };
+});
+
+ipcMain.handle('print-job', async (event, job) => {
+    const http = require('http');
+    return new Promise((resolve, reject) => {
+        const data = JSON.stringify(job);
+        const options = {
+            hostname: '127.0.0.1',
+            port: pyPort,
+            path: '/print',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': data.length
+            }
+        };
+
+        const req = http.request(options, (res) => {
+            let body = '';
+            res.on('data', chunk => body += chunk);
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    resolve(true);
+                } else {
+                    reject(new Error(`Bridge error: ${res.statusCode} ${body}`));
+                }
+            });
+        });
+
+        req.on('error', (err) => {
+            reject(err);
+        });
+
+        req.write(data);
+        req.end();
+    });
 });

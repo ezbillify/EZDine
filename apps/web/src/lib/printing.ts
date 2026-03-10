@@ -114,7 +114,30 @@ export async function saveDocNumberingSettings(
   if (error) throw error;
 }
 
+interface EZDineBridgeAPI {
+  getBridgeInfo: () => Promise<{ url: string; appUrl: string; ip: string; port: number }>;
+  printJob: (job: PrintJob) => Promise<boolean>;
+}
+
+declare global {
+  interface Window {
+    bridgeAPI?: EZDineBridgeAPI;
+  }
+}
+
 export async function sendPrintJob(job: PrintJob) {
+  // DESKTOP IPC SUPPORT: Use native Electron bridge if available to bypass Mixed Content restrictions
+  if (typeof window !== 'undefined' && window.bridgeAPI?.printJob) {
+    try {
+      console.log('Desktop Environment Detected: Using native print IPC channel');
+      const success = await window.bridgeAPI.printJob(job);
+      return success;
+    } catch (err) {
+      console.error('Desktop IPC print failed:', err);
+      // Fallback to fetch if IPC fails for any reason
+    }
+  }
+
   let baseUrl = 'http://localhost:4000';
   try {
     const settings = await getPrintingSettings();

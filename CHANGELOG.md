@@ -1,4 +1,13 @@
 
+## v1.20.0 (2026-03-10)
+
+### Features
+* Added native print job IPC channel for desktop environments
+* Updated app metadata for white labeling
+### Fixes
+* None
+
+
 ## v1.19.1 (2026-03-10)
 
 ### Fixes
