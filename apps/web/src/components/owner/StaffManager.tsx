@@ -46,7 +46,6 @@ export function StaffManager() {
   const [branchId, setBranchId] = useState("");
   const [branchRole, setBranchRole] = useState<(typeof branchRoles)[number]>("cashier");
   const [status, setStatus] = useState<"idle" | "sending" | "saving" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
   const [foundUser, setFoundUser] = useState<{ id: string; email: string | null; full_name: string | null } | null>(null);
 
   const loadData = useCallback(async () => {
@@ -95,16 +94,13 @@ export function StaffManager() {
   const handleInvite = async () => {
     if (!email) return;
     setStatus("sending");
-    setMessage(null);
     try {
       await sendOtpInvite(email);
       setStatus("idle");
-      setMessage("OTP sent. Ask staff to verify email, then assign roles.");
       toast.success("Magic link sent to " + email);
     } catch (err: unknown) {
       setStatus("error");
       const errorMsg = err instanceof Error ? err.message : "Failed to send OTP";
-      setMessage(errorMsg);
       toast.error(errorMsg);
     }
   };
@@ -112,42 +108,33 @@ export function StaffManager() {
   const handleLookup = async () => {
     if (!email) return;
     setStatus("saving");
-    setMessage(null);
     try {
       const profile = await findUserByEmail(email);
       if (!profile?.id) {
         setFoundUser(null);
         setStatus("idle");
-        setMessage("User not found. Ask them to login once first.");
         return;
       }
       setFoundUser(profile);
       setStatus("idle");
-      setMessage("User found. Assign roles below.");
       toast.success("Staff profile linked");
-    } catch (err: unknown) {
+    } catch {
       setStatus("error");
-      const errorMsg = err instanceof Error ? err.message : "Lookup failed";
-      setMessage(errorMsg);
     }
   };
 
   const handleAssign = async () => {
     if (!email || !restaurantId || !foundUser) return;
     setStatus("saving");
-    setMessage(null);
     try {
       if (branchId) {
         await assignBranchRole({ user_id: foundUser.id, branch_id: branchId, role: branchRole });
       }
       setStatus("idle");
-      setMessage("Roles assigned successfully.");
       toast.success("Staff role updated");
       await loadData();
-    } catch (err: unknown) {
+    } catch {
       setStatus("error");
-      const errorMsg = err instanceof Error ? err.message : "Failed to assign roles";
-      setMessage(errorMsg);
     }
   };
 
@@ -157,7 +144,7 @@ export function StaffManager() {
       await removeBranchRole(id);
       toast.success("Access revoked");
       await loadData();
-    } catch (err) {
+    } catch {
       toast.error("Failed to revoke access");
     }
   };

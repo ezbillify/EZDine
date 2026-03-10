@@ -1,4 +1,11 @@
 
+## v1.18.1 (2026-03-10)
+
+### Fixes
+* Removed unused icons and variables from the codebase
+* Refactored the sidebar items to use a typed interface
+
+
 ## v1.18.0 (2026-03-10)
 
 ### Features

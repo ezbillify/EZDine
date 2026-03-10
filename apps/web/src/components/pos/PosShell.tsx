@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { AlertCircle, CheckCircle2, Save, Trash2, User, Search, Plus, X, UserPlus, Eye, Zap, History, Utensils, ShoppingBag, Printer, Leaf, Flame, Egg } from "lucide-react";
+import { AlertCircle, CheckCircle2, Save, Trash2, User, Search, Plus, X, UserPlus, Eye, Zap, History, Utensils, ShoppingBag, Printer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast, Toaster } from "sonner";
 
@@ -1369,8 +1369,8 @@ export function PosShell() {
                       <div className="flex items-center gap-2 overflow-hidden">
                         <span className="text-slate-500 font-medium truncate max-w-[100px]">{bill.order?.customer?.name || "Guest"}</span>
                         <span className={`px-1.5 py-0.5 rounded-md font-black uppercase text-[8px] tracking-widest ${bill.order?.order_type === 'takeaway'
-                            ? 'bg-slate-900 text-white'
-                            : 'bg-blue-50 text-blue-600'
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-blue-50 text-blue-600'
                           }`}>
                           {bill.order?.order_type === 'takeaway' ? 'Takeaway' : 'Dine-In'}
                         </span>

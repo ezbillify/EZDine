@@ -12,8 +12,7 @@ import {
     Warehouse,
     MonitorCheck,
     Calendar,
-    LogOut,
-    Search
+    LogOut
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -24,7 +23,14 @@ import { getActiveBranchRole, getActiveRestaurantRole } from "../../lib/tenant";
 import { supabase } from "../../lib/supabaseClient";
 import { APP_VERSION } from "../../version";
 
-const baseItems = [
+interface SidebarItem {
+    href: string;
+    label: string;
+    icon: React.ElementType;
+    comingSoon?: boolean;
+}
+
+const baseItems: SidebarItem[] = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/pos", label: "POS Terminal", icon: MonitorCheck },
     { href: "/orders", label: "Live Orders", icon: ShoppingBag },
@@ -115,7 +121,7 @@ export function Sidebar({ className = "", onNavigate, isCollapsed = false }: { c
                         Product Suite
                     </div>
                 )}
-                {filteredItems.map((item: any) => {
+                {filteredItems.map((item) => {
                     const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
                     const Icon = item.icon;
                     const isComingSoon = item.comingSoon;
