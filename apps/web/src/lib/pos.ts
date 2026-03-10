@@ -99,7 +99,7 @@ export async function getOpenOrderForTable(tableId: string) {
   const { branchId } = await getContext();
   const { data, error } = await supabase
     .from("orders")
-    .select("id,order_number,token_number,status,order_type,customer_id, customer:customers(name)")
+    .select("id,order_number,token_number,status,order_type,source,customer_id, customer:customers(name)")
     .eq("branch_id", branchId)
     .eq("table_id", tableId)
     .eq("is_open", true)

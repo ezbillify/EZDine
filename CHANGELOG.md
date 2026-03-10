@@ -1,4 +1,15 @@
 
+## v1.21.0 (2026-03-10)
+
+# Features
+* Added update button to desktop application
+* Improved UI for desktop application
+
+# Fixes
+* Updated printing logic for QR orders
+* Fixed issues with printing settings
+
+
 ## v1.20.1 (2026-03-10)
 
 ### Fixes

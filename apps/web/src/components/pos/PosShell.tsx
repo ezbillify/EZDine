@@ -58,6 +58,7 @@ export function PosShell() {
   const [activeOrderNumber, setActiveOrderNumber] = useState<string | null>(null);
   const [activeTokenNumber, setActiveTokenNumber] = useState<number | null>(null);
   const [activeBillNumber, setActiveBillNumber] = useState<string | null>(null);
+  const [activeOrderSource, setActiveOrderSource] = useState<string | null>(null);
   const [isQuickBill, setIsQuickBill] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "paid">("pending");
   const [liveOrders, setLiveOrders] = useState<any[]>([]);
@@ -310,6 +311,7 @@ export function PosShell() {
       setActiveOrderId(order.id);
       setActiveOrderNumber(order.order_number);
       setActiveTokenNumber(order.token_number);
+      setActiveOrderSource(order.source);
       setSelectedCustomerId(order.customer_id);
       setSelectedCustomerName(order.customer?.name || null);
       setOrderType(order.order_type || "takeaway");
@@ -453,6 +455,7 @@ export function PosShell() {
           setActiveOrderId(order.id);
           setActiveOrderNumber(order.order_number);
           setActiveTokenNumber(order.token_number);
+          setActiveOrderSource((order as any).source);
           setSelectedCustomerId(order.customer_id);
           setSelectedCustomerName((order as any).customer?.name || null);
           setOrderType(order.order_type || "dine_in");
@@ -592,7 +595,8 @@ export function PosShell() {
       toast.error("Select a table or Quick Bill first");
       return;
     }
-    if (cart.length === 0) {
+    const isQrOrder = activeOrderSource === 'qr' || activeOrderSource === 'table';
+    if (cart.length === 0 && !isQrOrder) {
       toast.error("Cart is empty");
       return;
     }
@@ -616,13 +620,18 @@ export function PosShell() {
       try {
         const settings = await getPrintingSettings();
         if (settings) {
+          const kotItems = isQrOrder ? existingItems : cart;
           const kotLines = buildKotLines({
             restaurantName: branchDetails.restaurantName,
             branchName: branchDetails.branchName,
             tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
             orderId: orderNumber ?? "--",
             tokenNumber: activeTokenNumber?.toString(),
-            items: cart.map((c) => ({ name: c.name, qty: c.qty })),
+            items: kotItems.map((c: any) => ({
+              name: c.name,
+              qty: c.qty || c.quantity || 0,
+              notes: c.notes
+            })),
             orderType: orderType === "dine_in" ? "Dine-In" : "Takeaway"
           });
           await sendPrintJob({
@@ -684,17 +693,32 @@ export function PosShell() {
         }
       }
 
+      const fullItems = [
+        ...existingItems.map(i => ({ item_id: i.item_id, name: i.name, qty: i.quantity, price: i.price, notes: (i as any).notes })),
+        ...cart
+      ];
+
+      const totalAmount = fullItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
       const settings = await getPrintingSettings();
-      // 2. Print KOT (Only if new items exist AND not bypassing kitchen)
-      if (cart.length > 0 && !bypassKitchen && settings) {
+      // 2. Print KOT (If new items exist OR it's a QR/Table order being processed in POS for the first time)
+      const isQrOrder = activeOrderSource === 'qr' || activeOrderSource === 'table';
+      const needsKot = (cart.length > 0) || isQrOrder;
+
+      if (needsKot && !bypassKitchen && settings) {
         try {
+          // For QR orders, we print all items if they were just loaded. 
+          // For normal POS orders, we only print new 'cart' items.
+          const kotItems = isQrOrder ? fullItems : cart;
+
           const kotLines = buildKotLines({
             restaurantName: branchDetails.restaurantName,
             branchName: branchDetails.branchName,
             tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
             orderId: orderNumber ?? "--",
             tokenNumber: tokenNumber?.toString(),
-            items: cart.map((c) => ({ name: c.name, qty: c.qty, notes: c.notes }))
+            items: kotItems.map((c) => ({ name: c.name, qty: c.qty, notes: (c as any).notes })),
+            orderType: orderType === "dine_in" ? "Dine-In" : "Takeaway"
           });
 
           await sendPrintJob({
@@ -712,13 +736,6 @@ export function PosShell() {
       }
 
       // 3. Create Bill & Payment
-      const fullItems = [
-        ...existingItems.map(i => ({ item_id: i.item_id, name: i.name, qty: i.quantity, price: i.price })),
-        ...cart
-      ];
-
-      const totalAmount = fullItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
-
       const bill = await createBill(orderId!, fullItems as CartItem[]);
 
       // Add all payments
@@ -837,6 +854,18 @@ export function PosShell() {
       toast.error(msg);
     } finally {
       setStatus("idle");
+    }
+  };
+
+  const handleDeleteExistingItem = async (itemId: string) => {
+    if (!confirm("Remove this item?")) return;
+    try {
+      const { error } = await supabase.from('order_items').delete().eq('id', itemId);
+      if (error) throw error;
+      setExistingItems(prev => prev.filter(i => i.id !== itemId));
+      toast.success("Item removed");
+    } catch {
+      toast.error("Failed to remove item");
     }
   };
 
@@ -1643,7 +1672,17 @@ export function PosShell() {
                         <p className="text-xs font-bold text-slate-800">{item.name}</p>
                         <p className="text-[10px] text-slate-500">{item.quantity} × ₹{item.price}</p>
                       </div>
-                      <span className="text-xs font-black text-slate-900">₹{item.quantity * item.price}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-black text-slate-900">₹{item.quantity * item.price}</span>
+                        {!isOrderSettled && (
+                          <button
+                            onClick={() => handleDeleteExistingItem(item.id)}
+                            className="text-red-400 hover:text-red-600 p-1"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

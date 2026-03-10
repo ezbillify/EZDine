@@ -29,24 +29,57 @@
       padding: 0 16px;
       font-size: 13px;
       flex-shrink: 0;
+      border-bottom: 1px solid #1e293b;
       -webkit-app-region: drag;
-      /* Draggable titlebar on windows/mac */
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
     .ip-badge {
-      background-color: #10b981;
+      background-color: #0ea5e9;
       color: white;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-weight: 700;
       font-size: 11px;
       letter-spacing: 0.5px;
       -webkit-app-region: no-drag;
     }
 
-    .brand {
-      font-weight: 700;
+    .version-tag {
+      font-size: 10px;
+      color: #94a3b8;
+      font-weight: 600;
       letter-spacing: 1px;
+    }
+
+    .update-btn {
+      background: #1e293b;
+      color: #cbd5e1;
+      border: 1px solid #334155;
+      padding: 4px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: all 0.2s;
+    }
+
+    .update-btn:hover {
+      background: #334155;
+      color: white;
+    }
+
+    .brand {
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      font-size: 14px;
+      color: #ffffff;
     }
 
     #app-frame {
@@ -59,9 +92,16 @@
 
 <body>
   <div id="native-header">
-    <div class="brand">EZDINE POS</div>
-    <div>
-      Print Bridge: <span id="ip-display" class="ip-badge">Loading...</span>
+    <div class="brand-section">
+      <div class="brand">EZDINE POS</div>
+      <div class="version-tag" id="version-display">v...</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <div>
+        <span style="color: #94a3b8; font-size: 11px; font-weight: 500;">Bridge: </span>
+        <span id="ip-display" class="ip-badge">Loading...</span>
+      </div>
+      <button class="update-btn" onclick="checkUpdates()">Check for Updates</button>
     </div>
   </div>
 
@@ -70,9 +110,33 @@
 
   <script>
     async function init() {
+      // Get the absolute path to preload.js via the bridge info
       const info = await window.bridgeAPI.getBridgeInfo();
+      const webview = document.getElementById('app-frame');
+
+      // Update UI with native info
+      document.getElementById('version-display').innerText = `v${info.appVersion || '???'}`;
       document.getElementById('ip-display').innerText = info.url;
-      document.getElementById('app-frame').src = info.appUrl;
+
+      // Set the preload attribute before setting the src
+      if (info.preloadPath) {
+        webview.setAttribute('preload', info.preloadPath);
+      }
+
+      webview.src = info.appUrl;
+    }
+
+    function checkUpdates() {
+      const btn = document.querySelector('.update-btn');
+      btn.innerText = 'Checking...';
+      btn.disabled = true;
+
+      window.bridgeAPI.checkForUpdates();
+
+      setTimeout(() => {
+        btn.innerText = 'Check for Updates';
+        btn.disabled = false;
+      }, 3000);
     }
     init();
   </script>

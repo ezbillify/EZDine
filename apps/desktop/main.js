@@ -211,6 +211,13 @@ app.whenReady().then(() => {
     // Automatically check for updates and notify the user to install them when ready
     autoUpdater.checkForUpdatesAndNotify();
 
+    autoUpdater.on('checking-for-update', () => console.log('Checking for update...'));
+    autoUpdater.on('update-available', (info) => console.log('Update available:', info.version));
+    autoUpdater.on('update-not-available', (info) => console.log('Update not available.'));
+    autoUpdater.on('error', (err) => console.error('Error in auto-updater:', err));
+    autoUpdater.on('download-progress', (progressObj) => console.log(`Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}%`));
+    autoUpdater.on('update-downloaded', (info) => console.log('Update downloaded; will install now'));
+
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
             createWindow();
@@ -233,6 +240,8 @@ ipcMain.handle('get-bridge-info', () => {
         ip: localIp,
         port: pyPort,
         url: `http://${localIp}:${pyPort}`,
+        preloadPath: path.join(__dirname, 'preload.js'),
+        appVersion: app.getVersion(),
         appUrl: process.env.LOCAL_DEV ? 'http://localhost:3000' : 'https://ezdine.ezbillify.com'
     };
 });
@@ -271,4 +280,9 @@ ipcMain.handle('print-job', async (event, job) => {
         req.write(data);
         req.end();
     });
+});
+
+ipcMain.on('check-for-updates', () => {
+    console.log('Manual update check triggered');
+    autoUpdater.checkForUpdatesAndNotify();
 });

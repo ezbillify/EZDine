@@ -115,7 +115,7 @@ export async function saveDocNumberingSettings(
 }
 
 interface EZDineBridgeAPI {
-  getBridgeInfo: () => Promise<{ url: string; appUrl: string; ip: string; port: number }>;
+  getBridgeInfo: () => Promise<{ url: string; appUrl: string; ip: string; port: number; preloadPath?: string; appVersion?: string }>;
   printJob: (job: PrintJob) => Promise<boolean>;
 }
 
