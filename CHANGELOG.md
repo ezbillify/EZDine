@@ -1,4 +1,13 @@
 
+## v1.19.0 (2026-03-10)
+
+
+### Features
+* Introduced new `DashboardModule` and `QuickAccessLink` types
+* Added coming soon feature to modules and links
+
+
+
 ## v1.18.1 (2026-03-10)
 
 ### Fixes

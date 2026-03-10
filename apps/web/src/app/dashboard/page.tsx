@@ -66,6 +66,22 @@ interface ActivityFeedItem {
   table?: { name: string };
 }
 
+interface DashboardModule {
+  label: string;
+  icon: React.ElementType;
+  href: string;
+  description: string;
+  color: string;
+  comingSoon?: boolean;
+}
+
+interface QuickAccessLink {
+  label: string;
+  icon: React.ElementType;
+  href: string;
+  comingSoon?: boolean;
+}
+
 export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>("today");
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
@@ -181,7 +197,7 @@ export default function DashboardPage() {
     }).slice(0, 15);
   }, [pendingOrders, reservations, waitlist, feedFilter, feedSort]);
 
-  const modules = [
+  const modules: DashboardModule[] = [
     { label: "Terminal (POS)", icon: MonitorCheck, href: "/pos", description: "Ordering & Billing", color: "indigo" },
     { label: "Kitchen (KDS)", icon: Activity, href: "/kds", description: "Order Production", color: "emerald" },
     { label: "Reserve (Guests)", icon: Calendar, href: "/reservations", description: "Tables & Waitlist", color: "amber" },
@@ -258,27 +274,27 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <p className="px-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Quick Access</p>
               <div className="grid gap-2">
-                {[
+                {([
                   { label: "Order History", icon: History, href: "/orders" },
                   { label: "Daily Reports", icon: TrendingUp, href: "/reports" },
                   { label: "Staff Roster", icon: History, href: "/staff", comingSoon: true }
-                ].map(link => (
+                ] as QuickAccessLink[]).map(link => (
                   <Link
                     key={link.label}
-                    href={(link as any).comingSoon ? "#" : link.href}
-                    className={`group flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 transition-all ${(link as any).comingSoon ? "opacity-60 cursor-not-allowed" : "hover:border-brand-500 hover:shadow-lg hover:shadow-brand-500/5"}`}
-                    onClick={(e) => (link as any).comingSoon && e.preventDefault()}
+                    href={link.comingSoon ? "#" : link.href}
+                    className={`group flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-4 transition-all ${link.comingSoon ? "opacity-60 cursor-not-allowed" : "hover:border-brand-500 hover:shadow-lg hover:shadow-brand-500/5"}`}
+                    onClick={(e) => link.comingSoon && e.preventDefault()}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-xl bg-slate-50 text-slate-400 ${(link as any).comingSoon ? "" : "group-hover:bg-brand-50 group-hover:text-brand-600"} transition-colors`}>
+                      <div className={`flex h-8 w-8 items-center justify-center rounded-xl bg-slate-50 text-slate-400 ${link.comingSoon ? "" : "group-hover:bg-brand-50 group-hover:text-brand-600"} transition-colors`}>
                         <link.icon size={16} />
                       </div>
                       <div className="flex flex-col">
-                        <span className={`text-xs font-black uppercase tracking-wide text-slate-600 ${(link as any).comingSoon ? "" : "group-hover:text-slate-900"}`}>{link.label}</span>
-                        {(link as any).comingSoon && <span className="text-[7px] font-black text-brand-500 uppercase">Coming Soon</span>}
+                        <span className={`text-xs font-black uppercase tracking-wide text-slate-600 ${link.comingSoon ? "" : "group-hover:text-slate-900"}`}>{link.label}</span>
+                        {link.comingSoon && <span className="text-[7px] font-black text-brand-500 uppercase">Coming Soon</span>}
                       </div>
                     </div>
-                    {!(link as any).comingSoon && <ArrowRightCircle size={14} className="text-slate-200 group-hover:text-brand-500 transition-colors" />}
+                    {!link.comingSoon && <ArrowRightCircle size={14} className="text-slate-200 group-hover:text-brand-500 transition-colors" />}
                   </Link>
                 ))}
               </div>
@@ -434,21 +450,21 @@ export default function DashboardPage() {
                     {modules.map(mod => (
                       <Link
                         key={mod.label}
-                        href={(mod as any).comingSoon ? "#" : mod.href}
-                        className={`group flex items-center gap-4 rounded-3xl border border-slate-100 bg-white p-4 transition-all ${(mod as any).comingSoon ? "opacity-60 cursor-not-allowed" : "hover:border-brand-500 hover:shadow-xl hover:shadow-brand-500/5"}`}
-                        onClick={(e) => (mod as any).comingSoon && e.preventDefault()}
+                        href={mod.comingSoon ? "#" : mod.href}
+                        className={`group flex items-center gap-4 rounded-3xl border border-slate-100 bg-white p-4 transition-all ${mod.comingSoon ? "opacity-60 cursor-not-allowed" : "hover:border-brand-500 hover:shadow-xl hover:shadow-brand-500/5"}`}
+                        onClick={(e) => mod.comingSoon && e.preventDefault()}
                       >
-                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 ${(mod as any).comingSoon ? "" : "group-hover:bg-brand-600 group-hover:text-white"} transition-all`}>
+                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 ${mod.comingSoon ? "" : "group-hover:bg-brand-600 group-hover:text-white"} transition-all`}>
                           <mod.icon size={20} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <h4 className="text-xs font-black text-slate-900 uppercase tracking-tight truncate">{mod.label}</h4>
-                            {(mod as any).comingSoon && <span className="text-[7px] font-black bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded-full uppercase">Soon</span>}
+                            {mod.comingSoon && <span className="text-[7px] font-black bg-brand-50 text-brand-600 px-1.5 py-0.5 rounded-full uppercase">Soon</span>}
                           </div>
                           <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">{mod.description}</p>
                         </div>
-                        {!(mod as any).comingSoon && <Sparkles size={16} className="text-slate-100 group-hover:text-brand-100" />}
+                        {!mod.comingSoon && <Sparkles size={16} className="text-slate-100 group-hover:text-brand-100" />}
                       </Link>
                     ))}
                   </div>
