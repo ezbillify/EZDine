@@ -19,7 +19,7 @@ set "VBS_FILE=%SCRIPT_DIR%start-silent.vbs"
 echo Creating startup script...
 (
 echo Set WshShell = CreateObject^("WScript.Shell"^)
-echo WshShell.Run "python ""%SCRIPT_DIR%server.py""", 0, False
+echo WshShell.Run """%SCRIPT_DIR%ezdine-print-bridge-win.exe""", 0, False
 ) > "%VBS_FILE%"
 
 REM Create shortcut in Startup folder

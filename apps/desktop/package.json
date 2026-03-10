@@ -1,6 +1,6 @@
 {
   "name": "@ezdine/desktop",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "EZDine Desktop Application with built-in Print Bridge",
   "main": "main.js",
   "scripts": {

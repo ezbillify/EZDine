@@ -12,7 +12,7 @@ echo    Starting print bridge...
 echo.
 
 REM Start the server
-python server.py
+ezdine-print-bridge-win.exe 4000
 
 REM Keep window open if there's an error
 if errorlevel 1 (

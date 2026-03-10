@@ -15,7 +15,7 @@ echo "   Starting print bridge..."
 echo ""
 
 # Start the server
-python3 server.py
+./ezdine-print-bridge-macos 4000
 
 # Keep terminal open if there's an error
 if [ $? -ne 0 ]; then

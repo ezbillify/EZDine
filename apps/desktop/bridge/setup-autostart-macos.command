@@ -22,8 +22,7 @@ cat > "$PLIST_FILE" << EOF
     <string>com.ezdine.printbridge</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/python3</string>
-        <string>$DIR/server.py</string>
+        <string>$DIR/ezdine-print-bridge-macos</string>
     </array>
     <key>WorkingDirectory</key>
     <string>$DIR</string>
