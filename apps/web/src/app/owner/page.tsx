@@ -19,8 +19,18 @@ export default function OwnerPage() {
             <Section title="Branches" description="Create branches and assign managers.">
               <BranchManager />
             </Section>
-            <Section title="Team" description="Invite users and assign roles.">
-              <StaffManager />
+            <Section
+              title={
+                <div className="flex items-center gap-2">
+                  <span>Team</span>
+                  <span className="text-[10px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded-full font-black uppercase tracking-widest leading-none">Soon</span>
+                </div>
+              }
+              description="Invite users and assign roles (In Development)."
+            >
+              <div className="opacity-50 pointer-events-none grayscale">
+                <StaffManager />
+              </div>
             </Section>
             <Section title="Ownership" description="Transfer restaurant ownership securely.">
               <OwnershipTransfer />

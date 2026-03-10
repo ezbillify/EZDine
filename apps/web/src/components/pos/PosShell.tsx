@@ -68,6 +68,17 @@ export function PosShell() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "price_asc" | "price_desc">("name");
+  const [branchDetails, setBranchDetails] = useState<{
+    restaurantName: string;
+    branchName: string;
+    address?: string;
+    phone?: string;
+    gstin?: string;
+    fssai?: string;
+  }>({
+    restaurantName: "EZDine",
+    branchName: "Branch"
+  });
 
   // Customer State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -148,9 +159,30 @@ export function PosShell() {
         // Also load categories for the current branch
         const profile = await getCurrentUserProfile();
         if (profile?.active_branch_id) {
-          const { data: branch } = await supabase.from("branches").select("restaurant_id").eq("id", profile.active_branch_id).single();
-          if (branch) {
-            const { data: cats } = await supabase.from("menu_categories").select("id, name").eq("restaurant_id", branch.restaurant_id).order("name");
+          const { data: branchData } = await supabase
+            .from("branches")
+            .select(`
+              *,
+              restaurants(name)
+            `)
+            .eq("id", profile.active_branch_id)
+            .single();
+
+          if (branchData) {
+            setBranchDetails({
+              restaurantName: (branchData as any).restaurants?.name || "EZDine",
+              branchName: branchData.name || "Branch",
+              address: branchData.address || undefined,
+              phone: branchData.phone || undefined,
+              gstin: branchData.gstin || undefined,
+              fssai: branchData.fssai_no || undefined
+            });
+
+            const { data: cats } = await supabase
+              .from("menu_categories")
+              .select("id, name")
+              .eq("restaurant_id", branchData.restaurant_id)
+              .order("name");
             setCategories(cats ?? []);
           }
         }
@@ -333,6 +365,7 @@ export function PosShell() {
       setActiveTokenNumber(orderData?.token_number);
       setActiveBillNumber(bill.bill_number);
       setSelectedCustomerName(orderData?.customer?.name || "Guest");
+      setOrderType(orderData?.order_type || "takeaway");
 
       // IMPORTANT: Set Read-Only Mode
       setIsOrderSettled(true);
@@ -344,6 +377,19 @@ export function PosShell() {
       toast.info(`Loaded Settled Bill #${bill.order?.order_number}`);
     } catch {
       toast.error("Failed to load bill details");
+    }
+  };
+
+  const handleUpdateOrderType = async (type: "dine_in" | "takeaway") => {
+    if (isOrderSettled) return;
+    setOrderType(type);
+    if (activeOrderId) {
+      try {
+        await supabase.from('orders').update({ order_type: type }).eq('id', activeOrderId);
+        toast.success(`Order set to ${type === 'dine_in' ? 'Dine-In' : 'Takeaway'}`);
+      } catch (err) {
+        console.error("Failed to update order type", err);
+      }
     }
   };
 
@@ -401,6 +447,7 @@ export function PosShell() {
       try {
         setIsOrderSettled(false);
         setIsQuickBill(false); // If table selected, it's not a quick bill
+        setOrderType("dine_in"); // Default table to dine-in
         const order = await getOpenOrderForTable(activeTableId);
         if (order) {
           setActiveOrderId(order.id);
@@ -570,12 +617,13 @@ export function PosShell() {
         const settings = await getPrintingSettings();
         if (settings) {
           const kotLines = buildKotLines({
-            restaurantName: "EZDine",
-            branchName: "Branch",
+            restaurantName: branchDetails.restaurantName,
+            branchName: branchDetails.branchName,
             tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
             orderId: orderNumber ?? "--",
             tokenNumber: activeTokenNumber?.toString(),
-            items: cart.map((c) => ({ name: c.name, qty: c.qty }))
+            items: cart.map((c) => ({ name: c.name, qty: c.qty })),
+            orderType: orderType === "dine_in" ? "Dine-In" : "Takeaway"
           });
           await sendPrintJob({
             printerId: settings.printerIdKot ?? "kitchen-1",
@@ -641,8 +689,8 @@ export function PosShell() {
       if (cart.length > 0 && !bypassKitchen && settings) {
         try {
           const kotLines = buildKotLines({
-            restaurantName: "EZDine",
-            branchName: "Branch", // Ideally fetch this
+            restaurantName: branchDetails.restaurantName,
+            branchName: branchDetails.branchName,
             tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
             orderId: orderNumber ?? "--",
             tokenNumber: tokenNumber?.toString(),
@@ -704,12 +752,16 @@ export function PosShell() {
 
           if (consolidate) {
             const consolidatedLines = buildConsolidatedReceiptLines({
-              restaurantName: "EZDine",
-              branchName: "Branch",
-              tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
+              restaurantName: branchDetails.restaurantName,
+              branchName: branchDetails.branchName,
+              branchAddress: branchDetails.address,
+              gstin: branchDetails.gstin,
+              fssai: branchDetails.fssai,
+              phone: branchDetails.phone,
+              tableName: tables.find((t) => t.id === activeTableId)?.name ?? "--",
               orderId: `${orderNumber}`, // using order number for display
-              tokenNumber: tokenNumber?.toString(),
-              orderType: isQuickBill ? "Takeaway" : "Dine In",
+              tokenNumber: tokenNumber,
+              orderType: orderType,
               items: fullItems.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
               subtotal: totalAmount,
               tax: 0,
@@ -727,8 +779,12 @@ export function PosShell() {
           } else {
             // Bill
             const billLines = buildInvoiceLines({
-              restaurantName: "EZDine",
-              branchName: "Branch",
+              restaurantName: branchDetails.restaurantName,
+              branchName: branchDetails.branchName,
+              branchAddress: branchDetails.address,
+              gstin: branchDetails.gstin,
+              fssai: branchDetails.fssai,
+              phone: branchDetails.phone,
               billId: `${orderNumber}`, // Usually bill number is different but using order for now
               tokenNumber: tokenNumber,
               items: fullItems.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
@@ -818,6 +874,96 @@ export function PosShell() {
     }
   };
 
+  const handleReprintBill = async () => {
+    if (!activeOrderId || !isOrderSettled) {
+      toast.error("Please click a bill from history to load it first");
+      return;
+    }
+
+    setStatus("saving");
+    try {
+      const settings = await getPrintingSettings();
+      if (!settings) throw new Error("Printing settings not found");
+
+      const itemsToPrint = existingItems.map(i => ({
+        name: i.name,
+        qty: i.quantity,
+        price: i.price,
+        gst_rate: i.gst_rate ?? 0
+      }));
+
+      const totalAmount = itemsToPrint.reduce((sum, i) => sum + (i.price * i.qty), 0);
+      const tax = itemsToPrint.reduce((sum, i) => {
+        const lineTotal = i.qty * i.price;
+        const t = lineTotal - (lineTotal / (1 + (i.gst_rate / 100)));
+        return sum + t;
+      }, 0);
+      const subtotal = totalAmount - tax;
+
+      const consolidate = (settings as any).consolidatedPrinting === true;
+
+      if (consolidate) {
+        const consolidatedLines = buildConsolidatedReceiptLines({
+          restaurantName: branchDetails.restaurantName,
+          branchName: isQuickBill ? "Direct" : branchDetails.branchName,
+          branchAddress: branchDetails.address,
+          gstin: branchDetails.gstin,
+          fssai: branchDetails.fssai,
+          phone: branchDetails.phone,
+          tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
+          orderId: activeBillNumber || activeOrderNumber || "--",
+          tokenNumber: activeTokenNumber?.toString(),
+          orderType: orderType === "dine_in" ? "Dine-In (Reprint)" : "Takeaway (Reprint)",
+          items: itemsToPrint,
+          subtotal: subtotal,
+          tax: tax,
+          total: totalAmount,
+          paperWidth: settings.widthInvoice as 58 | 80 ?? 80
+        });
+
+        await sendPrintJob({
+          printerId: settings.printerIdInvoice ?? "billing-1",
+          width: settings.widthInvoice ?? 80,
+          type: "invoice",
+          lines: consolidatedLines,
+          font: (settings as any).printFont
+        });
+      } else {
+        const invoiceLines = buildInvoiceLines({
+          restaurantName: branchDetails.restaurantName,
+          branchName: isQuickBill ? "Direct" : branchDetails.branchName,
+          branchAddress: branchDetails.address,
+          gstin: branchDetails.gstin,
+          fssai: branchDetails.fssai,
+          phone: branchDetails.phone,
+          tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
+          billId: activeBillNumber || activeOrderNumber || "--",
+          tokenNumber: activeTokenNumber,
+          orderType: orderType === "dine_in" ? "Dine-In (Reprint)" : "Takeaway (Reprint)",
+          items: itemsToPrint,
+          subtotal: subtotal,
+          tax: tax,
+          total: totalAmount,
+          paperWidth: settings.widthInvoice as 58 | 80 ?? 80
+        });
+
+        await sendPrintJob({
+          printerId: settings.printerIdInvoice ?? "billing-1",
+          width: settings.widthInvoice ?? 80,
+          type: "invoice",
+          lines: invoiceLines,
+          font: (settings as any).printFont
+        });
+      }
+      toast.success("Bill reprinted successfully");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || "Failed to reprint bill");
+    } finally {
+      setStatus("idle");
+    }
+  };
+
   const handlePreviewBill = async () => {
     if (!activeOrderId && cart.length === 0) return;
 
@@ -839,10 +985,15 @@ export function PosShell() {
     const subtotal = total - tax;
 
     const lines = buildInvoiceLines({
-      restaurantName: "EZDine",
-      branchName: isQuickBill ? "Walk-in" : (tables.find(t => t.id === activeTableId)?.name ?? "Branch"),
+      restaurantName: branchDetails.restaurantName,
+      branchName: isQuickBill ? "Walk-in" : (tables.find(t => t.id === activeTableId)?.name ?? branchDetails.branchName),
+      branchAddress: branchDetails.address,
+      gstin: branchDetails.gstin,
+      fssai: branchDetails.fssai,
+      phone: branchDetails.phone,
       billId: "PREVIEW",
       tokenNumber: activeTokenNumber,
+      orderType: orderType === "dine_in" ? "Dine-In" : "Takeaway",
       items: billable,
       subtotal: subtotal,
       tax: tax,
@@ -882,11 +1033,12 @@ export function PosShell() {
           const settings = await getPrintingSettings();
           if (settings) {
             const kotLines = buildKotLines({
-              restaurantName: "EZDine",
-              branchName: "Branch",
+              restaurantName: branchDetails.restaurantName,
+              branchName: branchDetails.branchName,
               tableName: "QUICK BILL",
               orderId: order.order_number,
-              items: cart.map((c) => ({ name: c.name, qty: c.qty }))
+              items: cart.map((c) => ({ name: c.name, qty: c.qty })),
+              orderType: orderType === "dine_in" ? "Dine-In" : "Takeaway"
             });
             await sendPrintJob({
               printerId: settings.printerIdKot ?? "kitchen-1",
@@ -953,12 +1105,16 @@ export function PosShell() {
 
           if (consolidate) {
             const consolidatedLines = buildConsolidatedReceiptLines({
-              restaurantName: "EZDine",
-              branchName: isQuickBill ? "Direct" : "Branch",
+              restaurantName: branchDetails.restaurantName,
+              branchName: isQuickBill ? "Direct" : branchDetails.branchName,
+              branchAddress: branchDetails.address,
+              gstin: branchDetails.gstin,
+              fssai: branchDetails.fssai,
+              phone: branchDetails.phone,
               tableName: isQuickBill ? "QUICK BILL" : (tables.find((t) => t.id === activeTableId)?.name ?? "--"),
               orderId: bill.bill_number, // using bill number for display
               tokenNumber: activeTokenNumber?.toString(),
-              orderType: isQuickBill ? "Takeaway" : "Dine In",
+              orderType: orderType === "dine_in" ? "Dine-In" : "Takeaway",
               items: billItems.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
               subtotal: billTotal,
               tax: 0,
@@ -975,10 +1131,15 @@ export function PosShell() {
             });
           } else {
             const invoiceLines = buildInvoiceLines({
-              restaurantName: "EZDine",
-              branchName: isQuickBill ? "Direct" : "Branch",
+              restaurantName: branchDetails.restaurantName,
+              branchName: isQuickBill ? "Direct" : branchDetails.branchName,
+              branchAddress: branchDetails.address,
+              gstin: branchDetails.gstin,
+              fssai: branchDetails.fssai,
+              phone: branchDetails.phone,
               billId: bill.bill_number,
               tokenNumber: activeTokenNumber,
+              orderType: orderType === "dine_in" ? "Dine-In" : "Takeaway",
               items: billItems.map((c) => ({ name: c.name, qty: c.qty, price: c.price })),
               subtotal: billTotal,
               tax: 0,
@@ -1033,7 +1194,7 @@ export function PosShell() {
       {/* Mobile-inspired Layout: Sidebar + Main Area */}
 
       {/* 1. Compact Sidebar - Mobile Design Inspired */}
-      <section className="flex w-72 flex-none flex-col bg-white border-r border-slate-200 shadow-lg">
+      <section className="flex w-64 flex-none flex-col bg-white border-r border-slate-200 shadow-lg">
         {/* Header */}
         <div className="border-b border-slate-100 bg-slate-50 p-4">
           <h2 className="text-lg font-black text-slate-900 mb-2">POS TERMINAL</h2>
@@ -1067,21 +1228,22 @@ export function PosShell() {
                   setActiveOrderId(null);
                   setActiveOrderNumber(null);
                   setActiveTokenNumber(null);
+                  setOrderType("takeaway"); // DEFAULT QUICK BILL TO TAKEAWAY
                 }}
-                className={`w-full p-4 rounded-2xl border-2 transition-all ${isQuickBill && !activeTableId
+                className={`w-full p-2.5 rounded-xl border-2 transition-all ${isQuickBill && !activeTableId
                   ? "border-blue-500 bg-blue-50 shadow-lg"
                   : "border-slate-200 bg-white hover:border-blue-300 hover:shadow-md"
                   }`}
               >
-                <div className="flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isQuickBill && !activeTableId ? "bg-blue-500 text-white" : "bg-slate-100 text-slate-500"}`}>
-                    <Zap size={24} />
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isQuickBill && !activeTableId ? "bg-blue-500 text-white" : "bg-slate-100 text-slate-500"}`}>
+                    <Zap size={20} />
                   </div>
                   <div className="text-left">
-                    <h3 className="font-bold text-slate-900">Quick Bill</h3>
-                    <p className="text-sm text-slate-500">Walk-in / Direct</p>
+                    <h3 className="font-bold text-slate-900 text-sm">Quick Bill</h3>
+                    <p className="text-[10px] text-slate-500">Walk-in / Direct</p>
                   </div>
-                  {isQuickBill && !activeTableId && <CheckCircle2 size={20} className="text-blue-500 ml-auto" />}
+                  {isQuickBill && !activeTableId && <CheckCircle2 size={16} className="text-blue-500 ml-auto" />}
                 </div>
               </button>
 
@@ -1102,7 +1264,7 @@ export function PosShell() {
                       <button
                         key={order.id}
                         onClick={() => loadQrOrder(order)}
-                        className={`relative p-4 rounded-2xl border-2 transition-all ${isActive
+                        className={`relative p-3 rounded-xl border-2 transition-all flex flex-col justify-between h-24 ${isActive
                           ? "border-green-500 bg-green-50 shadow-lg"
                           : isPaid
                             ? "border-green-200 bg-green-50/50 hover:bg-green-50"
@@ -1110,15 +1272,23 @@ export function PosShell() {
                           }`}
                       >
                         {/* Status Indicator */}
-                        <div className="absolute top-2 right-2">
-                          <div className={`w-3 h-3 rounded-full shadow-sm ${isPaid ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+                        <div className="absolute top-1.5 right-1.5 flex items-center gap-1.5">
+                          {order.order_type === 'takeaway' ? (
+                            <ShoppingBag size={10} className="text-slate-400" />
+                          ) : (
+                            <Utensils size={10} className="text-slate-400" />
+                          )}
+                          <div className={`w-1.5 h-1.5 rounded-full shadow-sm ${isPaid ? 'bg-green-500' : 'bg-orange-500'}`}></div>
                         </div>
 
-                        <div className="text-center">
-                          <div className="text-2xl font-black text-slate-900 mb-1">
+                        <div className="text-left mt-auto">
+                          <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                            {order.order_type === 'takeaway' ? 'Takeaway' : 'Dine-In'}
+                          </div>
+                          <div className="text-xl font-black text-slate-900 leading-none mb-1">
                             {order.token_number}
                           </div>
-                          <div className={`text-xs font-bold px-2 py-1 rounded-lg ${isPaid
+                          <div className={`inline-block text-[8px] font-black px-1.5 py-0.5 rounded ${isPaid
                             ? 'bg-green-100 text-green-700'
                             : 'bg-orange-100 text-orange-700'
                             }`}>
@@ -1148,8 +1318,8 @@ export function PosShell() {
                         }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-slate-900">{table.name}</span>
-                        {activeTableId === table.id && <CheckCircle2 size={16} className="text-blue-500" />}
+                        <span className="font-semibold text-slate-900 text-sm">{table.name}</span>
+                        {activeTableId === table.id && <CheckCircle2 size={14} className="text-blue-500" />}
                       </div>
                     </button>
                   ))}
@@ -1173,7 +1343,7 @@ export function PosShell() {
                   <div
                     key={bill.id}
                     onClick={() => loadSettledBill(bill)}
-                    className="p-4 bg-white rounded-2xl border border-slate-200 hover:shadow-md transition-all cursor-pointer"
+                    className="p-4 bg-white rounded-2xl border border-slate-200 hover:shadow-md transition-all cursor-pointer group"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -1182,10 +1352,29 @@ export function PosShell() {
                         </span>
                         <span className="font-bold text-slate-900">#{bill.order?.order_number}</span>
                       </div>
-                      <span className="font-bold text-green-600">₹{bill.total}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-green-600 text-sm">₹{bill.total}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            loadSettledBill(bill).then(() => setTimeout(() => handleReprintBill(), 500));
+                          }}
+                          className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-600 hover:text-white transition-all shadow-sm border border-slate-100"
+                        >
+                          <Printer size={14} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-500">{bill.order?.customer?.name || "Guest"}</span>
+                    <div className="flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="text-slate-500 font-medium truncate max-w-[100px]">{bill.order?.customer?.name || "Guest"}</span>
+                        <span className={`px-1.5 py-0.5 rounded-md font-black uppercase text-[8px] tracking-widest ${bill.order?.order_type === 'takeaway'
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-blue-50 text-blue-600'
+                          }`}>
+                          {bill.order?.order_type === 'takeaway' ? 'Takeaway' : 'Dine-In'}
+                        </span>
+                      </div>
                       <span className="text-slate-400">{new Date(bill.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                   </div>
@@ -1199,103 +1388,100 @@ export function PosShell() {
       {/* 2. Main Content Area - Mobile Inspired */}
       <div className="flex-1 flex flex-col bg-slate-50">
         {/* Top Bar - Mobile Style */}
-        <div className="bg-white border-b border-slate-200 p-4">
-          {/* Current Order Info */}
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white border-b border-slate-200 p-2 px-4">
+          {/* Combined Top Row: Title, Subtitle, Order Type, and Customer Search */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div>
-                <h2 className="text-xl font-black text-slate-900">
+                <h2 className="text-base font-black text-slate-900 leading-tight">
                   {isQuickBill && !activeTableId ? "Quick Bill" : (tables.find((t) => t.id === activeTableId)?.name ?? "Select Table")}
                 </h2>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2">
                   {activeOrderNumber && (
-                    <span className="text-sm text-slate-500">Order #{activeOrderNumber}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">#{activeOrderNumber}</span>
                   )}
                   {activeTokenNumber && (
-                    <span className="bg-blue-500 text-white text-sm font-bold px-3 py-1 rounded-full">
-                      Token {activeTokenNumber}
+                    <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                      T-{activeTokenNumber}
                     </span>
                   )}
                   {paymentStatus === 'paid' && (
-                    <span className="bg-green-100 text-green-700 text-sm font-bold px-3 py-1 rounded-full">
+                    <span className="bg-green-100 text-green-700 text-[10px] font-black px-2 py-0.5 rounded-full">
                       PAID
                     </span>
                   )}
                 </div>
               </div>
+
+              {/* Order Type Toggle - Smaller */}
+              <div className="flex bg-slate-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => handleUpdateOrderType("dine_in")}
+                  disabled={isOrderSettled}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${orderType === "dine_in"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                    } ${isOrderSettled && orderType !== "dine_in" ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <Utensils size={14} />
+                  Dine-In
+                </button>
+                <button
+                  onClick={() => handleUpdateOrderType("takeaway")}
+                  disabled={isOrderSettled}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 ${orderType === "takeaway"
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                    } ${isOrderSettled && orderType !== "takeaway" ? "opacity-50 cursor-not-allowed" : ""}`}
+                >
+                  <ShoppingBag size={14} />
+                  Takeaway
+                </button>
+              </div>
             </div>
 
-            {/* Order Type Toggle */}
-            <div className="flex bg-slate-100 rounded-xl p-1">
-              <button
-                onClick={() => !activeOrderId && setOrderType("dine_in")}
-                disabled={!!activeOrderId}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${orderType === "dine_in"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-                  } ${!!activeOrderId && orderType !== "dine_in" ? "opacity-50 cursor-not-allowed" : ""}`}
-              >
-                <Utensils size={16} />
-                Dine-In
-              </button>
-              <button
-                onClick={() => !activeOrderId && setOrderType("takeaway")}
-                disabled={!!activeOrderId}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${orderType === "takeaway"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-                  } ${!!activeOrderId && orderType !== "takeaway" ? "opacity-50 cursor-not-allowed" : ""}`}
-              >
-                <ShoppingBag size={16} />
-                Takeaway
-              </button>
+            {/* Customer Section - Compact & Same Row */}
+            <div className="flex-1 max-w-sm">
+              {!selectedCustomerId ? (
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    <UserPlus size={16} />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Guest Phone..."
+                    value={customerSearch}
+                    onChange={e => setCustomerSearch(e.target.value.replace(/\D/g, ''))}
+                    onKeyPress={e => e.key === 'Enter' && handleCustomerLookup()}
+                    className="w-full h-9 pl-9 pr-16 rounded-lg border border-slate-200 bg-white text-xs font-medium focus:border-blue-500 outline-none transition-all"
+                  />
+                  {customerSearch.length >= 10 && (
+                    <button
+                      onClick={handleCustomerLookup}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 px-3 bg-slate-900 text-white text-[10px] font-bold rounded-md"
+                    >
+                      Find
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between bg-green-50 border border-green-200 rounded-lg py-1.5 px-3">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <User size={14} className="text-green-600 flex-shrink-0" />
+                    <p className="font-bold text-slate-900 text-xs truncate">{selectedCustomerName}</p>
+                  </div>
+                  {!activeOrderId && (
+                    <button
+                      onClick={() => { setSelectedCustomerId(null); setSelectedCustomerName(null) }}
+                      className="text-slate-400 hover:text-red-500 ml-2"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Customer Section */}
-          {!selectedCustomerId ? (
-            <div className="relative">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                <UserPlus size={20} />
-              </div>
-              <input
-                type="text"
-                placeholder="Enter guest phone number..."
-                value={customerSearch}
-                onChange={e => setCustomerSearch(e.target.value.replace(/\D/g, ''))}
-                onKeyPress={e => e.key === 'Enter' && handleCustomerLookup()}
-                className="w-full h-12 pl-12 pr-20 rounded-xl border-2 border-slate-200 bg-white text-sm font-medium placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
-              />
-              {customerSearch.length >= 10 && (
-                <button
-                  onClick={handleCustomerLookup}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-4 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-black transition-all"
-                >
-                  Find
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center justify-between bg-green-50 border-2 border-green-200 rounded-xl p-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center text-white">
-                  <User size={20} />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-green-600 uppercase">Linked Guest</p>
-                  <p className="font-bold text-slate-900">{selectedCustomerName}</p>
-                </div>
-              </div>
-              {!activeOrderId && (
-                <button
-                  onClick={() => { setSelectedCustomerId(null); setSelectedCustomerName(null) }}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                >
-                  <X size={18} />
-                </button>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Menu Section */}
@@ -1303,17 +1489,17 @@ export function PosShell() {
           {/* Menu Items */}
           <div className="flex-1 flex flex-col">
             {/* Search and Filters */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="relative flex-1">
-                <Search size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <div className="flex items-center gap-3 mb-2">
+              <div className="relative max-w-xs w-full">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
-                  placeholder="Search menu items..."
+                  placeholder="Search items..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full h-12 pl-11 pr-4 rounded-xl border-2 border-slate-200 bg-white text-sm font-medium placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
+                  className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 bg-white text-xs font-medium placeholder:text-slate-400 focus:border-blue-500 transition-all outline-none"
                 />
               </div>
-              <div className="flex bg-slate-100 rounded-xl p-1">
+              <div className="flex bg-slate-100 rounded-lg p-0.5">
                 {[
                   { id: "name", label: "A-Z" },
                   { id: "price_asc", label: "₹↑" },
@@ -1322,7 +1508,7 @@ export function PosShell() {
                   <button
                     key={s.id}
                     onClick={() => setSortBy(s.id as any)}
-                    className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${sortBy === s.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                    className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all ${sortBy === s.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                   >
                     {s.label}
                   </button>
@@ -1331,12 +1517,12 @@ export function PosShell() {
             </div>
 
             {/* Category Tabs */}
-            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+            <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1.5 no-scrollbar">
               <button
                 onClick={() => setSelectedCategoryId(null)}
-                className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategoryId === null
-                  ? "bg-blue-500 text-white shadow-lg"
-                  : "bg-white border-2 border-slate-200 text-slate-600 hover:border-blue-300"
+                className={`flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedCategoryId === null
+                  ? "bg-slate-900 text-white shadow-md"
+                  : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
                   }`}
               >
                 All Items
@@ -1345,9 +1531,9 @@ export function PosShell() {
                 <button
                   key={c.id}
                   onClick={() => setSelectedCategoryId(c.id)}
-                  className={`flex-none px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategoryId === c.id
-                    ? "bg-blue-500 text-white shadow-lg"
-                    : "bg-white border-2 border-slate-200 text-slate-600 hover:border-blue-300"
+                  className={`flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${selectedCategoryId === c.id
+                    ? "bg-slate-900 text-white shadow-md"
+                    : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300"
                     }`}
                 >
                   {c.name}
@@ -1371,35 +1557,39 @@ export function PosShell() {
                     return 0;
                   })
                   .map((item) => (
-                    <div key={item.id} className="relative group">
+                    <div key={item.id} className="relative group h-28">
                       <button
                         onClick={() => addItem(item)}
                         disabled={!item.is_available}
-                        className={`w-full p-4 rounded-2xl border-2 text-left transition-all ${item.is_available
-                          ? "border-slate-200 bg-white hover:border-blue-300 hover:shadow-lg active:scale-95"
-                          : "border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed"
+                        className={`w-full h-full p-3 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${!item.is_available
+                          ? "border-slate-100 bg-slate-50 opacity-60 cursor-not-allowed"
+                          : item.is_veg
+                            ? "bg-green-50/50 border-green-100 hover:border-green-400 hover:bg-green-50 hover:shadow-md active:scale-95"
+                            : item.is_egg
+                              ? "bg-yellow-50/50 border-yellow-100 hover:border-yellow-400 hover:bg-yellow-50 hover:shadow-md active:scale-95"
+                              : "bg-red-50/50 border-red-100 hover:border-red-400 hover:bg-red-50 hover:shadow-md active:scale-95"
                           }`}
                       >
-                        <div className="flex items-start justify-between mb-3">
-                          <h3 className="font-bold text-slate-900 line-clamp-2 flex-1 pr-2">{item.name}</h3>
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${item.is_veg ? "bg-green-100 text-green-600" : item.is_egg ? "bg-yellow-100 text-yellow-600" : "bg-red-100 text-red-600"}`}>
-                            {item.is_veg ? <Leaf size={14} /> : item.is_egg ? <Egg size={14} /> : <Flame size={14} />}
-                          </div>
+                        <div className="flex items-start justify-between">
+                          <h3 className="font-bold text-[13px] text-slate-900 line-clamp-2 flex-1 pr-1 leading-[1.2]">
+                            {item.name}
+                          </h3>
                         </div>
 
                         {!item.is_available && (
-                          <div className="mb-3">
-                            <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-1 rounded-lg">
-                              SOLD OUT
+                          <div className="mb-1">
+                            <span className="bg-red-100 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">
+                              Sold Out
                             </span>
                           </div>
                         )}
 
-                        <div className="flex items-center justify-between">
-                          <span className="text-lg font-black text-slate-900">₹{item.base_price}</span>
+                        <div className="flex items-center justify-between mt-auto">
+                          <span className="text-sm font-black text-slate-900">₹{item.base_price}</span>
                           {item.is_available && (
-                            <div className="w-8 h-8 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Plus size={18} />
+                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity ${item.is_veg ? 'bg-green-500 text-white' : item.is_egg ? 'bg-yellow-500 text-white' : 'bg-red-500 text-white'
+                              }`}>
+                              <Plus size={14} />
                             </div>
                           )}
                         </div>
@@ -1408,9 +1598,9 @@ export function PosShell() {
                       {/* Stock Toggle */}
                       <button
                         onClick={(e) => { e.stopPropagation(); handleToggleStock(item); }}
-                        className={`absolute -top-2 -right-2 px-2 py-1 rounded-lg text-xs font-bold transition-all ${item.is_available
+                        className={`absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded text-[8px] font-bold transition-all shadow-sm ${item.is_available
                           ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                          : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                          : 'bg-red-600 text-white hover:bg-red-700'}`}
                       >
                         {item.is_available ? "IN" : "OUT"}
                       </button>
@@ -1423,95 +1613,79 @@ export function PosShell() {
           {/* Cart Section - Mobile Inspired */}
           <div className="w-96 bg-white rounded-2xl border-2 border-slate-200 shadow-xl flex flex-col">
             {/* Cart Header */}
-            <div className="border-b border-slate-100 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-black text-slate-900">Current Order</h3>
-                {activeBillNumber && (
-                  <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-1 rounded-lg">
-                    Bill #{activeBillNumber}
-                  </span>
-                )}
-              </div>
-
-              {activeOrderNumber && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-500">Order #{activeOrderNumber}</span>
+            <div className="border-b border-slate-100 p-3">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">Current Order</h3>
+                {activeOrderNumber && (
                   <button
                     onClick={handleCancelOrder}
-                    className="w-8 h-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-100 transition-all"
-                    title="Cancel Order"
+                    className="w-7 h-7 bg-red-50 text-red-500 rounded-lg flex items-center justify-center hover:bg-red-100 transition-all"
+                    title="Cancel"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={14} />
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Cart Items */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {/* Existing Items */}
               {existingItems.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-green-500" />
-                    <p className="text-sm font-bold text-slate-600 uppercase">Running Order</p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-1.5 opacity-60">
+                    <CheckCircle2 size={12} className="text-green-500" />
+                    <p className="text-[10px] font-bold text-slate-600 uppercase">Saved Items</p>
                   </div>
                   {existingItems.map((item) => (
-                    <div key={item.id} className="flex justify-between items-center py-2 border-b border-slate-100">
+                    <div key={item.id} className="flex justify-between items-center py-1.5 border-b border-slate-50">
                       <div className="flex-1">
-                        <p className="font-semibold text-slate-900">{item.name}</p>
-                        <p className="text-sm text-slate-500">{item.quantity}x ₹{item.price}</p>
+                        <p className="text-xs font-bold text-slate-800">{item.name}</p>
+                        <p className="text-[10px] text-slate-500">{item.quantity} × ₹{item.price}</p>
                       </div>
-                      <span className="font-bold text-slate-900">₹{item.quantity * item.price}</span>
+                      <span className="text-xs font-black text-slate-900">₹{item.quantity * item.price}</span>
                     </div>
                   ))}
-                  <div className="border-t border-dashed border-slate-300 pt-2 flex justify-between font-semibold text-slate-700">
-                    <span>Running Total</span>
-                    <span>₹{existingTotal}</span>
-                  </div>
                 </div>
               )}
 
               {/* New Items */}
               {cart.length > 0 && (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <AlertCircle size={16} className="text-blue-500" />
-                      <p className="text-sm font-bold text-blue-600 uppercase">New Items</p>
+                    <div className="flex items-center gap-1.5">
+                      <AlertCircle size={12} className="text-blue-500" />
+                      <p className="text-[10px] font-bold text-blue-600 uppercase">New Selection</p>
                     </div>
                     <button
                       onClick={() => setCart([])}
-                      className="text-sm text-red-500 hover:text-red-700 font-medium"
+                      className="text-[10px] text-red-500 hover:text-red-700 font-bold uppercase"
                     >
                       Clear
                     </button>
                   </div>
                   {cart.map((item) => (
-                    <div key={item.item_id} className="bg-blue-50 border-2 border-blue-100 rounded-xl p-3">
+                    <div key={item.item_id} className="bg-slate-50 border border-slate-100 rounded-lg p-2.5">
                       <div className="flex items-center justify-between mb-2">
-                        <div className="flex-1">
-                          <p className="font-semibold text-slate-900">{item.name}</p>
-                          <p className="text-sm text-slate-500">₹{item.price} each</p>
-                        </div>
+                        <p className="text-xs font-bold text-slate-900">{item.name}</p>
+                        <span className="text-xs font-black text-slate-900">₹{item.qty * item.price}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center bg-white rounded-lg border border-slate-200">
+                        <div className="flex items-center bg-white rounded border border-slate-200">
                           <button
                             onClick={() => item.qty > 1 ? updateQty(item.item_id, item.qty - 1) : removeItem(item.item_id)}
-                            className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-50 rounded-l-lg"
+                            className="w-6 h-6 flex items-center justify-center text-slate-500 hover:bg-slate-50"
                           >
                             -
                           </button>
-                          <span className="w-12 text-center font-bold">{item.qty}</span>
+                          <span className="w-8 text-center text-xs font-black">{item.qty}</span>
                           <button
                             onClick={() => updateQty(item.item_id, item.qty + 1)}
-                            className="w-8 h-8 flex items-center justify-center text-slate-500 hover:bg-slate-50 rounded-r-lg"
+                            className="w-6 h-6 flex items-center justify-center text-slate-500 hover:bg-slate-50"
                           >
                             +
                           </button>
                         </div>
-                        <span className="font-bold text-slate-900">₹{item.qty * item.price}</span>
                       </div>
                     </div>
                   ))}
@@ -1576,25 +1750,34 @@ export function PosShell() {
 
                 {isOrderSettled || paymentStatus === 'paid' ? (
                   <div className="space-y-3">
-                    <Button
-                      onClick={() => {
-                        setIsOrderSettled(false);
-                        setActiveTableId(null);
-                        setIsQuickBill(true);
-                        setExistingItems([]);
-                        setActiveOrderId(null);
-                        setActiveOrderNumber(null);
-                        setActiveTokenNumber(null);
-                        setActiveBillNumber(null);
-                        setCart([]);
-                        setSelectedCustomerId(null);
-                        setSelectedCustomerName(null);
-                      }}
-                      className="w-full h-12 bg-green-500 hover:bg-green-600 text-white font-black rounded-xl shadow-lg"
-                    >
-                      <Plus size={18} className="mr-2" /> Start New Order
-                    </Button>
-                    <div className="text-center text-sm font-bold text-slate-400">Order is Settled</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Button
+                        onClick={handleReprintBill}
+                        variant="secondary"
+                        className="h-12 border-2 border-slate-200 text-slate-900 rounded-xl font-bold hover:bg-slate-50"
+                      >
+                        <Printer size={18} className="mr-2" /> Reprint
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setIsOrderSettled(false);
+                          setActiveTableId(null);
+                          setIsQuickBill(true);
+                          setExistingItems([]);
+                          setActiveOrderId(null);
+                          setActiveOrderNumber(null);
+                          setActiveTokenNumber(null);
+                          setActiveBillNumber(null);
+                          setCart([]);
+                          setSelectedCustomerId(null);
+                          setSelectedCustomerName(null);
+                        }}
+                        className="h-12 bg-green-500 hover:bg-green-600 text-white font-black rounded-xl shadow-lg"
+                      >
+                        <Plus size={18} className="mr-2" /> New
+                      </Button>
+                    </div>
+                    <div className="text-center text-sm font-bold text-slate-400 tracking-wide">ORDER IS SETTLED</div>
                   </div>
                 ) : (
                   <div className="flex gap-3">
@@ -1633,7 +1816,7 @@ export function PosShell() {
       {
         showCustomerModal && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-            <Card className="bg-white border-slate-200 w-full animate-slide-up shadow-2xl max-w-sm p-6 rounded-3x">
+            <Card className="bg-white border-slate-200 w-full animate-slide-up shadow-2xl max-w-sm p-6 rounded-3xl">
               <h3 className="text-sm font-black uppercase text-slate-900 mb-4">Register New Guest</h3>
               <div className="space-y-4">
                 <Input placeholder="Guest Name" value={newCustName} onChange={e => setNewCustName(e.target.value)} className="h-11" />

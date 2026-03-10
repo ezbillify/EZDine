@@ -345,7 +345,7 @@ export async function getSettledBills() {
   const { branchId } = await getContext();
   const { data, error } = await supabase
     .from("bills")
-    .select("*, order:orders(order_number, token_number, customer:customers(name))")
+    .select("*, order:orders(order_number, token_number, order_type, customer:customers(name))")
     .eq("branch_id", branchId)
     .order("created_at", { ascending: false })
     .limit(50);

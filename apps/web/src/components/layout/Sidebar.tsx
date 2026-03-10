@@ -28,15 +28,17 @@ const baseItems = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/pos", label: "POS Terminal", icon: MonitorCheck },
     { href: "/orders", label: "Live Orders", icon: ShoppingBag },
-    { href: "/reservations", label: "Reservations", icon: Calendar },
     { href: "/kds", label: "Kitchen (KDS)", icon: ChefHat },
     { href: "/menu", label: "Menu Manager", icon: Menu },
-    { href: "/inventory", label: "Inventory", icon: Warehouse },
-    { href: "/purchase", label: "Purchase", icon: ShoppingBag },
-    { href: "/customers", label: "Customers", icon: Users },
     { href: "/tables", label: "Tables", icon: UtensilsCrossed },
     { href: "/reports", label: "Analytics", icon: BarChart3 },
-    { href: "/settings", label: "Settings", icon: Settings }
+    { href: "/reservations", label: "Reservations", icon: Calendar },
+    { href: "/customers", label: "Customers", icon: Users },
+    { href: "/settings", label: "Settings", icon: Settings },
+    // Coming Soon
+    { href: "/staff", label: "Staff Manager", icon: Users, comingSoon: true },
+    { href: "/inventory", label: "Inventory", icon: Warehouse, comingSoon: true },
+    { href: "/purchase", label: "Purchase", icon: ShoppingBag, comingSoon: true },
 ];
 
 export function Sidebar({ className = "", onNavigate, isCollapsed = false }: { className?: string, onNavigate?: () => void, isCollapsed?: boolean }) {
@@ -69,10 +71,7 @@ export function Sidebar({ className = "", onNavigate, isCollapsed = false }: { c
         });
     };
 
-    const items =
-        role === "owner"
-            ? [...baseItems, { href: "/staff", label: "Staff Manager", icon: Users }]
-            : baseItems;
+    const items = baseItems;
 
     const filteredItems = items.filter((item) => {
         if (role === "owner") return true;
@@ -108,19 +107,7 @@ export function Sidebar({ className = "", onNavigate, isCollapsed = false }: { c
                 </div>
             </div>
 
-            {!isCollapsed && (
-                <div className="p-4 mt-4 animate-in fade-in duration-300">
-                    <button className="flex w-full items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-slate-400 hover:bg-slate-100 transition-all">
-                        <div className="flex items-center gap-3">
-                            <Search size={16} />
-                            <span className="text-xs font-bold uppercase tracking-widest opacity-60">Global Search</span>
-                        </div>
-                        <div className="flex items-center gap-1 rounded bg-white px-1.5 py-0.5 border border-slate-200 text-[10px] font-black opacity-40">
-                            <span>⌘</span><span>K</span>
-                        </div>
-                    </button>
-                </div>
-            )}
+
 
             <nav className={`flex-1 overflow-y-auto px-4 py-2 space-y-1.5 custom-scrollbar ${isCollapsed ? 'mt-4' : ''}`}>
                 {!isCollapsed && (
@@ -128,34 +115,42 @@ export function Sidebar({ className = "", onNavigate, isCollapsed = false }: { c
                         Product Suite
                     </div>
                 )}
-                {filteredItems.map((item) => {
+                {filteredItems.map((item: any) => {
                     const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
                     const Icon = item.icon;
+                    const isComingSoon = item.comingSoon;
 
                     return (
                         <Link
                             key={item.href}
-                            href={item.href}
-                            prefetch={true}
+                            href={isComingSoon ? "#" : item.href}
+                            prefetch={isComingSoon ? false : true}
                             onClick={(e) => {
                                 e.preventDefault();
-                                handleNavigation(item.href);
-                                onNavigate?.();
+                                if (!isComingSoon) {
+                                    handleNavigation(item.href);
+                                    onNavigate?.();
+                                }
                             }}
                             className={`group flex items-center rounded-2xl transition-all duration-200 ${isCollapsed ? 'justify-center p-3 w-12 h-12 mx-auto' : 'gap-4 px-4 py-3'} text-xs font-black uppercase tracking-widest ${isActive
                                 ? "bg-slate-900 text-white shadow-2xl shadow-slate-900/20 translate-x-1"
-                                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                                : isComingSoon
+                                    ? "text-slate-300 cursor-not-allowed opacity-60"
+                                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
                                 } ${isPending ? 'opacity-50' : ''}`}
                             title={isCollapsed ? item.label : undefined}
                         >
                             <Icon
                                 size={20}
-                                className={`shrink-0 transition-all ${isActive ? "text-brand-500 group-hover:scale-110" : "text-slate-300 group-hover:text-slate-600"}`}
+                                className={`shrink-0 transition-all ${isActive ? "text-brand-500 group-hover:scale-110" : isComingSoon ? "text-slate-200" : "text-slate-300 group-hover:text-slate-600"}`}
                             />
                             {!isCollapsed && (
-                                <span className="animate-in fade-in duration-300 whitespace-nowrap overflow-hidden">
-                                    {item.label}
-                                </span>
+                                <div className="flex flex-1 items-center justify-between shrink-0 animate-in fade-in duration-300 whitespace-nowrap overflow-hidden">
+                                    <span>{item.label}</span>
+                                    {isComingSoon && (
+                                        <span className="text-[7px] font-black bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full tracking-normal normal-case">Soon</span>
+                                    )}
+                                </div>
                             )}
                         </Link>
                     );
@@ -163,23 +158,6 @@ export function Sidebar({ className = "", onNavigate, isCollapsed = false }: { c
             </nav>
 
             <div className={`p-6 border-t border-slate-50 space-y-4 ${isCollapsed ? 'px-2' : ''}`}>
-                {!isCollapsed ? (
-                    <div className="rounded-[2rem] bg-brand-50 p-5 relative overflow-hidden group border border-brand-100/50 animate-in fade-in duration-300">
-                        <div className="absolute top-0 right-0 p-2 opacity-10 text-brand-600">
-                            <MonitorCheck size={60} />
-                        </div>
-                        <p className="text-[9px] font-black uppercase tracking-widest text-brand-600 mb-1">POS Status</p>
-                        <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                            <p className="text-[11px] font-black text-slate-900 uppercase">Live & Secure</p>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex justify-center transition-all animate-in fade-in zoom-in w-12 h-12 mx-auto rounded-2xl bg-brand-50 items-center border border-brand-100/50 cursor-pointer" title="POS Status: Live & Secure">
-                        <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
-                    </div>
-                )}
-
                 {!isCollapsed && (
                     <div className="px-2 text-center space-y-1 animate-in fade-in duration-300 overflow-hidden whitespace-nowrap">
                         <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">v{APP_VERSION}</p>

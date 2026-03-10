@@ -1,4 +1,13 @@
 
+## v1.18.0 (2026-03-10)
+
+### Features
+* Added 'Coming Soon' label to dashboard links
+* Refactored sidebar and menu page for better user experience
+### Fixes
+* Improved code quality and consistency
+
+
 ## v1.17.0 (2026-03-10)
 
 # Features

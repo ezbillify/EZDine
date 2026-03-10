@@ -293,39 +293,56 @@ export function buildInvoiceLines(input: {
   const singleDivider = "-".repeat(charCount);
   const lines: PrintLine[] = [];
 
-  // Restaurant Name
+  // 1. Header Section
   lines.push({ text: input.restaurantName.toUpperCase(), align: 'center', bold: true });
 
-  // Branch
   if (input.branchName) {
     lines.push({ text: input.branchName, align: 'center' });
   }
 
-  // Address
-  if (input.branchAddress && input.branchAddress.length > 0) {
+  if (input.branchAddress) {
     lines.push({ text: input.branchAddress, align: 'center' });
   }
 
-  // Mobile Number
-  if (input.phone && input.phone.length > 0) {
+  if (input.phone) {
     lines.push({ text: `PH: ${input.phone}`, align: 'center' });
   }
 
-  lines.push({ text: singleDivider, align: 'center' });
+  if (input.gstin) {
+    lines.push({ text: `GSTIN: ${input.gstin}`, align: 'center' });
+  }
 
-  // Bill Number and Time
-  const now = new Date();
-  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-  lines.push({ text: `BILL NO: ${input.billId.toUpperCase()} | TIME: ${timeStr}`, align: 'center', bold: true });
-
-  // Token Number
-  if (input.tokenNumber) {
-    lines.push({ text: `TOKEN NO: ${input.tokenNumber}`, align: 'center', bold: true });
+  if (input.fssai) {
+    lines.push({ text: `FSSAI: ${input.fssai}`, align: 'center' });
   }
 
   lines.push({ text: singleDivider, align: 'center' });
 
-  // Item Name Qty and Price
+  // 2. Order Info Section
+  const now = new Date();
+  const dateStr = `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear()}`;
+  const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+  lines.push({ text: `INV NO: ${input.billId.toUpperCase()}`, align: 'left' });
+  lines.push({ text: `DATE: ${dateStr} ${timeStr}`, align: 'left' });
+
+  // Line 2: Token and Order Type
+  const tokenPart = input.tokenNumber ? `TOKEN: ${input.tokenNumber}` : "";
+  const typePart = input.orderType ? input.orderType.toUpperCase() : "DINE-IN";
+
+  if (tokenPart || typePart) {
+    const spaceCount = charCount - tokenPart.length - typePart.length;
+    const infoLine = `${tokenPart}${" ".repeat(Math.max(1, spaceCount))}${typePart}`;
+    lines.push({ text: infoLine, align: 'left', bold: true });
+  }
+
+  if (input.tableName && input.tableName !== "--") {
+    lines.push({ text: `TABLE: ${input.tableName.toUpperCase()}`, align: 'left', bold: true });
+  }
+
+  lines.push({ text: singleDivider, align: 'center' });
+
+  // 3. Items Table Header
   const headerItem = "ITEM".padEnd(paperWidth === 80 ? 24 : 14);
   const headerQty = "QTY".padStart(paperWidth === 80 ? 4 : 3);
   const headerPrice = "PRICE".padStart(paperWidth === 80 ? 8 : 6);
@@ -334,6 +351,7 @@ export function buildInvoiceLines(input: {
   lines.push({ text: headerStr, align: 'left', bold: true });
   lines.push({ text: singleDivider, align: 'center' });
 
+  // 4. Items List
   input.items.forEach((item) => {
     const name = (item.name || "Item").toUpperCase();
     const qty = item.qty || 1;
@@ -345,30 +363,31 @@ export function buildInvoiceLines(input: {
       const qtyStr = qty.toString().padStart(4);
       const priceStr = price.toFixed(2).padStart(8);
       const totalStr = amt.toFixed(2).padStart(9);
-
-      const itemLine = `${shortName} ${qtyStr} ${priceStr} ${totalStr}`;
-      lines.push({ text: itemLine, align: 'left' });
+      lines.push({ text: `${shortName} ${qtyStr} ${priceStr} ${totalStr}`, align: 'left' });
     } else {
       const shortName = name.length > 14 ? name.substring(0, 12) + ".." : name.padEnd(14);
       const qtyStr = qty.toString().padStart(3);
       const priceStr = price.toFixed(2).padStart(6);
       const totalStr = amt.toFixed(2).padStart(6);
-
-      const itemLine = `${shortName} ${qtyStr} ${priceStr} ${totalStr}`;
-      lines.push({ text: itemLine, align: 'left' });
+      lines.push({ text: `${shortName} ${qtyStr} ${priceStr} ${totalStr}`, align: 'left' });
     }
   });
 
   lines.push({ text: singleDivider, align: 'center' });
 
-  // Grand Total
-  const totalLabel = "GRAND TOTAL";
+  // 5. Totals
   const totalVal = `Rs. ${input.total.toFixed(2)}`;
+  const totalLabel = "GRAND TOTAL";
   const totalPad = Math.max(1, charCount - totalLabel.length - totalVal.length);
   lines.push({ text: `${totalLabel}${" ".repeat(totalPad)}${totalVal}`, align: 'left', bold: true });
 
   lines.push({ text: singleDivider, align: 'center' });
+
+  // 6. Footer
   lines.push({ text: "THANK YOU", align: 'center', bold: true });
+  lines.push({ text: "POWERED BY EZBILLIFY", align: 'center' });
+  lines.push({ text: " ", align: 'center' }); // Extra space for cut
+  lines.push({ text: " ", align: 'center' });
 
   return lines;
 }

@@ -156,13 +156,19 @@ export function RestaurantManager() {
                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">ID: {restaurant.id}</p>
                     </div>
                   </div>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" className="h-9 w-9 p-0 bg-white border border-slate-200 shadow-sm text-slate-600 hover:text-brand-600 hover:border-brand-200 rounded-xl" onClick={() => handleRename(restaurant)}>
-                      <Edit3 size={14} />
-                    </Button>
-                    <Button variant="ghost" className="h-9 w-9 p-0 bg-white border border-slate-200 shadow-sm text-slate-600 hover:text-rose-600 hover:border-rose-200 rounded-xl" onClick={() => handleDelete(restaurant)}>
-                      <Trash2 size={14} />
-                    </Button>
+                  <div className="flex gap-2">
+                    <button
+                      className="h-9 w-9 flex items-center justify-center bg-blue-100 border-2 border-blue-200 text-blue-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 rounded-xl transition-all shadow-sm active:scale-95"
+                      onClick={() => handleRename(restaurant)}
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button
+                      className="h-9 w-9 flex items-center justify-center bg-rose-100 border-2 border-rose-200 text-rose-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 rounded-xl transition-all shadow-sm active:scale-95"
+                      onClick={() => handleDelete(restaurant)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
               ))

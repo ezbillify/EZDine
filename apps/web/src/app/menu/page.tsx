@@ -11,7 +11,7 @@ import { Dropdown } from "../../components/ui/Dropdown";
 import { toast, Toaster } from "sonner";
 import { supabase } from "../../lib/supabaseClient";
 import { getAccessibleBranches, getCurrentUserProfile } from "../../lib/tenant";
-import { Leaf, Flame, Egg } from "lucide-react";
+import { Leaf, Flame, Egg, Edit3, Trash2, Plus } from "lucide-react";
 
 type Category = {
   id: string;
@@ -267,17 +267,23 @@ export default function MenuPage() {
               {categories.map((c) => (
                 <li key={c.id} className="flex items-center justify-between">
                   <span className="font-bold">{c.name}</span>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" className="text-blue-500" onClick={() => {
-                      setEditingCategoryId(c.id);
-                      setCategoryName(c.name);
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                    }}>
-                      Edit
-                    </Button>
-                    <Button variant="ghost" className="text-red-400" onClick={() => supabase.from("menu_categories").delete().eq("id", c.id).then(load)}>
-                      Delete
-                    </Button>
+                  <div className="flex gap-2">
+                    <button
+                      className="h-8 w-8 flex items-center justify-center bg-blue-100 border border-blue-200 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg transition-all shadow-sm active:scale-95"
+                      onClick={() => {
+                        setEditingCategoryId(c.id);
+                        setCategoryName(c.name);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button
+                      className="h-8 w-8 flex items-center justify-center bg-rose-100 border border-rose-200 text-rose-700 hover:bg-rose-600 hover:text-white rounded-lg transition-all shadow-sm active:scale-95"
+                      onClick={() => supabase.from("menu_categories").delete().eq("id", c.id).then(load)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </li>
               ))}
@@ -298,21 +304,27 @@ export default function MenuPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" className="text-blue-500" onClick={() => {
-                      setEditingItemId(i.id);
-                      setItemName(i.name);
-                      setItemPrice(i.base_price.toString());
-                      setCategoryId(i.category_id || "");
-                      setGstRate(i.gst_rate?.toString() || "0");
-                      setDietary(i.is_egg ? "egg" : (i.is_veg ? "veg" : "non-veg"));
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}>
-                      Edit
-                    </Button>
-                    <Button variant="ghost" className="text-red-500" onClick={() => supabase.from("menu_items").delete().eq("id", i.id).then(load)}>
-                      Delete
-                    </Button>
+                  <div className="flex gap-2">
+                    <button
+                      className="h-9 w-9 flex items-center justify-center bg-blue-100 border border-blue-200 text-blue-700 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
+                      onClick={() => {
+                        setEditingItemId(i.id);
+                        setItemName(i.name);
+                        setItemPrice(i.base_price.toString());
+                        setCategoryId(i.category_id || "");
+                        setGstRate(i.gst_rate?.toString() || "0");
+                        setDietary(i.is_egg ? "egg" : (i.is_veg ? "veg" : "non-veg"));
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                    >
+                      <Edit3 size={18} />
+                    </button>
+                    <button
+                      className="h-9 w-9 flex items-center justify-center bg-rose-100 border border-rose-200 text-rose-700 hover:bg-rose-600 hover:text-white rounded-xl transition-all shadow-sm active:scale-95"
+                      onClick={() => supabase.from("menu_items").delete().eq("id", i.id).then(load)}
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
                 </li>
               ))}

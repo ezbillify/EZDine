@@ -270,12 +270,18 @@ export function BranchManager() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="ghost" className="h-10 w-10 p-0 bg-white border border-slate-200 shadow-sm text-slate-600 hover:text-brand-600 hover:border-brand-200 rounded-xl transition-all" onClick={() => handleEdit(branch)}>
-                      <Edit3 size={16} />
-                    </Button>
-                    <Button variant="ghost" className="h-10 w-10 p-0 bg-white border border-slate-200 shadow-sm text-slate-600 hover:text-rose-600 hover:border-rose-200 rounded-xl transition-all" onClick={() => handleDelete(branch)}>
-                      <Trash2 size={16} />
-                    </Button>
+                    <button
+                      className="h-10 w-10 flex items-center justify-center bg-blue-100 border-2 border-blue-200 text-blue-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 rounded-xl transition-all shadow-sm active:scale-95"
+                      onClick={() => handleEdit(branch)}
+                    >
+                      <Edit3 size={18} />
+                    </button>
+                    <button
+                      className="h-10 w-10 flex items-center justify-center bg-rose-100 border-2 border-rose-200 text-rose-700 hover:bg-rose-600 hover:text-white hover:border-rose-600 rounded-xl transition-all shadow-sm active:scale-95"
+                      onClick={() => handleDelete(branch)}
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
                 </div>
               ))

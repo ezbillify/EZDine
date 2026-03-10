@@ -134,6 +134,11 @@ export async function assignBranchRole(input: {
   if (error) throw error;
 }
 
+export async function removeBranchRole(id: string) {
+  const { error } = await supabase.from("user_branch_roles").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function transferRestaurantOwnership(input: {
   restaurant_id: string;
   new_owner_user_id: string;
