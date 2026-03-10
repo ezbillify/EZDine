@@ -1,4 +1,10 @@
 
+## v1.20.1 (2026-03-10)
+
+### Fixes
+* Updated print bridge binaries for macos and windows
+
+
 ## v1.20.0 (2026-03-10)
 
 ### Features
