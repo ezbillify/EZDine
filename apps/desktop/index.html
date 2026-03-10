@@ -113,10 +113,45 @@
       // Get the absolute path to preload.js via the bridge info
       const info = await window.bridgeAPI.getBridgeInfo();
       const webview = document.getElementById('app-frame');
+      const updateBtn = document.querySelector('.update-btn');
 
       // Update UI with native info
       document.getElementById('version-display').innerText = `v${info.appVersion || '???'}`;
       document.getElementById('ip-display').innerText = info.url;
+
+      // Subscribe to update status
+      window.bridgeAPI.onUpdateStatus((status, data) => {
+        console.log('Native Update Status:', status, data);
+        switch (status) {
+          case 'checking':
+            updateBtn.innerText = 'Checking...';
+            updateBtn.disabled = true;
+            break;
+          case 'available':
+            updateBtn.innerText = `Update Found: v${data}`;
+            updateBtn.style.background = '#059669'; // Greenish
+            break;
+          case 'uptodate':
+            updateBtn.innerText = 'App is Up to Date';
+            updateBtn.disabled = false;
+            setTimeout(() => { updateBtn.innerText = 'Check for Updates'; }, 3000);
+            break;
+          case 'downloading':
+            updateBtn.innerText = `Downloading: ${data}%`;
+            updateBtn.disabled = true;
+            break;
+          case 'downloaded':
+            updateBtn.innerText = 'Installing Update...';
+            updateBtn.style.background = '#2563eb'; // Blue
+            break;
+          case 'error':
+            updateBtn.innerText = 'Update Error';
+            updateBtn.title = data;
+            updateBtn.disabled = false;
+            setTimeout(() => { updateBtn.innerText = 'Check for Updates'; }, 3000);
+            break;
+        }
+      });
 
       // Set the preload attribute before setting the src
       if (info.preloadPath) {
@@ -127,16 +162,7 @@
     }
 
     function checkUpdates() {
-      const btn = document.querySelector('.update-btn');
-      btn.innerText = 'Checking...';
-      btn.disabled = true;
-
       window.bridgeAPI.checkForUpdates();
-
-      setTimeout(() => {
-        btn.innerText = 'Check for Updates';
-        btn.disabled = false;
-      }, 3000);
     }
     init();
   </script>

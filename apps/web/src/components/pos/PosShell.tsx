@@ -804,6 +804,7 @@ export function PosShell() {
               phone: branchDetails.phone,
               billId: `${orderNumber}`, // Usually bill number is different but using order for now
               tokenNumber: tokenNumber,
+              orderType: orderType,
               items: fullItems.map(c => ({ name: c.name, qty: c.qty, price: c.price })),
               subtotal: totalAmount,
               tax: 0,

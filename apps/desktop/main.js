@@ -208,15 +208,33 @@ app.whenReady().then(() => {
     createWindow();
     createMenu();
 
+    autoUpdater.on('checking-for-update', () => {
+        console.log('Checking for update...');
+        mainWindow?.webContents.send('update-status', 'checking');
+    });
+    autoUpdater.on('update-available', (info) => {
+        console.log('Update available:', info.version);
+        mainWindow?.webContents.send('update-status', 'available', info.version);
+    });
+    autoUpdater.on('update-not-available', (info) => {
+        console.log('Update not available.');
+        mainWindow?.webContents.send('update-status', 'uptodate');
+    });
+    autoUpdater.on('error', (err) => {
+        console.error('Error in auto-updater:', err);
+        mainWindow?.webContents.send('update-status', 'error', err.message);
+    });
+    autoUpdater.on('download-progress', (progressObj) => {
+        console.log(`Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}%`);
+        mainWindow?.webContents.send('update-status', 'downloading', Math.round(progressObj.percent));
+    });
+    autoUpdater.on('update-downloaded', (info) => {
+        console.log('Update downloaded; will install now');
+        mainWindow?.webContents.send('update-status', 'downloaded');
+    });
+
     // Automatically check for updates and notify the user to install them when ready
     autoUpdater.checkForUpdatesAndNotify();
-
-    autoUpdater.on('checking-for-update', () => console.log('Checking for update...'));
-    autoUpdater.on('update-available', (info) => console.log('Update available:', info.version));
-    autoUpdater.on('update-not-available', (info) => console.log('Update not available.'));
-    autoUpdater.on('error', (err) => console.error('Error in auto-updater:', err));
-    autoUpdater.on('download-progress', (progressObj) => console.log(`Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}%`));
-    autoUpdater.on('update-downloaded', (info) => console.log('Update downloaded; will install now'));
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {

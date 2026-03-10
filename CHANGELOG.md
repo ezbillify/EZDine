@@ -1,4 +1,16 @@
 
+## v1.22.0 (2026-03-10)
+
+
+### Features
+* Added update status handling for desktop app
+* Improved printing for 80mm paper
+
+### Fixes
+* Adjusted character count for 80mm paper printing
+
+
+
 ## v1.21.0 (2026-03-10)
 
 # Features

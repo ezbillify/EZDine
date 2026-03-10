@@ -312,7 +312,7 @@ export function buildInvoiceLines(input: {
   paperWidth?: 58 | 80;
 }) {
   const paperWidth = input.paperWidth || 58;
-  const charCount = paperWidth === 80 ? 48 : 32;
+  const charCount = paperWidth === 80 ? 46 : 31;
   const singleDivider = "-".repeat(charCount);
   const lines: PrintLine[] = [];
 
@@ -366,8 +366,8 @@ export function buildInvoiceLines(input: {
   lines.push({ text: singleDivider, align: 'center' });
 
   // 3. Items Table Header
-  const headerItem = "ITEM".padEnd(paperWidth === 80 ? 24 : 14);
-  const headerQty = "QTY".padStart(paperWidth === 80 ? 4 : 3);
+  const headerItem = "ITEM".padEnd(paperWidth === 80 ? 22 : 13);
+  const headerQty = "QTY".padStart(paperWidth === 80 ? 3 : 3);
   const headerPrice = "PRICE".padStart(paperWidth === 80 ? 8 : 6);
   const headerTotal = "TOTAL".padStart(paperWidth === 80 ? 9 : 6);
   const headerStr = `${headerItem} ${headerQty} ${headerPrice} ${headerTotal}`;
@@ -382,13 +382,13 @@ export function buildInvoiceLines(input: {
     const amt = price * qty;
 
     if (paperWidth === 80) {
-      const shortName = name.length > 24 ? name.substring(0, 22) + ".." : name.padEnd(24);
-      const qtyStr = qty.toString().padStart(4);
+      const shortName = name.length > 22 ? name.substring(0, 20) + ".." : name.padEnd(22);
+      const qtyStr = qty.toString().padStart(3);
       const priceStr = price.toFixed(2).padStart(8);
       const totalStr = amt.toFixed(2).padStart(9);
       lines.push({ text: `${shortName} ${qtyStr} ${priceStr} ${totalStr}`, align: 'left' });
     } else {
-      const shortName = name.length > 14 ? name.substring(0, 12) + ".." : name.padEnd(14);
+      const shortName = name.length > 13 ? name.substring(0, 11) + ".." : name.padEnd(13);
       const qtyStr = qty.toString().padStart(3);
       const priceStr = price.toFixed(2).padStart(6);
       const totalStr = amt.toFixed(2).padStart(6);
