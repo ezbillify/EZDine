@@ -11,7 +11,7 @@ import { Dropdown } from "../../components/ui/Dropdown";
 import { toast, Toaster } from "sonner";
 import { supabase } from "../../lib/supabaseClient";
 import { getAccessibleBranches, getCurrentUserProfile } from "../../lib/tenant";
-import { Leaf, Flame, Egg, Edit3, Trash2 } from "lucide-react";
+import { Leaf, Flame, Egg, Edit3, Trash2, Zap } from "lucide-react";
 
 type Category = {
   id: string;
@@ -26,6 +26,7 @@ type MenuItem = {
   category_id: string | null;
   is_veg: boolean;
   is_egg: boolean;
+  is_featured?: boolean;
   menu_categories?: { name: string };
 };
 
@@ -47,6 +48,7 @@ export default function MenuPage() {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [dietary, setDietary] = useState<"veg" | "non-veg" | "egg">("veg");
+  const [isFeatured, setIsFeatured] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -138,7 +140,8 @@ export default function MenuPage() {
             base_price: Number(itemPrice),
             gst_rate: Number(gstRate),
             is_veg: dietary === "veg",
-            is_egg: dietary === "egg"
+            is_egg: dietary === "egg",
+            is_featured: isFeatured
           })
           .eq("id", editingItemId);
         if (error) throw error;
@@ -153,7 +156,8 @@ export default function MenuPage() {
           base_price: Number(itemPrice),
           gst_rate: Number(gstRate),
           is_veg: dietary === "veg",
-          is_egg: dietary === "egg"
+          is_egg: dietary === "egg",
+          is_featured: isFeatured
         });
         if (error) throw error;
         toast.success(`Item "${itemName}" added`);
@@ -161,6 +165,7 @@ export default function MenuPage() {
       setItemName("");
       setItemPrice("0");
       setDietary("veg");
+      setIsFeatured(false);
       load();
     } catch (error: unknown) {
       toast.error(editingItemId ? "Failed to update item" : "Failed to create item");
@@ -244,16 +249,29 @@ export default function MenuPage() {
                   </button>
                 ))}
               </div>
+              <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-100 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="featured-toggle"
+                  checked={isFeatured}
+                  onChange={(e) => setIsFeatured(e.target.checked)}
+                  className="w-4 h-4 rounded text-amber-500 focus:ring-amber-400"
+                />
+                <label htmlFor="featured-toggle" className="text-[10px] font-black uppercase text-slate-500 cursor-pointer flex items-center gap-1.5">
+                  <Zap size={12} className={isFeatured ? "fill-amber-500 text-amber-500" : ""} />
+                  Featured / Frequently Bought
+                </label>
+              </div>
               <div className="flex gap-2">
                 <Button className="flex-1" onClick={createItem} disabled={!itemName || !branchId}>
                   {editingItemId ? "Update Item" : "Add Item (Inclusive)"}
                 </Button>
                 {editingItemId && (
                   <Button variant="ghost" onClick={() => {
-                    setEditingItemId(null);
                     setItemName("");
                     setItemPrice("0");
                     setDietary("veg");
+                    setIsFeatured(false);
                   }}>Cancel</Button>
                 )}
               </div>
@@ -298,7 +316,10 @@ export default function MenuPage() {
                       {i.is_veg ? <Leaf size={18} /> : i.is_egg ? <Egg size={18} /> : <Flame size={18} />}
                     </div>
                     <div>
-                      <p className="font-bold">{i.name}</p>
+                      <p className="font-bold">
+                        {i.name}
+                        {i.is_featured && <span className="ml-2 bg-amber-100 text-amber-700 text-[8px] px-1 rounded uppercase font-black">Featured</span>}
+                      </p>
                       <p className="text-xs text-slate-500 uppercase">
                         {i.menu_categories?.name || "Uncategorized"} · ₹{i.base_price} (Inc. {i.gst_rate ?? 0}% Tax)
                       </p>
@@ -314,6 +335,7 @@ export default function MenuPage() {
                         setCategoryId(i.category_id || "");
                         setGstRate(i.gst_rate?.toString() || "0");
                         setDietary(i.is_egg ? "egg" : (i.is_veg ? "veg" : "non-veg"));
+                        setIsFeatured(i.is_featured || false);
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }}
                     >

@@ -29,7 +29,7 @@ export async function getMenuItems() {
 export async function getPublicBranchMenu(branchId: string) {
   const { data, error } = await supabase
     .from("menu_items")
-    .select("id,name,description,base_price,gst_rate,is_veg,is_egg,category_id,is_available, menu_categories(name)")
+    .select("id,name,description,base_price,gst_rate,is_veg,is_egg,category_id,is_available,is_featured, menu_categories(name)")
     .eq("branch_id", branchId)
     .eq("is_active", true)
     .order("name");

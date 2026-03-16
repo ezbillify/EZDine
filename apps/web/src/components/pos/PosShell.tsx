@@ -38,6 +38,7 @@ type MenuItem = {
   is_veg: boolean;
   is_egg: boolean;
   category_id?: string;
+  is_featured?: boolean;
 };
 
 type OrderItem = {
@@ -69,6 +70,7 @@ export function PosShell() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "price_asc" | "price_desc">("name");
+  const [showFeatured, setShowFeatured] = useState(false);
   const [branchDetails, setBranchDetails] = useState<{
     restaurantName: string;
     branchName: string;
@@ -1544,6 +1546,15 @@ export function PosShell() {
                   </button>
                 ))}
               </div>
+
+              {/* Featured Toggle */}
+              <button
+                onClick={() => setShowFeatured(!showFeatured)}
+                className={`ml-1 h-9 px-3 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1.5 ${showFeatured ? "bg-amber-500 text-white shadow-md" : "bg-white border border-slate-200 text-slate-600 hover:border-amber-400 hover:text-amber-600"}`}
+              >
+                <Zap size={14} className={showFeatured ? "fill-white" : ""} />
+                {showFeatured ? "Showing Featured only" : "Filter Featured"}
+              </button>
             </div>
 
             {/* Category Tabs */}
@@ -1572,15 +1583,27 @@ export function PosShell() {
             </div>
 
             {/* Menu Grid */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto pt-4 pr-4">
               <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {menuItems
                   .filter(i => {
                     const matchesSearch = i.name.toLowerCase().includes(searchQuery.toLowerCase());
                     const matchesCategory = !selectedCategoryId || i.category_id === selectedCategoryId;
-                    return matchesSearch && matchesCategory;
+                    const matchesFeatured = !showFeatured || i.is_featured;
+                    return matchesSearch && matchesCategory && matchesFeatured;
                   })
                   .sort((a, b) => {
+                    // 1. Availability Sort (Out of Stock to Bottom)
+                    if (a.is_available !== b.is_available) {
+                      return a.is_available ? -1 : 1;
+                    }
+
+                    // 2. Featured Sort (Always Top if available)
+                    if (a.is_featured !== b.is_featured) {
+                      return a.is_featured ? -1 : 1;
+                    }
+
+                    // 3. User selected Sort
                     if (sortBy === "name") return a.name.localeCompare(b.name);
                     if (sortBy === "price_asc") return a.base_price - b.base_price;
                     if (sortBy === "price_desc") return b.base_price - a.base_price;
@@ -1604,6 +1627,11 @@ export function PosShell() {
                           <h3 className="font-bold text-[13px] text-slate-900 line-clamp-2 flex-1 pr-1 leading-[1.2]">
                             {item.name}
                           </h3>
+                          {item.is_featured && (
+                            <div className="w-5 h-5 bg-amber-100 rounded-md flex items-center justify-center text-amber-600 shadow-sm">
+                              <Zap size={10} className="fill-amber-600" />
+                            </div>
+                          )}
                         </div>
 
                         {!item.is_available && (
@@ -1879,6 +1907,6 @@ export function PosShell() {
         width={previewData.width}
         onPrint={handleCreateBill}
       />
-    </div >
+    </div>
   );
 }

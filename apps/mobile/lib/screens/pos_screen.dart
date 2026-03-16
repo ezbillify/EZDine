@@ -80,6 +80,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   final _cacheService = PosCacheService();
   final _addToCartThrottler = Throttler(); 
   String _sortBy = "name";
+  bool _showFeaturedOnly = false;
 
   @override
   void initState() {
@@ -800,17 +801,32 @@ class _PosScreenState extends ConsumerState<PosScreen> {
               final filtered = items.where((i) {
                 final matchesCategory = _selectedCategoryId == null || i['category_id'] == _selectedCategoryId;
                 final matchesSearch = i['name'].toString().toLowerCase().contains(_searchQuery);
-                return matchesCategory && matchesSearch;
+                final matchesFeatured = !_showFeaturedOnly || (i['is_featured'] == true);
+                return matchesCategory && matchesSearch && matchesFeatured;
               }).toList();
 
               // Apply Sorting
-              if (_sortBy == 'name') {
-                filtered.sort((a, b) => a['name'].toString().compareTo(b['name'].toString()));
-              } else if (_sortBy == 'price_asc') {
-                filtered.sort((a, b) => (a['base_price'] as num).compareTo(b['base_price'] as num));
-              } else if (_sortBy == 'price_desc') {
-                filtered.sort((a, b) => (b['base_price'] as num).compareTo(a['base_price'] as num));
-              }
+              filtered.sort((a, b) {
+                // 1. Availability Sort (Out of Stock to Bottom)
+                final bool aAvail = a['is_available'] ?? true;
+                final bool bAvail = b['is_available'] ?? true;
+                if (aAvail != bAvail) return aAvail ? -1 : 1;
+
+                // 2. Featured Sort (Always Top if available)
+                final bool aFeat = a['is_featured'] == true;
+                final bool bFeat = b['is_featured'] == true;
+                if (aFeat != bFeat) return aFeat ? -1 : 1;
+
+                // 3. User selected Sort
+                if (_sortBy == 'name') {
+                  return a['name'].toString().compareTo(b['name'].toString());
+                } else if (_sortBy == 'price_asc') {
+                  return (a['base_price'] as num).compareTo(b['base_price'] as num);
+                } else if (_sortBy == 'price_desc') {
+                  return (b['base_price'] as num).compareTo(a['base_price'] as num);
+                }
+                return 0;
+              });
 
               if (filtered.isEmpty) {
                 return Center(
@@ -1471,6 +1487,21 @@ class _PosScreenState extends ConsumerState<PosScreen> {
             _buildSortOption('name', 'Alphabetical (A-Z)', LucideIcons.filter),
             _buildSortOption('price_asc', 'Price: Low to High', LucideIcons.arrowUp),
             _buildSortOption('price_desc', 'Price: High to Low', LucideIcons.arrowDown),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Divider(),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text('SHOW FEATURED ONLY', style: GoogleFonts.outfit(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.5, color: Colors.amber.shade700)),
+              secondary: Icon(LucideIcons.zap, color: _showFeaturedOnly ? Colors.amber : Colors.grey, size: 20),
+              value: _showFeaturedOnly,
+              activeColor: Colors.amber,
+              onChanged: (val) {
+                setState(() => _showFeaturedOnly = val);
+                Navigator.pop(context);
+              },
+            ),
           ],
         ),
       ),
@@ -1721,6 +1752,16 @@ class _ProductCard extends StatelessWidget {
                       ),
                       child: Icon(dietaryIcon, size: 12, color: dietaryColor),
                     ),
+                    if (item['is_featured'] == true)
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(LucideIcons.zap, size: 10, color: Colors.amber.shade700),
+                      ),
+                    const Spacer(),
                     GestureDetector(
                       onTap: onToggle,
                       child: Icon(

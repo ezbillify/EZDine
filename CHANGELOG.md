@@ -1,4 +1,14 @@
 
+## v1.23.0 (2026-03-16)
+
+
+### Features
+* Introduced featured items in the POS system
+* Enhanced sorting and filtering functionality to prioritize featured items
+* Added sorting based on item availability and price
+
+
+
 ## v1.22.0 (2026-03-10)
 
 
