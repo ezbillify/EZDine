@@ -410,6 +410,12 @@ export default function QrOrderPage() {
                     : item.menu_categories?.name === activeCategory);
             const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
             return matchesCategory && matchesSearch;
+        }).sort((a, b) => {
+            if (a.is_available !== b.is_available) {
+                return a.is_available ? -1 : 1;
+            }
+            // Fallback to original order from menuItems if both have same availability
+            return menuItems.indexOf(a) - menuItems.indexOf(b);
         });
     }, [menuItems, activeCategory, searchQuery]);
 

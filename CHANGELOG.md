@@ -1,4 +1,13 @@
 
+## v1.24.0 (2026-03-21)
+
+### Features
+* Improved release script to build and publish both mac and win platforms
+* Added sorting of menu items by availability in descending order
+### Fixes
+* Updated electron-builder configuration for mac and win platforms
+
+
 ## v1.23.0 (2026-03-16)
 
 

@@ -43,8 +43,8 @@ cd apps/desktop
 # Determine platform for builds
 if [[ "$OSTYPE" == "darwin"* ]]; then
     # On Mac, we can build both if configured, but let's do mac first
-    echo "Running build:mac with publish..."
-    pnpm exec electron-builder --mac --publish always -c.mac.identity=null
+    echo "Running build:mac and build:win with publish..."
+    pnpm exec electron-builder --mac --win --publish always -c.mac.identity=null -c.win.verifyUpdateCodeSignature=false
 else
     echo "Running build:win with publish..."
     pnpm exec electron-builder --win --publish always -c.win.verifyUpdateCodeSignature=false
